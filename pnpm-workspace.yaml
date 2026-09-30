@@ -1,5 +1,9 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
-  - 'workers/*'
-  - 'tools/*'
+  - apps/*
+  - packages/*
+  - workers/*
+  - tools/*
+
+allowBuilds:
+  sharp: false
+  unrs-resolver: true
