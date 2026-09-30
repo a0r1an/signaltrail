@@ -1,0 +1,8 @@
+{
+    "extends": "@signaltrail/typescript-config/node.json",
+    "compilerOptions": {
+      "noEmit": true
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["dist", "node_modules"]
+  }
