@@ -25,3 +25,14 @@ pnpm-debug.log*
 
 # Local infrastructure data
 .local-data/
+
+
+# Vercel
+.vercel/
+
+# TypeScript generated files
+*.tsbuildinfo
+next-env.d.ts
+
+# Local certificates and keys
+*.pem
