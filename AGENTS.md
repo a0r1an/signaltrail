@@ -1,55 +1,32 @@
-# SignalTrail project status
+# SignalTrail coaching and development
 
-Last updated: 2026-10-01
+## Goal and context
 
-## Goal
+Build SignalTrail while preparing for Staff Software Engineer roles, with Vercel
+as the primary target. Preparation workspace: `/Users/eufracio/Documents/ChatGPT/Senior`.
+Read `docs/PROJECT_STATUS.md` at session start. For curriculum context, read the
+Senior workspace's `docs/CURRICULUM.md`, `docs/WEEKLY_PLAN.md`, and latest entries
+in `docs/LEARNING_LOG.md`. Product scope: Senior's `signaltrail-project-plan.md`.
+Verify existing milestones rather than repeating completed setup.
 
-Build a production-style product analytics and session-replay platform while
-preparing for Staff Software Engineer interviews at Vercel.
+## Teaching style — explicit user preference
 
-## Architecture direction
+- Explain what we need to do and the concept before each implementation step.
+- Show the exact code the user should write, its target file, and why it works.
+- Give one implementation step at a time; do not require the user to invent code
+  before showing it. Ask short teach-back questions to check understanding.
+- The user writes and runs code. Review saved files when they confirm readiness.
+- Do not edit application code or run it on the user's behalf unless explicitly
+  requested. Read-only inspection for coaching and review is allowed.
+- Do not edit documentation unless explicitly requested.
+- For algorithm interview practice, retain independent attempts and progressive
+  hints unless the user specifically asks for a worked solution.
+- Track demonstrated mastery, assistance, weaknesses, and review dates. Do not
+  label planned behavior or unobserved test runs as completed.
 
-- Next.js dashboard hosted on Vercel
-- Next.js demo store hosted on Vercel
-- TypeScript browser SDK
-- Node.js ingestion and query APIs
-- PostgreSQL for transactional metadata
-- ClickHouse for analytics events
-- Redpanda for event streaming
-- Valkey for caching and rate limiting
-- MinIO for replay payload storage
-- Docker-based local infrastructure
-- Load and peak-traffic testing
+## Test-first work
 
-## Completed
-
-- Initialized Git repository and pnpm/Turbo monorepo
-- Created `@signaltrail/dashboard`
-- Created `@signaltrail/demo-store`
-- Added shared `@signaltrail/typescript-config`
-- Upgraded the project to Node.js 24
-- Configured dependency build permissions
-- Scaffolded the compilable `@signaltrail/contracts` package
-- Added Zod, Vitest, tsup, and TypeScript tooling
-- Confirmed clean working tree
-
-## Important commits
-
-- `98b7111` Initialize monorepo tooling
-- `b22d1c1` Scaffold dashboard and demo store
-- `c2c9522` Configure dependency build permissions
-- `7fc9fc7` Add shared TypeScript configuration
-- `cbcdb88` Upgrade to Node 24 and scaffold contracts
-
-## Current task
-
-Build the first analytics-event runtime contract using Zod and TDD.
-
-The first behavior is:
-
-> A valid browser analytics event is accepted.
-
-The planned public interface is:
-
-```ts
-AnalyticsEventSchema.safeParse(input)
+Use one behavior at a time: explain and show the test, let the user write/run it,
+inspect the failure, then explain and show the implementation. Distinguish import
+or setup errors from a test failing on the intended behavior. Never treat a
+missing-module error alone as evidence that validation behavior was tested.
