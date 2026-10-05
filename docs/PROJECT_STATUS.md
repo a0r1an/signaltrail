@@ -19,61 +19,95 @@ Load and peak-traffic testing follow working ingestion and processing.
 - Dependency build permissions configured.
 - Compilable `@signaltrail/contracts` scaffolded.
 - Zod, Vitest, tsup, and TypeScript tooling added.
-- Clean working tree reported previously; not reverified for this handoff.
 
 Important commits: `98b7111` monorepo; `b22d1c1` frontends; `c2c9522` build
 permissions; `7fc9fc7` TypeScript configuration; `cbcdb88` Node 24/contracts.
 
-## Current task and inspected state
+## Completed this session — 2026-10-01
 
-First analytics-event runtime contract using Zod and test-first development.
-First behavior: **a valid browser analytics event is accepted**.
-Public interface: `AnalyticsEventSchema.safeParse(input)`.
+The valid-event acceptance milestone is complete, with additional rejection
+coverage. Saved source and the final shared-fixture refactor were reviewed.
 
-Inspected `packages/contracts/src/analytics-event.test.ts` at handoff:
-- Vitest's `describe`, `it`, and `expect` are imported.
-- Schema import still points to `./analytics-event.test.js` (self-import).
-- Test calls `isValidSync({})`; that is not the planned Zod interface and the
-  empty object is not a valid event fixture.
-- No working acceptance test or schema has been demonstrated. Re-read files
-  in the new session in case the user has changed them.
+- Added `packages/contracts/src/analytics-event.ts`, exposing
+  `AnalyticsEventSchema.safeParse(input)` through a Zod object schema.
+- Corrected the test's self-import and replaced `isValidSync` with `safeParse`.
+  Setup failures were distinguished from the intended assertion failure.
+- Established valid-event rejection with `z.never()`, then implemented acceptance.
+- Added tests for missing, empty, whitespace-only, and numeric `eventId`;
+  unsupported schema version; negative and fractional sequence; accepted zero
+  sequence; invalid URL; and invalid client timestamp.
+- Learner reported red → green cycles for acceptance, empty/whitespace-only ID,
+  negative/fractional sequence, invalid URL, and invalid timestamp. Other tests
+  covered rules already implemented.
+- Refactored all eleven tests to use one `validEvent` fixture, with object-spread
+  overrides or destructuring for the missing-field case. No test mutates it.
+- Configured `allowImportingTsExtensions: true` alongside `noEmit: true` so the
+  test can import `./analytics-event.ts` directly.
 
-The package test command from repository root is:
-`pnpm --filter @signaltrail/contracts test`.
+The saved fixture uses `eventName: 'pageview'`, `properties: { productId: '123' }`,
+`url: 'https://www.example.com'`, and `context: { sdkVersion: '1.0.0' }`.
+The full fixture is in `packages/contracts/src/analytics-event.test.ts`.
 
-## Resume here
+## Important decisions and current limits
 
-Read AGENTS.md and inspect contracts source/tsconfig before giving code.
-Explain and show the corrected acceptance test in
-`packages/contracts/src/analytics-event.test.ts`: import the implementation,
-use a concrete valid fixture, call `safeParse`, assert `result.success` is true.
-The user writes and runs it. Do not merely request they invent the test.
-Resolve setup/import failures, then establish the intended behavior failure
-before guiding schema implementation. Show one step at a time, with rationale.
+- Only schema version `1` is supported (`z.literal(1)`).
+- `eventId` must be a string containing a non-whitespace character. Its value is
+  preserved, including surrounding spaces; UUID format is not enforced.
+  Retries must preserve event identity.
+- Keep `sequence` for capture order within an SDK event stream. It must be a
+  nonnegative integer; zero is explicitly accepted. Retries should preserve it.
+  Multi-tab coordination and session-wide ordering remain unresolved.
+- URL format uses `z.url()`; protocol restrictions are not implemented. Format
+  validation does not verify that a website exists.
+- Client timestamps use `z.iso.datetime()` (UTC ISO datetime). Correct format
+  does not establish clock accuracy; trusted receive time will be server-derived.
+- Properties currently permit arbitrary values through
+  `z.record(z.string(), z.unknown())`; JSON-only validation remains pending.
+- Other required string fields still allow empty strings. Optional envelope
+  fields and broader validation remain future work.
 
-Agreed fixture shape (not yet validated by implementation):
-- `schemaVersion: 1`
-- `eventId: "d23f947a-15e8-4fa1-9cb8-338e50cb2a16"`
-- `projectKey: "adrianproject-1234"`
-- `distinctId: "visitor-789"`
-- `sessionId: "2e8b4071-8f65-4a92-a653-909bc390ab24"`
-- `eventName: "product_viewed"`
-- `clientTimestamp: "2026-10-01T16:00:00.000Z"`
-- `sequence: 1`
-- `url: "https://demo.signaltrail.dev/products/product-123"`
-- `properties: { productId: "product-123" }`
-- `context: { sdkVersion: "0.1.0" }`
+## Test and build status
 
-The learner explained that TypeScript types do not validate runtime inputs and
-that a retry preserves eventId. Teach visitor/session/event identity as needed.
-Do not reintroduce product definition or repeat scaffolding. Runtime validation,
-invalid-event rejection, checks/CI verification, and local infrastructure remain
-next milestones; the full event-to-dashboard slice is later work.
+- Latest learner-reported results after the fixture refactor: **11 tests passed**
+  and **typecheck completed without errors**. Commands from repository root:
+  `pnpm --filter @signaltrail/contracts test` and
+  `pnpm --filter @signaltrail/contracts typecheck`.
+- Source was inspected; these commands were not independently run by the coach.
+- Strict TypeScript settings were inspected, including `strict`,
+  `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
+- Package build after these changes is **not verified**. The build command is
+  `pnpm --filter @signaltrail/contracts build` (tsup with declaration generation).
+- `packages/contracts/src/index.ts` still exports only `CONTRACT_VERSION`;
+  the schema is not yet exposed through the package entry point.
+- Lint, formatting checks, and CI configuration/run results remain unverified.
+- Last inspected working tree had modified documentation/configuration and
+  untracked schema/test files. No commit of this session's work is verified.
+
+## Exact next step
+
+Expose the schema through the package entry point. Keep the existing declaration
+in `packages/contracts/src/index.ts` and add:
+
+```ts
+export { AnalyticsEventSchema } from './analytics-event.ts';
+```
+
+Then verify tests, typecheck, and the package build using the commands above.
+Inspect any build/declaration errors before claiming package consumption works.
+After that, continue Day 2 with lint/formatting and CI inspection, addressing
+remaining contract rules one behavior at a time. Local infrastructure is Day 3;
+SDK and event-to-dashboard integration remain later milestones.
 
 ## Preparation continuity
 
 Senior's `docs/LEARNING_LOG.md` records Day 1 algorithms and request-lifecycle
-learning, plus review needs. No career recording or social draft is verified.
-New teaching preference: explain the task, show code and why, then let the user
-write/run it and review their result. No application code was edited during this
-handoff; only documentation was authorized.
+learning, plus review needs. That log has not been updated for this session.
+No career recording, evidence inventory, social draft, or end-of-day reflection
+is verified. Stable coaching and development rules are maintained in `AGENTS.md`.
+
+This session's teach-backs demonstrated missing versus empty values, whitespace
+length, literal-version validation, integer/nonnegative constraints, untrusted
+client time, and object-spread overwrite order. Numeric ID acceptance initially
+needed correction; the learner then correctly explained boolean rejection by
+`z.string()`. Code was supplied through guided examples rather than independent
+implementation. Review runtime type versus format constraints on 2026-10-02.
