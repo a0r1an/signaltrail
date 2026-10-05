@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-01
+Last updated: 2026-10-05
 
 ## Goal and architecture
 
@@ -23,7 +23,7 @@ Load and peak-traffic testing follow working ingestion and processing.
 Important commits: `98b7111` monorepo; `b22d1c1` frontends; `c2c9522` build
 permissions; `7fc9fc7` TypeScript configuration; `cbcdb88` Node 24/contracts.
 
-## Completed this session — 2026-10-01
+## Completed Day 1 — 2026-10-01
 
 The valid-event acceptance milestone is complete, with additional rejection
 coverage. Saved source and the final shared-fixture refactor were reviewed.
@@ -48,6 +48,31 @@ The saved fixture uses `eventName: 'pageview'`, `properties: { productId: '123' 
 `url: 'https://www.example.com'`, and `context: { sdkVersion: '1.0.0' }`.
 The full fixture is in `packages/contracts/src/analytics-event.test.ts`.
 
+## Completed Day 2 — 2026-10-05
+
+Day 2's core SignalTrail package-readiness and engineering-check work is complete.
+
+- Exported `AnalyticsEventSchema` through `packages/contracts/src/index.ts`,
+  preserving `CONTRACT_VERSION`. Generated JavaScript and declarations were
+  inspected and both expose the schema and version.
+- Added `packages/contracts/eslint.config.mjs` and a contracts lint script using
+  recommended JavaScript/TypeScript rules and `--max-warnings 0`.
+  `ignoreRestSiblings: true` permits intentional field omission in the test fixture.
+- Added root development dependencies for ESLint 10, `@eslint/js` 10, and
+  `typescript-eslint` 8. Frontends retain ESLint 9; its unsupported-version warning
+  remains a dependency-maintenance follow-up.
+- Applied existing Prettier formatting to eight files, then formatted the new
+  lint configuration and CI workflow. Reviewed changes preserve behavior.
+- Added `.github/workflows/ci.yml`: push/PR checks on Ubuntu, Node 24,
+  pnpm 10.27.0, frozen-lockfile installation, formatting, lint, tests, typecheck,
+  and build. No deployment or infrastructure checks are configured.
+- Connected `origin` to `git@github.com:a0r1an/signaltrail.git` and pushed `main`.
+  Commits inspected: `cf4cd40` initial event/tests; `4a9462f` schema export/CI;
+  `e81ceca` status update/document formatting.
+- First GitHub run failed on the committed status document's formatting. Local
+  checks had used its newer unstaged version. Committing the formatted document
+  resolved the failure; the learner reported the subsequent CI run successful.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -68,42 +93,48 @@ The full fixture is in `packages/contracts/src/analytics-event.test.ts`.
 
 ## Test and build status
 
-- Latest learner-reported results after the fixture refactor: **11 tests passed**
-  and **typecheck completed without errors**. Commands from repository root:
-  `pnpm --filter @signaltrail/contracts test` and
-  `pnpm --filter @signaltrail/contracts typecheck`.
-- Source was inspected; these commands were not independently run by the coach.
+- Contracts: learner reported **11 tests passed**, successful typecheck, and
+  successful tsup JavaScript/declaration build. Build output was supplied and
+  generated exports were inspected.
+- Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
+  all passing. Full root outputs were not supplied.
+- Formatting: supplied `pnpm format:check` output confirms success.
+- Lint: supplied `pnpm lint` output confirms **three successful tasks** for
+  contracts, dashboard, and demo-store. TypeScript-config has no lint task.
+- CI: learner reported a successful GitHub Actions run after the documentation
+  fix. Workflow source was reviewed; remote run logs/URL were not independently
+  inspected. Repository: https://github.com/a0r1an/signaltrail.
+- Source was inspected; application checks were not independently run by the coach.
 - Strict TypeScript settings were inspected, including `strict`,
   `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
-- Package build after these changes is **not verified**. The build command is
-  `pnpm --filter @signaltrail/contracts build` (tsup with declaration generation).
-- `packages/contracts/src/index.ts` still exports only `CONTRACT_VERSION`;
-  the schema is not yet exposed through the package entry point.
-- Lint, formatting checks, and CI configuration/run results remain unverified.
-- Last inspected working tree had modified documentation/configuration and
-  untracked schema/test files. No commit of this session's work is verified.
+- Build/export verification does not yet demonstrate an application importing
+  the package or runtime service integration. Branch-protection enforcement is
+  not verified.
+- Working tree was clean before this status update. This document update has
+  not yet been committed or pushed.
 
 ## Exact next step
 
-Expose the schema through the package entry point. Keep the existing declaration
-in `packages/contracts/src/index.ts` and add:
+Begin Day 3 local infrastructure with PostgreSQL and Redpanda. No Docker/Compose
+files were found in the latest repository filename search. First have the learner
+run `docker --version` and `docker compose version` to verify the prerequisite
+tooling, then define the first Compose service one step at a time. Verify startup,
+readiness, shutdown, and restart before marking a service complete.
 
-```ts
-export { AnalyticsEventSchema } from './analytics-event.ts';
-```
-
-Then verify tests, typecheck, and the package build using the commands above.
-Inspect any build/declaration errors before claiming package consumption works.
-After that, continue Day 2 with lint/formatting and CI inspection, addressing
-remaining contract rules one behavior at a time. Local infrastructure is Day 3;
-SDK and event-to-dashboard integration remain later milestones.
+Add ClickHouse, Valkey, and MinIO within the remaining project blocks, carrying
+unfinished services forward at the daily time limit. All infrastructure readiness
+remains unverified. Do not repeat completed contract coverage or package setup.
+JSON-compatible properties and required-string policies remain contract follow-ups;
+bounded batch validation is Day 4. SDK and event-to-dashboard integration remain
+later milestones.
 
 ## Preparation continuity
 
-Senior's `docs/LEARNING_LOG.md` records Day 1 algorithms and request-lifecycle
-learning, plus review needs. That log has not been updated for this session.
-No career recording, evidence inventory, social draft, or end-of-day reflection
-is verified. Stable coaching and development rules are maintained in `AGENTS.md`.
+Senior's `docs/LEARNING_LOG.md` also records Day 2 algorithms and system-design
+learning. It has not been updated for this SignalTrail session. The Day 2 Staff
+architecture-story exercise and end-of-day review remain unverified here.
+Social-media work is outside the coached curriculum per the current weekly plan.
+Stable coaching and development rules are maintained in `AGENTS.md`.
 
 This session's teach-backs demonstrated missing versus empty values, whitespace
 length, literal-version validation, integer/nonnegative constraints, untrusted
@@ -111,3 +142,10 @@ client time, and object-spread overwrite order. Numeric ID acceptance initially
 needed correction; the learner then correctly explained boolean rejection by
 `z.string()`. Code was supplied through guided examples rather than independent
 implementation. Review runtime type versus format constraints on 2026-10-02.
+
+Day 2 teach-backs: learner explained the public export makes the schema available,
+that Turbo package scope does not guarantee a lint task ran, and why a fresh CI
+environment exposes dependence on local state. Formatting check versus automatic
+rewrite required explanation. Review on the next curriculum day: public package
+boundaries, package scope versus executed tasks, and working-tree versus committed
+CI input. Implementation and commands were supplied through guided coaching.
