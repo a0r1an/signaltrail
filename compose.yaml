@@ -12,22 +12,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
-      test:
-        [
-          'CMD',
-          'pg_isready',
-          '-h',
-          '127.0.0.1',
-          '-U',
-          'signaltrail',
-          '-d',
-          'signaltrail',
-        ]
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'signaltrail', '-d', 'signaltrail']
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
-  
+
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
     command:
@@ -46,8 +36,7 @@ services:
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test:
-        ['CMD', 'rpk', 'cluster', 'info', '-X', 'brokers=127.0.0.1:9092']
+      test: ['CMD', 'rpk', 'cluster', 'info', '-X', 'brokers=127.0.0.1:9092']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -107,7 +96,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-      
+
 volumes:
   postgres_data:
   redpanda_data:
