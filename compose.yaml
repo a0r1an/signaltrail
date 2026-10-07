@@ -1,0 +1,114 @@
+name: signaltrail
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: signaltrail
+      POSTGRES_PASSWORD: signaltrail_local
+      POSTGRES_DB: signaltrail
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'pg_isready',
+          '-h',
+          '127.0.0.1',
+          '-U',
+          'signaltrail',
+          '-d',
+          'signaltrail',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - '127.0.0.1:19092:19092'
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test:
+        ['CMD', 'rpk', 'cluster', 'info', '-X', 'brokers=127.0.0.1:9092']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8
+    environment:
+      CLICKHOUSE_DB: signaltrail
+      CLICKHOUSE_USER: signaltrail
+      CLICKHOUSE_PASSWORD: signaltrail_local
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+    ports:
+      - '127.0.0.1:8123:8123'
+      - '127.0.0.1:9000:9000'
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'clickhouse-client',
+          '--host',
+          '127.0.0.1',
+          '--user',
+          'signaltrail',
+          '--password',
+          'signaltrail_local',
+          '--query',
+          'SELECT 1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  valkey:
+    image: valkey/valkey:9.1.2
+    command:
+      - valkey-server
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      
+volumes:
+  postgres_data:
+  redpanda_data:
+  clickhouse_data:

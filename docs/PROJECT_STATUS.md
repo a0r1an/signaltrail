@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-05
+Last updated: 2026-10-06
 
 ## Goal and architecture
 
@@ -8,7 +8,8 @@ Build a product analytics and privacy-conscious session-replay platform while
 preparing for Staff Software Engineer interviews at Vercel.
 Next.js dashboard and demo store on Vercel; TypeScript browser SDK; Node.js
 ingestion/query APIs; PostgreSQL metadata; ClickHouse analytics; Redpanda event
-transport; Valkey caching/rate limits; MinIO replay storage; Docker local stack.
+transport; Valkey caching/rate limits; replay object storage (provider pending,
+originally MinIO); Docker local stack.
 Load and peak-traffic testing follow working ingestion and processing.
 
 ## Previously documented completed setup
@@ -73,6 +74,46 @@ Day 2's core SignalTrail package-readiness and engineering-check work is complet
   checks had used its newer unstaged version. Committing the formatted document
   resolved the failure; the learner reported the subsequent CI run successful.
 
+## Day 3 progress — 2026-10-06
+
+Stopped for today at the learner's request. Four local services have been checked;
+object storage is deferred, so Day 3 infrastructure is partially complete.
+Root `compose.yaml` was inspected. Commands were supplied through coaching and
+run by the learner; the coach did not run services or edit the Compose file.
+
+- Docker CLI/engine 27.3.1 and Compose v2.30.3-desktop.1 were reported reachable.
+  Compose configuration validation returned without errors at each step.
+- PostgreSQL: `postgres:18`, actual query-reported version 18.6; healthy and
+  authenticated TCP query inside container passed. Probe row `1` survived
+  `docker compose down` and `up` (lifecycle confirmed by learner). Uses
+  `postgres_data:/var/lib/postgresql`. Host port 5432 was occupied, so the local
+  mapping is `127.0.0.1:5433:5432`.
+- Redpanda: `v26.2.3`, one development broker, one core, 1 GB configured memory;
+  healthy. Topic `infrastructure-probe` has one partition and one replica.
+  Produced and consumed `signaltrail-probe-1` at partition 0, offset 0; message
+  survived stop/remove/recreate (lifecycle confirmed). Uses `redpanda_data`;
+  containers connect to `redpanda:9092`, host clients to `localhost:19092`.
+- ClickHouse: `26.8` LTS series, actual client-reported version 26.8.19.9; healthy.
+  MergeTree probe row written/read, then full stop/remove/recreate output and
+  subsequent read of `1` supplied. Uses `clickhouse_data`, host ports 8123/9000.
+- Valkey: `9.1.2`, healthy on host port 6379. SET/GET and TTL 60 supplied;
+  expiration confirmed by EXISTS 0 and TTL -2. A non-expiring probe was absent
+  after restart (lifecycle confirmed). Persistence is disabled; 128 MB data-memory
+  limit and `noeviction` policy. No named volume. Rate-limit reset policy remains
+  unresolved; a memory limit does not provide durability.
+- Initial Redpanda topic creation had no visible result and topic list was empty.
+  Retry with `docker compose exec -T` returned OK/exit status 0. Subsequent
+  noninteractive client commands use `-T`.
+- Initial ClickHouse inline multiquery insert failed with code 48 concerning
+  async inserts and stdin. Retry with `--async_insert=0` and `</dev/null` passed.
+- Probe tables/topic remain. Host application connections are untested.
+  Single-node volumes protect against container replacement, not disk/host loss;
+  replication and backup/restore remain unverified.
+- MinIO was not installed: its community repository is archived
+  (https://github.com/minio/minio). Discussed SeaweedFS, Garage, R2, B2, Spaces,
+  and Amazon S3; no replacement or local/production pairing was selected.
+  The original plan had no dollar budget for MinIO, only shared-VPS hosting.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -98,7 +139,9 @@ Day 2's core SignalTrail package-readiness and engineering-check work is complet
   generated exports were inspected.
 - Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
   all passing. Full root outputs were not supplied.
-- Formatting: supplied `pnpm format:check` output confirms success.
+- Formatting: Day 2 supplied `pnpm format:check` output confirms success.
+  Day 3 Compose formatting remains unchecked; visible whitespace differences
+  remain. No CI run for today's infrastructure changes is verified.
 - Lint: supplied `pnpm lint` output confirms **three successful tasks** for
   contracts, dashboard, and demo-store. TypeScript-config has no lint task.
 - CI: learner reported a successful GitHub Actions run after the documentation
@@ -110,23 +153,26 @@ Day 2's core SignalTrail package-readiness and engineering-check work is complet
 - Build/export verification does not yet demonstrate an application importing
   the package or runtime service integration. Branch-protection enforcement is
   not verified.
-- Working tree was clean before this status update. This document update has
-  not yet been committed or pushed.
+- At Day 3 close, `compose.yaml` and unexpected files `rpk` and `--partitions`
+  were untracked. Their purpose is unknown; inspect before staging. They were
+  not removed. This status update is not committed or pushed. Live service
+  state at close was not rechecked.
 
 ## Exact next step
 
-Begin Day 3 local infrastructure with PostgreSQL and Redpanda. No Docker/Compose
-files were found in the latest repository filename search. First have the learner
-run `docker --version` and `docker compose version` to verify the prerequisite
-tooling, then define the first Compose service one step at a time. Verify startup,
-readiness, shutdown, and restart before marking a service complete.
+Resume with infrastructure wrap-up: inspect the unexpected untracked files,
+then have the learner run `docker compose ps` and `docker stats --no-stream`
+to capture current readiness and resource use. Review, format, and validate
+`compose.yaml` before staging. Resource usage remains unmeasured.
 
-Add ClickHouse, Valkey, and MinIO within the remaining project blocks, carrying
-unfinished services forward at the daily time limit. All infrastructure readiness
-remains unverified. Do not repeat completed contract coverage or package setup.
-JSON-compatible properties and required-string policies remain contract follow-ups;
-bounded batch validation is Day 4. SDK and event-to-dashboard integration remain
-later milestones.
+Resolve the replay object-storage decision before adding a fifth service or
+creating a managed bucket. Do not assume a replacement was approved. Verify
+upload/download and persistence for the selected local store; do not repeat
+the four completed service probes.
+
+Day 4's bounded batch contract remains next curriculum work. JSON-compatible
+properties and required-string policies remain follow-ups. SDK and full
+event-to-dashboard integration remain later milestones.
 
 ## Preparation continuity
 
@@ -149,3 +195,11 @@ environment exposes dependence on local state. Formatting check versus automatic
 rewrite required explanation. Review on the next curriculum day: public package
 boundaries, package scope versus executed tasks, and working-tree versus committed
 CI input. Implementation and commands were supplied through guided coaching.
+
+Day 3 teach-backs: Docker engine must be running; service mounts specify volume
+paths; deleting a volume loses its database files; consuming a log record does
+not delete it; single-host storage does not survive disk loss; cache misses can
+fall back to ClickHouse. Initially confused volumes with images and Valkey with
+session search; corrected after explanation. Durability versus memory limits
+also required clarification. Review these distinctions next working day
+(2026-10-07), then 2026-10-13 and 2026-10-27. Senior's learning log was not edited.
