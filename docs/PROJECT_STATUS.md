@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-06
+Last updated: 2026-10-08
 
 ## Goal and architecture
 
@@ -8,8 +8,8 @@ Build a product analytics and privacy-conscious session-replay platform while
 preparing for Staff Software Engineer interviews at Vercel.
 Next.js dashboard and demo store on Vercel; TypeScript browser SDK; Node.js
 ingestion/query APIs; PostgreSQL metadata; ClickHouse analytics; Redpanda event
-transport; Valkey caching/rate limits; replay object storage (provider pending,
-originally MinIO); Docker local stack.
+transport; Valkey caching/rate limits; Amazon S3 replay object storage
+(replacing the originally planned MinIO); Docker local stack.
 Load and peak-traffic testing follow working ingestion and processing.
 
 ## Previously documented completed setup
@@ -114,6 +114,77 @@ run by the learner; the coach did not run services or edit the Compose file.
   and Amazon S3; no replacement or local/production pairing was selected.
   The original plan had no dollar budget for MinIO, only shared-VPS hosting.
 
+## Storage and recovery session — 2026-10-08
+
+This session was limited to SignalTrail work. Infrastructure decisions and AWS
+setup were guided; the learner performed console actions and CLI commands.
+No application code or Compose configuration was changed and no VPS was provisioned.
+
+### Hosting and recovery decisions
+
+- Start with one self-managed VPS for APIs, workers, PostgreSQL, Redpanda,
+  ClickHouse, and Valkey. Provider, machine size, disks, and total cost remain
+  undecided. Earlier three-machine prices were illustrations, not sizing advice.
+- Use managed Amazon S3 for replay and off-server recovery archives. The learner
+  selected S3 over R2; no local object-storage replacement service was installed.
+  Separate private replay and recovery buckets are proposed; only the development
+  replay bucket exists so far.
+- Initial recovery time objective (RTO): restore service within four hours of
+  VPS failure. Initial recovery point objective (RPO): best-effort maximum one
+  hour of lost acknowledged analytics. Neither target has been implemented or
+  verified. This replaces the earlier zero-loss requirement for the initial
+  deployment. Datacenter resilience remains a future goal, not an initial guarantee.
+- A single VPS can be recoverable but cannot remain available during host loss.
+  Vercel may serve the dashboard shell while its backend dependencies are down.
+- Proposed archive worker: consume accepted Redpanda events, upload compressed
+  batches to S3, then commit consumer offsets. Preserve event IDs for deduplication
+  during recovery. Object naming, manifests, retention, and safe replay are unresolved.
+- Learner approved rejecting ingestion when off-server archiving falls behind.
+  Proposed thresholds: archive within five minutes, alert at 15 minutes, reject
+  at 30 minutes or when archive status is unknown. Thresholds and recovery from
+  rejection remain unimplemented and untested.
+- Rejection does not protect an existing unarchived backlog. A prolonged archive
+  failure followed by VPS loss can exceed the RPO; learner accepted this limitation
+  for the initial best-effort target. A strict zero-loss guarantee would require
+  an off-server durable copy before acknowledgment.
+- PostgreSQL backup design, ClickHouse backup/rebuild strategy, preservation of
+  unprocessed Redpanda events, backup-tool compatibility, secret recovery, alerts,
+  and a timed replacement-host restore are pending. Replay storage alone does
+  not protect the database metadata required to locate and authorize replay.
+
+### AWS setup and supplied evidence
+
+- Learner reported AWS account creation, root MFA, and a zero-spend budget
+  notification configured. The budget is an alert, not a spending cap.
+- IAM Identity Center organization instance enabled in `us-west-2`, single Region;
+  personal user created, invitation accepted, AdministratorAccess assigned,
+  portal sign-in verified, and Identity Center MFA reported enabled.
+- Development S3 region selected: US West (Oregon), `us-west-2`. Production
+  placement should be revisited alongside VPS location.
+- Bucket created: `signaltrail-replay-dev-eufracio-25812850`. Guided settings:
+  general purpose, ACLs disabled/bucket owner enforced, all public access blocked,
+  SSE-S3 encryption, versioning disabled, Object Lock disabled. Configuration
+  was learner-reported, not independently queried.
+- Learner reported the unsigned Object URL returned AccessDenied. Console
+  upload/download was initially reported successful, but later CLI listing showed
+  a zero-byte probe; that initial check did not establish content preservation.
+- AWS CLI initially reported 2.22.20; learner reported updating to the latest
+  version, but did not supply the final version string. Configured SSO session
+  `signaltrail` and profile `signaltrail-admin`, default region `us-west-2`, JSON
+  output. Configuration/credentials are outside the repository.
+- Supplied `sts get-caller-identity` output confirms an assumed Identity Center
+  AdministratorAccess role for user `eufracio` in the expected account.
+- Supplied CLI listing confirms bucket access. Corrected probe upload succeeded;
+  subsequent listing showed 28 bytes. Learner supplied
+  `PASS: downloaded bytes match` after downloading to a different file and using
+  `cmp`. Nonempty authenticated upload/download is verified from supplied output.
+- These checks used administrator permissions. No restricted development identity,
+  worker credentials, SDK integration, recovery bucket, or restore test exists yet.
+- At session start the working tree was clean; previously unexpected `rpk` and
+  `--partitions` files were absent. At close, `storage-probe.txt` is untracked;
+  do not stage it unintentionally. No service readiness/resource output, application
+  checks, or new CI evidence was supplied today.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -155,20 +226,29 @@ run by the learner; the coach did not run services or edit the Compose file.
   not verified.
 - At Day 3 close, `compose.yaml` and unexpected files `rpk` and `--partitions`
   were untracked. Their purpose is unknown; inspect before staging. They were
-  not removed. This status update is not committed or pushed. Live service
+  not removed in that session; both were absent on 2026-10-08. Live service
   state at close was not rechecked.
 
 ## Exact next step
 
-Resume with infrastructure wrap-up: inspect the unexpected untracked files,
-then have the learner run `docker compose ps` and `docker stats --no-stream`
-to capture current readiness and resource use. Review, format, and validate
-`compose.yaml` before staging. Resource usage remains unmeasured.
+Tomorrow (2026-10-09), resume restricted development S3 access. First explain
+identity versus AWS account and define the operations needed for a replay probe.
+Guide the learner through a separate Identity Center permission set limited to
+the development replay bucket, with a named profile distinct from
+`signaltrail-admin`. Verify allowed upload/download/list behavior and denial of
+an operation outside that scope. Avoid treating an administrator test as proof
+of application permissions. The eventual unattended worker needs its own
+credential strategy; human SSO is for local development.
 
-Resolve the replay object-storage decision before adding a fifth service or
-creating a managed bucket. Do not assume a replacement was approved. Verify
-upload/download and persistence for the selected local store; do not repeat
-the four completed service probes.
+Then finish infrastructure wrap-up: learner runs `docker compose ps` and
+`docker stats --no-stream`; review, format, and validate `compose.yaml`.
+Resource usage remains unmeasured. Inspect the untracked `storage-probe.txt`
+before staging; do not repeat the four completed service probes.
+
+Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
+strategy separately. No archive implementation or production deployment is
+required before the bounded batch contract. S3 is selected; do not restart the
+provider comparison or add a fifth local service by assumption.
 
 Day 4's bounded batch contract remains next curriculum work. JSON-compatible
 properties and required-string policies remain follow-ups. SDK and full
@@ -203,3 +283,13 @@ fall back to ClickHouse. Initially confused volumes with images and Valkey with
 session search; corrected after explanation. Durability versus memory limits
 also required clarification. Review these distinctions next working day
 (2026-10-07), then 2026-10-13 and 2026-10-27. Senior's learning log was not edited.
+
+2026-10-08 learning evidence: learner explained retries retain event IDs for
+deduplication, ingestion acknowledgment depends on Redpanda rather than
+ClickHouse processing, and containers on one VPS share its failure. RPO/RTO and
+partial archive failures required explanation. Learner recognized workers need
+separate permissions; corrected separate AWS account to separate identity.
+Review on 2026-10-09, 2026-10-15, and 2026-10-29: recovery time versus recovery
+point, partial failures and archive lag, identity versus account, and why admin
+access does not verify least-privilege application access. AWS steps and commands
+were supplied through guided coaching. Senior workspace documents were not edited.
