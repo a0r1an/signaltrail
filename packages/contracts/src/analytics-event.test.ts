@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AnalyticsEventSchema } from './analytics-event.ts';
+import { AnalyticsBatchSchema, validateAnalyticsEvents } from './analytics-batch.ts';
 
 const validEvent = {
   schemaVersion: 1,
@@ -103,5 +104,119 @@ describe('AnalyticsEventSchema', () => {
     const result = AnalyticsEventSchema.safeParse(event);
 
     expect(result.success).toBe(false);
+  });
+
+  it('accepts an event without a projectKey', () => {
+    const { projectKey, ...event } = validEvent;
+
+    const result = AnalyticsEventSchema.safeParse(event);
+
+    expect(result.success).toBe(true);
+  });
+
+  it('strips a supplied projectKey from the parsed event', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      projectKey: 'another-project',
+    });
+
+    expect(result.success).toBe(true);
+
+    if (!result.success) {
+      throw new Error('Expected a valid event');
+    }
+
+    expect(result.data).not.toHaveProperty('projectKey');
+  });
+});
+
+describe('AnalyticsBatchSchema', () => {
+  it('accepts a batch containing one valid event', () => {
+    const result = AnalyticsBatchSchema.safeParse({
+      events: [validEvent],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty batch', () => {
+    const result = AnalyticsBatchSchema.safeParse({
+      events: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a batch containing more than 100 events', () => {
+    const events = Array.from({ length: 101 }, (_, index) => ({
+      ...validEvent,
+      eventId: `event-${index}`,
+      sequence: index,
+    }));
+    const result = AnalyticsBatchSchema.safeParse({ events });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a batch containing exactly 100 events', () => {
+    const events = Array.from({ length: 100 }, (_, index) => ({
+      ...validEvent,
+      eventId: `event-${index}`,
+      sequence: index,
+    }));
+
+    const result = AnalyticsBatchSchema.safeParse({ events });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('allows a malformed event through batch structure validation', () => {
+    const result = AnalyticsBatchSchema.safeParse({
+      events: [validEvent, { ...validEvent, eventId: '' }],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a batch missing the events field', () => {
+    const result = AnalyticsBatchSchema.safeParse({});
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a batch whose events field is not an array', () => {
+    const result = AnalyticsBatchSchema.safeParse({
+      events: validEvent,
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('validateAnalyticsEvents', () => {
+  it('validates each event independently and preserves its index', () => {
+    const results = validateAnalyticsEvents([validEvent, { ...validEvent, eventId: '' }]);
+
+    expect(
+      results.map(({ index, result }) => ({
+        index,
+        valid: result.success,
+      })),
+    ).toEqual([
+      { index: 0, valid: true },
+      { index: 1, valid: false },
+    ]);
+  });
+
+  it('continues validating events after an invalid event', () => {
+    const results = validateAnalyticsEvents([{ ...validEvent, eventId: '' }, validEvent]);
+
+    expect(
+      results.map(({ index, result }) => ({
+        index,
+        valid: result.success,
+      })),
+    ).toEqual([
+      { index: 0, valid: false },
+      { index: 1, valid: true },
+    ]);
   });
 });

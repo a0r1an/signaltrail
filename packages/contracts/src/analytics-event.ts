@@ -5,7 +5,6 @@ export const AnalyticsEventSchema = z.object({
   eventId: z.string().min(1).regex(/\S/),
   eventName: z.string(),
   properties: z.record(z.string(), z.unknown()),
-  projectKey: z.string(),
   distinctId: z.string(),
   sessionId: z.string(),
   clientTimestamp: z.iso.datetime(),

@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-08
+Last updated: 2026-10-12
 
 ## Goal and architecture
 
@@ -185,6 +185,88 @@ No application code or Compose configuration was changed and no VPS was provisio
   do not stage it unintentionally. No service readiness/resource output, application
   checks, or new CI evidence was supplied today.
 
+## Restricted S3 access and batch contract — 2026-10-12
+
+Core session work completed through guided coaching. The learner wrote all
+application code and ran checks; the coach inspected saved source and generated
+exports. This session stayed within SignalTrail work.
+
+### Restricted development access
+
+- Created custom Identity Center permission set `SignalTrailReplayDev`, assigned
+  to the existing user in the same AWS account. One-hour session duration and
+  Project/Environment tags were guided; setup completion learner-reported.
+- Inline policy allows `s3:ListBucket` on
+  `signaltrail-replay-dev-eufracio-25812850` and `s3:GetObject`/`s3:PutObject`
+  on its objects. PutObject can overwrite objects. No delete or bucket-management
+  permissions were granted by this policy.
+- Configured CLI profile `signaltrail-replay-dev` using the existing `signaltrail`
+  SSO session. Supplied STS output confirms the SignalTrailReplayDev assumed role.
+  Admin and restricted role sessions do not combine permissions.
+- Supplied restricted-profile output verifies listing, upload of
+  `restricted-role-probe.txt`, download, and byte-for-byte comparison PASS.
+- Read-only GetBucketPolicy returned AccessDenied explicitly because no
+  identity-based policy allows `s3:GetBucketPolicy`. This verifies that denial,
+  not every possible unauthorized operation. Worker credentials remain undecided;
+  this human SSO role is for development, not unattended production execution.
+
+### Local infrastructure wrap-up
+
+- Supplied `docker compose ps` shows all four SignalTrail services healthy,
+  with five days of uptime. No completed functional/restart probes were repeated.
+- Supplied one `docker stats --no-stream` snapshot: ClickHouse 1.15 GiB/8.56% CPU,
+  Redpanda 279.9 MiB/0.54%, PostgreSQL 24.48 MiB/0%, Valkey 13.27 MiB/0.77%.
+  Combined SignalTrail memory approximately 1.46 GiB. Separate `pg_docker`
+  container also running, using 51.03 MiB.
+- The 7.653 GiB displayed limit is Docker-available memory, not individual
+  container caps. ClickHouse's 45.4 GB block writes are cumulative I/O, not disk
+  occupancy. Snapshot without application load does not establish VPS sizing.
+- Supplied Prettier check confirms Compose formatting; `docker compose config
+--quiet` returned without error. Configuration was not changed today. Host
+  application connections, actual disk use, backups, and load/failure tests remain
+  unverified. No VPS has been provisioned.
+
+### Contract implementation and decisions
+
+- Added `packages/contracts/src/analytics-batch.ts` with
+  `AnalyticsBatchSchema`: `{ events: z.array(z.unknown()).min(1).max(100) }`.
+  Count limit is provisional, not a measured capacity or HTTP byte limit.
+- Learner chose partial event acceptance: one malformed event must not discard
+  valid siblings. Structural validation permits unknown entries; exported
+  `validateAnalyticsEvents` independently safe-parses each entry and preserves
+  its original index and Zod result. Indices work even when eventId is invalid.
+- Callers must check batch structure/count first. The helper alone accepts any
+  array length and does not enforce the batch bounds. No publishing or HTTP
+  response implementation exists yet; validation success is not acknowledgment.
+- Learner selected request-level project authentication. Proposed API header:
+  `Authorization: Bearer <public-project-key>`. Key permits ingestion only;
+  server resolves and adds trusted project ID. Authentication is not implemented.
+- Removed required `projectKey` from AnalyticsEventSchema. Tests verify keyless
+  events pass and supplied projectKey is stripped from parsed output. Future
+  publication must use parsed data, not the original unvalidated object.
+  Shared fixture still contains projectKey for omission/stripping coverage.
+- Schema version and CONTRACT_VERSION remain 1. Package has no demonstrated
+  deployed consumers; future compatibility policy remains a follow-up.
+- Exported batch schema/helper through `src/index.ts`. Supplied tsup builds
+  succeeded for JavaScript and declarations; generated exports and absence of
+  projectKey in declarations were inspected.
+- Learner reported 22 tests passing. Supplied intended assertion failures for
+  batch acceptance, empty-batch rejection, over-limit rejection, independent
+  validation, and keyless-event acceptance establish guided red-to-green cycles.
+  Remaining boundary/structure/stripping tests covered implemented behavior.
+- Learner reported final formatting, lint, and typecheck passed; earlier successful
+  typecheck output and final build output supplied. Final saved source reviewed,
+  including moving the non-array test to the batch schema describe block.
+  No full-workspace checks or new remote CI run verified today.
+- SDK batch timers and buffering were discussed, not implemented. Five seconds
+  is a provisional flush interval, with earlier count/byte/lifecycle flushes;
+  one in-flight request was proposed, not finalized. Replay is a separate chunk
+  stream. SDK defaults, response-loss retries, partial-result response design,
+  bounded queues, and JSON-only properties remain future work.
+- At recording, batch source is untracked and three existing contract files are
+  modified. `storage-probe.txt` is no longer listed by git status; its disposition
+  was not investigated. No commit or push performed by the coach.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -202,17 +284,20 @@ No application code or Compose configuration was changed and no VPS was provisio
   `z.record(z.string(), z.unknown())`; JSON-only validation remains pending.
 - Other required string fields still allow empty strings. Optional envelope
   fields and broader validation remain future work.
+- Project association is request-level; per-event projectKey is omitted from
+  the parsed contract. Batch validation supports independent event results, but
+  actual partial publication and client response semantics are not implemented.
 
 ## Test and build status
 
-- Contracts: learner reported **11 tests passed**, successful typecheck, and
-  successful tsup JavaScript/declaration build. Build output was supplied and
-  generated exports were inspected.
+- Contracts as of 2026-10-12: learner reported **22 tests passed**, final lint,
+  typecheck, and formatting passed. Successful tsup JavaScript/declaration build
+  output supplied; generated exports and changed event shape inspected.
 - Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
   all passing. Full root outputs were not supplied.
-- Formatting: Day 2 supplied `pnpm format:check` output confirms success.
-  Day 3 Compose formatting remains unchecked; visible whitespace differences
-  remain. No CI run for today's infrastructure changes is verified.
+- Formatting: Day 2 root check passed from supplied output. Compose formatting
+  check passed on 2026-10-12; modified contract formatting learner-reported.
+  No fresh root formatting check or CI run verified today.
 - Lint: supplied `pnpm lint` output confirms **three successful tasks** for
   contracts, dashboard, and demo-store. TypeScript-config has no lint task.
 - CI: learner reported a successful GitHub Actions run after the documentation
@@ -231,28 +316,33 @@ No application code or Compose configuration was changed and no VPS was provisio
 
 ## Exact next step
 
-Tomorrow (2026-10-09), resume restricted development S3 access. First explain
-identity versus AWS account and define the operations needed for a replay probe.
-Guide the learner through a separate Identity Center permission set limited to
-the development replay bucket, with a named profile distinct from
-`signaltrail-admin`. Verify allowed upload/download/list behavior and denial of
-an operation outside that scope. Avoid treating an administrator test as proof
-of application permissions. The eventual unattended worker needs its own
-credential strategy; human SSO is for local development.
+Next session (planned 2026-10-13), start with a brief project teach-back:
+structural versus per-event validation, and validation versus Redpanda
+acknowledgment. Restricted S3 checks, Compose checks, and the core bounded batch
+increment are complete; do not repeat them as unfinished setup.
 
-Then finish infrastructure wrap-up: learner runs `docker compose ps` and
-`docker stats --no-stream`; review, format, and validate `compose.yaml`.
-Resource usage remains unmeasured. Inspect the untracked `storage-probe.txt`
-before staging; do not repeat the four completed service probes.
+Next implementation priority: close JSON-compatible properties validation, one
+behavior at a time through learner-written TDD. Current z.unknown properties
+still admit values that are not valid JSON. Explain the intended JSON value
+domain before showing the first test; distinguish runtime values from data after
+JSON serialization. Then review required nonblank strings and other validation
+policies before implementing ingestion.
+
+Before partial publication, define request authentication and the result contract:
+request-level failures versus per-event rejections, original indexes, stable IDs,
+publication failures/uncertain outcomes, and when the SDK retries. Valid events
+must receive Redpanda acknowledgment before being reported accepted. Add a bounded
+ingestion entrypoint and publication only after these prerequisites are ready.
+HTTP body-size protection must precede parsing oversized payloads.
 
 Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
 strategy separately. No archive implementation or production deployment is
-required before the bounded batch contract. S3 is selected; do not restart the
+required before continuing contract/API work. S3 is selected; do not restart the
 provider comparison or add a fifth local service by assumption.
 
-Day 4's bounded batch contract remains next curriculum work. JSON-compatible
-properties and required-string policies remain follow-ups. SDK and full
-event-to-dashboard integration remain later milestones.
+Inspect and intentionally stage the new batch file when committing. Full workspace
+checks and CI for these changes remain pending. SDK and full event-to-dashboard
+integration remain later milestones; production recovery targets remain unverified.
 
 ## Preparation continuity
 
@@ -293,3 +383,16 @@ Review on 2026-10-09, 2026-10-15, and 2026-10-29: recovery time versus recovery
 point, partial failures and archive lag, identity versus account, and why admin
 access does not verify least-privilege application access. AWS steps and commands
 were supplied through guided coaching. Senior workspace documents were not edited.
+
+2026-10-12 learning evidence: learner correctly explained unknown batch entries
+allow valid/invalid siblings to be handled separately, and twice recalled that
+valid events need publication to Redpanda before acceptance (reinforced waiting
+for acknowledgment). Role assignment versus combined permissions required
+explanation; batch buffering location, sparse traffic, replay versus analytics,
+in-flight events, and vendor validation behavior were discussed with guidance.
+All code/tests and commands were provided, then written/run by learner; independent
+implementation mastery is not established. Closing check: one project question
+answered correctly, not a full curriculum quiz. Review next session (2026-10-13),
+2026-10-19, and 2026-11-02: role sessions, batch bounds versus byte limits,
+partial validation versus acknowledged publication, and request-derived project
+identity. Senior workspace documents were not edited in this session.
