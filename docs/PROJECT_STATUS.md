@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 ## Goal and architecture
 
@@ -267,6 +267,52 @@ exports. This session stayed within SignalTrail work.
   modified. `storage-probe.txt` is no longer listed by git status; its disposition
   was not investigated. No commit or push performed by the coach.
 
+## JSON validation and SDK delivery discussion — 2026-10-13
+
+Application changes were learner-written and learner-run through guided TDD.
+Coach reviewed saved source and generated declarations; no application checks
+were run by the coach.
+
+- Properties now use `z.record(z.string(), z.json())`. Direct undefined rejection
+  first used a refinement; nested undefined exposed its shallow scope, leading
+  to the recursive JSON validator. Learner used Zod's `error` option instead of
+  deprecated `message` on the temporary refinement.
+- Tests cover direct/nested/array undefined rejection, explicit null acceptance,
+  nested JSON primitives/objects/arrays, Infinity and bigint rejection, and
+  preservation of a valid sibling during independent event validation.
+- JSON validation is not a byte-size/depth bound or cycle guard. Browser-side
+  validation before serialization remains important: undefined object fields
+  disappear, undefined array entries/Infinity become null, and bigint throws.
+  Ingestion must independently validate the received JSON.
+- eventName, distinctId, sessionId, and context.sdkVersion now each use
+  `z.string().min(1).regex(/\S/)`, matching eventId's nonblank policy. Values are
+  preserved, not trimmed; SDK version format is not enforced.
+- Added empty and whitespace-only rejection cases for each field. Review found
+  the empty sdkVersion test duplicated whitespace; learner corrected it and
+  reported 38 passing tests afterward (initial count of 28 corrected to 38).
+- Learner reported 38 tests passing; supplied output confirms formatting, lint,
+  typecheck, and JavaScript/declaration builds passed. Generated properties type
+  `ZodJSONSchema` inspected. No new full-workspace checks or remote CI verified.
+- Proposed browser SDK responsibility: generate/manage session IDs; future
+  identify(userId) links an anonymous visitor to customer-supplied identity.
+  Identity lifecycle, multi-tab behavior, and server-event contracts remain
+  undecided. Client identity claims must not authorize dashboard access.
+- Discussed a three-outcome per-event response (accepted/rejected/retry), optional
+  retry delay, request-level errors, and response-loss handling. HTTP 200 for a
+  processed mixed batch was proposed, not finalized. Acceptance requires Redpanda
+  acknowledgment; authentication and publication remain unimplemented.
+- Learner explicitly wants persistent SDK event buffering. Storage mechanism is
+  not selected. Per-event retry is undecided; the earlier three-outcome response
+  is a proposal, not an approved implementation requirement. Partial acceptance
+  remains desired; retry granularity and response semantics must be reconciled.
+- Compared SDK batching, persistent event queues versus identity storage,
+  request-level retries, asynchronous ingestion validation, GTM destination-specific
+  delivery, and replay segment uploads/compression workers/envelopes. These were
+  explanatory discussions, not implemented SignalTrail capabilities.
+- At recording, only analytics-event.ts and analytics-event.test.ts are listed
+  as modified; no commit/push performed by the coach. Infrastructure/S3 checks
+  were not repeated. Recovery storage and production resilience remain pending.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -280,19 +326,20 @@ exports. This session stayed within SignalTrail work.
   validation does not verify that a website exists.
 - Client timestamps use `z.iso.datetime()` (UTC ISO datetime). Correct format
   does not establish clock accuracy; trusted receive time will be server-derived.
-- Properties currently permit arbitrary values through
-  `z.record(z.string(), z.unknown())`; JSON-only validation remains pending.
-- Other required string fields still allow empty strings. Optional envelope
-  fields and broader validation remain future work.
+- Properties require JSON values recursively through `z.record(z.string(), z.json())`.
+  Byte/depth bounds and cyclic runtime-value handling remain pending.
+- eventId, eventName, distinctId, sessionId, and sdkVersion require a non-whitespace
+  character, without trimming. Optional envelope fields and broader validation
+  remain future work.
 - Project association is request-level; per-event projectKey is omitted from
   the parsed contract. Batch validation supports independent event results, but
   actual partial publication and client response semantics are not implemented.
 
 ## Test and build status
 
-- Contracts as of 2026-10-12: learner reported **22 tests passed**, final lint,
-  typecheck, and formatting passed. Successful tsup JavaScript/declaration build
-  output supplied; generated exports and changed event shape inspected.
+- Contracts as of 2026-10-13: learner reported **38 tests passed**. Supplied
+  formatting, lint, typecheck, and tsup JavaScript/declaration build outputs confirm
+  success. Saved source and generated JSON property declarations inspected.
 - Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
   all passing. Full root outputs were not supplied.
 - Formatting: Day 2 root check passed from supplied output. Compose formatting
@@ -316,31 +363,30 @@ exports. This session stayed within SignalTrail work.
 
 ## Exact next step
 
-Next session (planned 2026-10-13), start with a brief project teach-back:
-structural versus per-event validation, and validation versus Redpanda
-acknowledgment. Restricted S3 checks, Compose checks, and the core bounded batch
-increment are complete; do not repeat them as unfinished setup.
+Next session (planned 2026-10-14), follow the learner's explicit priority:
+decide the persistent SDK storage mechanism and retry semantics before more
+implementation. Compare IndexedDB and localStorage for bounded event buffering,
+including async access, storage failures, multi-tab coordination, event age/byte/
+count limits, and consent cleanup. Do not assume a mechanism is approved.
 
-Next implementation priority: close JSON-compatible properties validation, one
-behavior at a time through learner-written TDD. Current z.unknown properties
-still admit values that are not valid JSON. Explain the intended JSON value
-domain before showing the first test; distinguish runtime values from data after
-JSON serialization. Then review required nonblank strings and other validation
-policies before implementing ingestion.
+Then decide request-level versus per-event retry handling, reconcile it with
+partial acceptance, and define response meanings, removal from persistent storage,
+permanent rejections, lost/malformed responses, stable IDs, backoff/jitter,
+retry bounds, and overload behavior. The accepted/rejected/retry model and HTTP
+status mapping remain proposals. Do not implement them as settled requirements.
 
-Before partial publication, define request authentication and the result contract:
-request-level failures versus per-event rejections, original indexes, stable IDs,
-publication failures/uncertain outcomes, and when the SDK retries. Valid events
-must receive Redpanda acknowledgment before being reported accepted. Add a bounded
-ingestion entrypoint and publication only after these prerequisites are ready.
-HTTP body-size protection must precede parsing oversized payloads.
+Restricted S3 checks, Compose checks, bounded batch structure, independent event
+validation, JSON properties, and nonblank required strings are complete; do not
+repeat them as unfinished setup. Later API work needs request authentication,
+Redpanda acknowledgment before acceptance, and HTTP body-size protection before
+parsing oversized payloads. SDK/storage implementation follows agreed design.
 
 Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
 strategy separately. No archive implementation or production deployment is
 required before continuing contract/API work. S3 is selected; do not restart the
 provider comparison or add a fifth local service by assumption.
 
-Inspect and intentionally stage the new batch file when committing. Full workspace
+Inspect and intentionally stage current changes when committing. Full workspace
 checks and CI for these changes remain pending. SDK and full event-to-dashboard
 integration remain later milestones; production recovery targets remain unverified.
 
@@ -396,3 +442,15 @@ answered correctly, not a full curriculum quiz. Review next session (2026-10-13)
 2026-10-19, and 2026-11-02: role sessions, batch bounds versus byte limits,
 partial validation versus acknowledged publication, and request-derived project
 identity. Senior workspace documents were not edited in this session.
+
+2026-10-13 learning evidence: learner correctly distinguished explicit null from
+likely accidental undefined, explained client validation avoids unnecessary
+ingestion calls, and correctly stated regex validation accepts surrounding spaces
+without removing them. Serialization mutation needed additional explanation.
+Guided discussion clarified SDK versus ingestion buffers, persistence versus
+batching, request failures versus downstream event rejection, workers on the
+client device, and custom envelopes versus web standards. All code/tests were
+supplied; implementation mastery is not independently established. Review next
+session (2026-10-14), 2026-10-20, and 2026-11-03: validation before serialization,
+recursive JSON versus resource bounds, persistent queue lifecycle, and response
+semantics versus retries. Senior workspace documents were not edited.

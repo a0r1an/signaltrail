@@ -128,6 +128,163 @@ describe('AnalyticsEventSchema', () => {
 
     expect(result.data).not.toHaveProperty('projectKey');
   });
+
+  it('rejects an undefined property', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: { productId: undefined },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a null property value', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: { productId: null },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an undefined value inside a nested property', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: {
+        product: { id: undefined },
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts nested JSON property values', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: {
+        product: {
+          id: '123',
+          price: 19.99,
+          available: true,
+          discount: null,
+          tags: ['sale', 'featured'],
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an infinite property value', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: {
+        price: Infinity,
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an undefined value inside a property array', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: {
+        tags: ['sale', undefined],
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a bigint property value', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      properties: {
+        count: 1n,
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty eventName', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      eventName: '',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an eventName containing only white spaces', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      eventName: ' \t\n',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty distinctId', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      distinctId: '',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a distinctId containing only white spaces', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      distinctId: ' \t\n',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty sessionId', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      sessionId: '',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a sessionId containing only white spaces', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      sessionId: ' \t\n',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty sdkVersion', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      context: {
+        ...validEvent.context,
+        sdkVersion: '',
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a sdkVersion containing only white spaces', () => {
+    const result = AnalyticsEventSchema.safeParse({
+      ...validEvent,
+      context: {
+        ...validEvent.context,
+        sdkVersion: ' \t\n',
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('AnalyticsBatchSchema', () => {
@@ -208,6 +365,28 @@ describe('validateAnalyticsEvents', () => {
 
   it('continues validating events after an invalid event', () => {
     const results = validateAnalyticsEvents([{ ...validEvent, eventId: '' }, validEvent]);
+
+    expect(
+      results.map(({ index, result }) => ({
+        index,
+        valid: result.success,
+      })),
+    ).toEqual([
+      { index: 0, valid: false },
+      { index: 1, valid: true },
+    ]);
+  });
+
+  it('preserves a valid sibling when another event has invalid properties', () => {
+    const results = validateAnalyticsEvents([
+      {
+        ...validEvent,
+        properties: {
+          count: 1n,
+        },
+      },
+      validEvent,
+    ]);
 
     expect(
       results.map(({ index, result }) => ({
