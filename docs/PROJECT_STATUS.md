@@ -421,8 +421,48 @@ source and generated exports, without running application checks.
   the parsed contract. Batch validation supports independent event results, but
   actual partial publication and client response semantics are not implemented.
 
+## Completed browser SDK queue session — logged 2026-10-15
+
+Today's agreed queue slice is complete. The learner wrote all application code
+and ran all checks through guided, one-behavior-at-a-time TDD. Saved source was
+reviewed at close; the coach did not run application checks.
+
+- Created `@signaltrail/browser-sdk` with browser TypeScript settings, contracts
+  dependency, ESLint, Vitest, tsup, and a public entry point exporting
+  `openEventQueue` and `EventQueue`. Added `idb` as a runtime dependency and
+  `fake-indexeddb` as a test-only dependency. Set ESLint `tsconfigRootDir`
+  explicitly to resolve multiple package-root candidates.
+- Implemented IndexedDB connection opening/closing, enqueue, and ordered reads.
+  An auto-incrementing primary key preserves enqueue order; a unique eventId
+  index is present. Duplicate-enqueue behavior is not yet specified or tested.
+- Added configurable event-count capacity, default 500. Enqueue returns
+  `{ status: 'queued' }` after commit or
+  `{ status: 'dropped', reason: 'capacity' }` while preserving existing events.
+  Count and insert share one read/write transaction on the events store.
+- Four tests cover close/reopen preservation, enqueue order rather than eventId
+  order, dropping new events at capacity, and capacity across two concurrent
+  connections. Supplied failures established ordering, capacity, and concurrent
+  capacity gaps. Initial missing eventName and missing reopen were test setup
+  issues, not evidence of a persistence behavior failure.
+- The concurrent test exposed a separate `database.add()` transaction after the
+  count. Switching to `transaction.store.add()` kept check and insertion atomic.
+  The learner correctly identified the check-then-act race in their teach-back.
+- Learner reported **4 tests passed**. Supplied output confirms final Prettier,
+  SDK lint, typecheck, and JavaScript/declaration builds passed. No fresh contracts,
+  full-workspace, CI, actual browser reload, or real multi-tab run was verified.
+- At close, `packages/browser-sdk/` is untracked and `pnpm-lock.yaml` modified.
+  No commit or push was performed by the coach.
+
+Count capacity is a completed slice, not the full persistent delivery queue.
+Configuration validation, byte accounting, expiry, diagnostics, memory fallback,
+project isolation, claims, response-driven removal, and retries remain pending.
+Fake IndexedDB tests do not establish real browser durability or eviction behavior.
+
 ## Test and build status
 
+- Browser SDK queue: **4 tests passed** learner-reported; final formatting, lint,
+  typecheck, and tsup builds passed from supplied output. Saved source reviewed;
+  actual browser and full-workspace/CI verification remain pending.
 - Contracts as of 2026-10-15: supplied output confirms **57 tests passed**, lint,
   typecheck, and tsup JavaScript/declaration builds passed. Source and generated
   response schema/helper exports inspected. Formatting supplied before final
@@ -450,28 +490,27 @@ source and generated exports, without running application checks.
 
 ## Exact next step
 
-Next session (planned 2026-10-16): begin the browser SDK queue as a small vertical
-slice. Storage, fallback, limits and per-event retry decisions above are settled
-enough to start; do not restart the provider/storage comparison.
+Next session: continue the browser SDK queue from the completed persistence,
+ordering, and transactional count-capacity slice. Do not repeat scaffolding,
+storage selection, or the four completed tests.
 
-1. Brief teach-back: when a persisted event may be removed; response schema parsing
-   versus request matching; why uncertain delivery preserves the original ID.
-2. Inspect workspace conventions, then guide learner setup of
-   `packages/browser-sdk` with browser TypeScript settings, contracts dependency,
-   test/lint/build scripts and a public entry point. No scaffold exists at close.
-   Learner writes/runs code; keep setup minimal and verify it rather than assuming.
-3. Define one async queue interface and choose a small IndexedDB wrapper versus
-   native API after checking current docs. First behavior: a valid event queued
-   in IndexedDB can be read through a reopened queue connection with the same ID
-   and payload. Supply one test, establish its intended failure, then minimum
-   implementation. Fake IndexedDB tests do not establish real browser durability;
-   schedule an actual browser reload test before claiming that behavior.
-4. Add expiry, count/byte budgets and overflow separately, then claims and memory
-   fallback. Inject clock/storage dependencies as needed for meaningful failure
-   tests. Do not implement the scheduler, transport and persistence all at once.
-5. Later connect response parsing + matching before any queue deletion; test
-   accepted/rejected removal, retry retention, malformed/lost responses, and
-   cross-tab claim ownership. Preserve full-batch identity while matching results.
+1. Retrieve why count and insert must share a read/write transaction, and why
+   closing a connection does not delete its database. Revisit next session,
+   one week later, and three weeks later; calendar dates were not assigned.
+2. Validate `maxEvents` configuration through one guided red-to-green behavior;
+   define the allowed range before implementing. Invalid values are currently
+   unchecked. Keep the learner writing and running code.
+3. Add serialized UTF-8 byte capacity and accounting, then expiry separately.
+   Preserve the agreed oldest-first policy and remove expired entries before
+   deciding whether a new event fits. Current enqueue result is not an upload
+   acknowledgment. Define duplicate-ID behavior before relying on its index.
+4. Continue with project isolation, claims and bounded memory fallback. Schedule
+   an actual browser reload test and real multi-tab verification; fake IndexedDB
+   connection tests alone do not establish those browser behaviors.
+5. Later connect response parsing + request matching before queue deletion;
+   test accepted/rejected removal, retry retention, malformed/lost responses, and
+   claim ownership. Preserve original event IDs on uncertain delivery. Scheduler,
+   transport and persistence should remain separate implementation steps.
 
 No live ingestion endpoint is required for the first queue slice; use explicit
 test boundaries without claiming end-to-end delivery. Later API work still needs
@@ -565,3 +604,14 @@ correct; no full curriculum quiz conducted. All implementation code supplied;
 learner wrote/refactored and ran it. Review 2026-10-16, 2026-10-22, 2026-11-05:
 isolating test failures, schema parsing prerequisites, safe queue removal,
 uncertain acknowledgment and duplicate handling.
+
+Browser SDK queue learning evidence (logged 2026-10-15): learner correctly
+explained that closing a connection leaves the database intact, unlike deleteDB;
+that queue order must follow enqueue order; and that splitting count and insert
+introduces a check-then-act race. Auto-increment keys, transaction scope, test
+fixture corrections, and the implementation were guided with supplied code.
+Independent implementation mastery is not established. Review connection lifecycle,
+key order versus event sequence, transaction atomicity, and fake versus real
+browser evidence at the next session, one week later, and three weeks later.
+This closes the SignalTrail slice only, not a full curriculum day or closing quiz.
+Senior workspace documents were not edited.
