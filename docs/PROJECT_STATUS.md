@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-13
+Last updated: 2026-10-15
 
 ## Goal and architecture
 
@@ -313,6 +313,92 @@ were run by the coach.
   as modified; no commit/push performed by the coach. Infrastructure/S3 checks
   were not repeated. Recovery storage and production resilience remain pending.
 
+## Completed delivery design and response contract — 2026-10-14–2026-10-15
+
+Today (2026-10-15) is done at the learner's request. Delivery design was agreed
+on 2026-10-14; response-schema work began then and completed today. Application
+code and checks were learner-written/run with supplied coaching. Coach reviewed
+source and generated exports, without running application checks.
+
+### Agreed analytics SDK delivery design (not implemented)
+
+- IndexedDB is the primary pending-event store. Valid analytics events are stored
+  before transmission and retained while delivery is unresolved. Replay persistence
+  is a separate, undecided policy. No browser SDK package exists yet.
+- On storage failure, fall back to bounded memory and report degraded persistence;
+  do not disrupt the host application. Memory does not survive page closure.
+- Provisional configurable limits: IndexedDB 500 events/1 MiB serialized payload;
+  memory 100 events/256 KiB. Either count or bytes can fill the queue. Both use
+  a 24-hour maximum age from capture, with expired events removed first.
+  Preserve older pending events and drop new arrivals at capacity; report losses.
+  Payload bytes are UTF-8 serialized event bytes, not actual disk/RAM occupancy.
+- Limits are starting budgets, not measured capacity. Calibration process:
+  measure representative demo-store journeys (event rate, serialized sizes and
+  bursts), choose the offline duration to support, estimate count/byte budgets
+  with margin, then test offline/reconnect, refresh, multiple tabs, storage failure,
+  overflow and expiry. Measure browser responsiveness, storage latency and memory;
+  tune before production. Backend load testing alone cannot size browser queues.
+- Per-event outcomes selected: accepted after Redpanda publication acknowledgment;
+  permanently rejected events removed with diagnostics; unconfirmed publication
+  retained for retry. Lost/malformed/incomplete/inconsistent responses must not
+  cause unresolved events to be discarded. Preserve event IDs on every retry.
+- Retry until 24-hour expiry, without a separate attempt-count cutoff. Exponential
+  backoff starts with a one-second window, capped at five minutes, using full
+  jitter from zero to that window; honor a longer server minimum. Persist attempt
+  count and next eligible time. Newer eligible events may proceed while older
+  events wait, so strict delivery ordering is not promised.
+- Authentication failures pause delivery and report configuration failure. Rate
+  limiting honors server delay; transient failures retry. Oversized requests need
+  splitting, not identical repeated sends. Exact HTTP status mapping, resumption
+  behavior, and oversized-single-event handling still need final API design.
+- Multiple tabs use atomic expiring claims on selected work. Proposed initial
+  request timeout 15 seconds and claim duration 60 seconds were accepted as
+  provisional. Upload outside the transaction; apply responses only while owning
+  the claim. Expiry allows recovery after tab loss; duplicates remain possible.
+- Tracking disable stops capture/future uploads and clears pending project events
+  in IndexedDB/memory across tabs. Already sent requests cannot be recalled.
+  Detailed API, cleanup coordination, and re-enable behavior remain to implement.
+- Recommended one analytics event per Redpanda record, with producer transport
+  batching and separate ClickHouse insert batching. This recommendation was
+  discussed, not independently approved as a final record format. Producer/client,
+  partition key, durability configuration and downstream deduplication remain open.
+
+### Completed response-contract increment
+
+- Added `analytics-batch-response.ts` and its test file in contracts. Schema covers
+  accepted (index/eventId/status), rejected (index/status/INVALID_EVENT), and retry
+  (index/eventId/status/PUBLICATION_UNCONFIRMED plus optional retryAfterMs).
+  Retry delays are nonnegative integers; event IDs are nonblank strings.
+- Results must be nonempty, statuses recognized, indexes nonnegative integers
+  and unique. Original rejected entries need no usable event ID.
+- Exported `isAnalyticsBatchResponseForEvents`: checks equal result/request counts,
+  index bounds and ID equality for accepted/retry results. Rejections match by
+  index. Caller MUST parse through AnalyticsBatchResponseSchema first: uniqueness,
+  nonnegative/integer indexes and nonempty results are schema responsibilities,
+  not enforced again by the helper or guaranteed by TypeScript's structural types.
+- On response validation/matching failure, retain unresolved queue data. The
+  helper is a boolean check, not a type guard or queue-deletion implementation.
+  Reordered results are logically supported by indexes but not separately tested.
+- Supplied intended red failures established accepted/rejected/retry support,
+  empty results, ID mismatch, missing coverage and out-of-range index behavior.
+  Duplicate-index test initially passed for an unrelated invalid status; corrected
+  the fixture before implementing uniqueness. Do not count that initial pass as
+  evidence of duplicate detection. Other cases verify existing rules.
+- Extracted index-uniqueness helper required an explicit readonly index-only type;
+  removed accidental console import. Count guard moved outside every() on review.
+  Helper naming (`sameSize`/`a`) remains an optional readability cleanup.
+- Supplied final output confirms **57 tests passed** (38 event/batch tests,
+  19 response tests), lint, typecheck and tsup JavaScript/declaration builds passed.
+  Formatting output supplied before final guard move; saved code and whitespace
+  reviewed afterward. Public schema/helper exports verified in source and both
+  generated artifacts. Initial build omitted the unsaved entry-point export;
+  corrected and rebuilt before claiming package exposure.
+- No queue, retry scheduler, API authentication, publication, deduplication or
+  production recovery was implemented. No fresh full-workspace checks or CI run
+  verified. Response schema alone cannot prove Redpanda publication happened.
+- At close, index.ts is modified and both response source/test files are untracked.
+  No commit or push performed by the coach. Senior workspace documents not edited.
+
 ## Important decisions and current limits
 
 - Only schema version `1` is supported (`z.literal(1)`).
@@ -337,9 +423,10 @@ were run by the coach.
 
 ## Test and build status
 
-- Contracts as of 2026-10-13: learner reported **38 tests passed**. Supplied
-  formatting, lint, typecheck, and tsup JavaScript/declaration build outputs confirm
-  success. Saved source and generated JSON property declarations inspected.
+- Contracts as of 2026-10-15: supplied output confirms **57 tests passed**, lint,
+  typecheck, and tsup JavaScript/declaration builds passed. Source and generated
+  response schema/helper exports inspected. Formatting supplied before final
+  guard move; whitespace reviewed afterward.
 - Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
   all passing. Full root outputs were not supplied.
 - Formatting: Day 2 root check passed from supplied output. Compose formatting
@@ -363,23 +450,34 @@ were run by the coach.
 
 ## Exact next step
 
-Next session (planned 2026-10-14), follow the learner's explicit priority:
-decide the persistent SDK storage mechanism and retry semantics before more
-implementation. Compare IndexedDB and localStorage for bounded event buffering,
-including async access, storage failures, multi-tab coordination, event age/byte/
-count limits, and consent cleanup. Do not assume a mechanism is approved.
+Next session (planned 2026-10-16): begin the browser SDK queue as a small vertical
+slice. Storage, fallback, limits and per-event retry decisions above are settled
+enough to start; do not restart the provider/storage comparison.
 
-Then decide request-level versus per-event retry handling, reconcile it with
-partial acceptance, and define response meanings, removal from persistent storage,
-permanent rejections, lost/malformed responses, stable IDs, backoff/jitter,
-retry bounds, and overload behavior. The accepted/rejected/retry model and HTTP
-status mapping remain proposals. Do not implement them as settled requirements.
+1. Brief teach-back: when a persisted event may be removed; response schema parsing
+   versus request matching; why uncertain delivery preserves the original ID.
+2. Inspect workspace conventions, then guide learner setup of
+   `packages/browser-sdk` with browser TypeScript settings, contracts dependency,
+   test/lint/build scripts and a public entry point. No scaffold exists at close.
+   Learner writes/runs code; keep setup minimal and verify it rather than assuming.
+3. Define one async queue interface and choose a small IndexedDB wrapper versus
+   native API after checking current docs. First behavior: a valid event queued
+   in IndexedDB can be read through a reopened queue connection with the same ID
+   and payload. Supply one test, establish its intended failure, then minimum
+   implementation. Fake IndexedDB tests do not establish real browser durability;
+   schedule an actual browser reload test before claiming that behavior.
+4. Add expiry, count/byte budgets and overflow separately, then claims and memory
+   fallback. Inject clock/storage dependencies as needed for meaningful failure
+   tests. Do not implement the scheduler, transport and persistence all at once.
+5. Later connect response parsing + matching before any queue deletion; test
+   accepted/rejected removal, retry retention, malformed/lost responses, and
+   cross-tab claim ownership. Preserve full-batch identity while matching results.
 
-Restricted S3 checks, Compose checks, bounded batch structure, independent event
-validation, JSON properties, and nonblank required strings are complete; do not
-repeat them as unfinished setup. Later API work needs request authentication,
-Redpanda acknowledgment before acceptance, and HTTP body-size protection before
-parsing oversized payloads. SDK/storage implementation follows agreed design.
+No live ingestion endpoint is required for the first queue slice; use explicit
+test boundaries without claiming end-to-end delivery. Later API work still needs
+request authentication, settled HTTP status semantics, body-size protection,
+producer choice and Redpanda acknowledgment. Restricted S3, Compose, event/batch
+validation and response-contract checks are done; do not repeat finished setup.
 
 Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
 strategy separately. No archive implementation or production deployment is
@@ -454,3 +552,16 @@ supplied; implementation mastery is not independently established. Review next
 session (2026-10-14), 2026-10-20, and 2026-11-03: validation before serialization,
 recursive JSON versus resource bounds, persistent queue lifecycle, and response
 semantics versus retries. Senior workspace documents were not edited.
+
+2026-10-14–15 learning evidence: learner selected storage/fallback/overflow/expiry,
+per-event retry and multi-tab/opt-out policies through guided discussion. These
+are agreed requirements, not implementation mastery. Clarified tests passing
+because invalid fixtures assert false versus actual schema acceptance; duplicate
+test initially masked missing uniqueness with an invalid status. Standalone helper
+typing versus contextual inference required explanation. Learner correctly said
+a mismatched response ID cannot confirm acceptance and independently recalled
+retaining events and retrying with the same ID after response loss. Closing check
+correct; no full curriculum quiz conducted. All implementation code supplied;
+learner wrote/refactored and ran it. Review 2026-10-16, 2026-10-22, 2026-11-05:
+isolating test failures, schema parsing prerequisites, safe queue removal,
+uncertain acknowledgment and duplicate handling.
