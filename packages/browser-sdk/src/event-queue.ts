@@ -1,3 +1,5 @@
+import { normalizeQueueConfig, type EventQueueConfig } from './project-config.ts';
+export type { EventQueueConfig } from './project-config.ts';
 import {
   AnalyticsBatchResponseSchema,
   isAnalyticsBatchResponseForEvents,
@@ -174,7 +176,7 @@ function decideEnqueue(
   return { status: 'queued' };
 }
 
-interface EventQueueOptions {
+export interface EventQueueOptions {
   maxEvents?: number;
   maxBytes?: number;
   maxAgeMs?: number;
@@ -186,34 +188,9 @@ interface EventQueueOptions {
   };
 }
 
-export interface EventQueueConfig {
-  readonly projectKey: string;
-  readonly ingestionUrl: string;
-}
-
 function queueDatabaseName(config: EventQueueConfig): string {
-  if (typeof config.projectKey !== 'string' || !/\S/.test(config.projectKey)) {
-    throw new TypeError('projectKey must be a nonblank string');
-  }
-  const invalidEndpoint =
-    'ingestionUrl must be an absolute HTTP(S) URL without credentials or a fragment';
-  let endpoint: URL;
-  try {
-    endpoint = new URL(config.ingestionUrl);
-  } catch {
-    throw new TypeError(invalidEndpoint);
-  }
-  if (
-    !['http:', 'https:'].includes(endpoint.protocol) ||
-    endpoint.username ||
-    endpoint.password ||
-    endpoint.hash
-  ) {
-    throw new TypeError(invalidEndpoint);
-  }
-  // Tuple encoding preserves the exact public key and prevents delimiter collisions.
-  // URL serialization normalizes host casing, default ports and the root slash.
-  return `signaltrail:analytics:v1:${JSON.stringify([endpoint.href, config.projectKey])}`;
+  const normalized = normalizeQueueConfig(config);
+  return `signaltrail:analytics:v1:${JSON.stringify([normalized.ingestionUrl, normalized.projectKey])}`;
 }
 
 export interface EventQueue {
@@ -223,6 +200,7 @@ export interface EventQueue {
   claimBatch(limit?: number): Promise<ClaimBatchResult>;
   releaseClaim(claimId: string): Promise<ReleaseClaimResult>;
   applyResponse(claimId: string, response: unknown): Promise<ApplyResponseResult>;
+  retryClaim(claimId: string, minimumDelayMs?: number): Promise<ApplyResponseResult>;
   close(): void;
 }
 
@@ -258,28 +236,48 @@ function withRecovery(
     }
   }
 
+  async function applyResponse(claimId: string, response: unknown): Promise<ApplyResponseResult> {
+    if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+    const original = issuedClaims.get(claimId);
+    if (!original || original.expiresAt <= now()) return { status: 'not_owned' };
+    const parsed = AnalyticsBatchResponseSchema.safeParse(response);
+    if (!parsed.success || !isAnalyticsBatchResponseForEvents(parsed.data, original.events)) {
+      return { status: 'invalid_response' };
+    }
+    const source = storage;
+    try {
+      const result = await source.applyResponse(claimId, original.events, parsed.data);
+      issuedClaims.delete(claimId);
+      return source === storage ? result : { status: 'storage_error' };
+    } catch (error) {
+      if (closed || source.storageMode === 'memory') throw error;
+      degrade(source);
+      return { status: 'storage_error' };
+    }
+  }
+
   return {
     get storageMode() {
       return storage.storageMode;
     },
-    async applyResponse(claimId, response) {
+    applyResponse,
+    async retryClaim(claimId, minimumDelayMs = 0) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+      if (!Number.isSafeInteger(minimumDelayMs) || minimumDelayMs < 0) {
+        throw new RangeError('minimumDelayMs must be a nonnegative safe integer');
+      }
       const original = issuedClaims.get(claimId);
-      if (!original || original.expiresAt <= now()) return { status: 'not_owned' };
-      const parsed = AnalyticsBatchResponseSchema.safeParse(response);
-      if (!parsed.success || !isAnalyticsBatchResponseForEvents(parsed.data, original.events)) {
-        return { status: 'invalid_response' };
-      }
-      const source = storage;
-      try {
-        const result = await source.applyResponse(claimId, original.events, parsed.data);
-        issuedClaims.delete(claimId);
-        return source === storage ? result : { status: 'storage_error' };
-      } catch (error) {
-        if (closed || source.storageMode === 'memory') throw error;
-        degrade(source);
-        return { status: 'storage_error' };
-      }
+      if (!original) return { status: 'not_owned' };
+      // Local delivery failure uses the same atomic retention/backoff update.
+      return applyResponse(claimId, {
+        results: original.events.map((event, index) => ({
+          index,
+          eventId: event.eventId,
+          status: 'retry',
+          code: 'PUBLICATION_UNCONFIRMED',
+          retryAfterMs: minimumDelayMs,
+        })),
+      });
     },
     async claimBatch(limit = MAX_CLAIM_EVENTS) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
