@@ -1,7 +1,12 @@
-import type { AnalyticsEventSchema } from '@signaltrail/contracts';
+import {
+  AnalyticsBatchResponseSchema,
+  isAnalyticsBatchResponseForEvents,
+  type AnalyticsEventSchema,
+} from '@signaltrail/contracts';
 import { openDB, type DBSchema, type IDBPDatabase, type IDBPTransaction } from 'idb';
 
 type AnalyticsEvent = ReturnType<typeof AnalyticsEventSchema.parse>;
+type BatchResponse = ReturnType<typeof AnalyticsBatchResponseSchema.parse>;
 
 const encoder = new TextEncoder();
 const CLAIM_LEASE_MS = 60_000;
@@ -102,6 +107,14 @@ export type ClaimBatchResult = ClaimOutcome | { status: 'storage_error' };
 type ReleaseOutcome = { status: 'released' } | { status: 'not_owned' };
 export type ReleaseClaimResult = ReleaseOutcome | { status: 'storage_error' };
 
+export type ApplyResponseResult =
+  | { status: 'applied' }
+  | { status: 'invalid_response' }
+  | { status: 'not_owned' }
+  | { status: 'storage_error' };
+
+type ApplyOutcome = { status: 'applied' } | { status: 'not_owned' };
+
 interface QueueLimits {
   maxEvents: number;
   maxBytes: number;
@@ -182,6 +195,7 @@ export interface EventQueue {
   getAll(): Promise<QueueReadResult>;
   claimBatch(limit?: number): Promise<ClaimBatchResult>;
   releaseClaim(claimId: string): Promise<ReleaseClaimResult>;
+  applyResponse(claimId: string, response: unknown): Promise<ApplyResponseResult>;
   close(): void;
 }
 
@@ -191,6 +205,11 @@ interface QueueStorage {
   getAll(): Promise<AnalyticsEvent[]>;
   claimBatch(limit: number): Promise<ClaimOutcome>;
   releaseClaim(claimId: string): Promise<ReleaseOutcome>;
+  applyResponse(
+    claimId: string,
+    events: readonly AnalyticsEvent[],
+    response: BatchResponse,
+  ): Promise<ApplyOutcome>;
   close(): void;
 }
 
@@ -201,10 +220,12 @@ function withRecovery(
 ): EventQueue {
   let storage = initial;
   let closed = false;
+  const issuedClaims = new Map<string, { expiresAt: number; events: AnalyticsEvent[] }>();
 
   function degrade(source: QueueStorage): void {
     if (storage === source) {
       source.close();
+      issuedClaims.clear();
       storage = createMemoryQueue(memoryLimits, now);
     }
   }
@@ -212,6 +233,25 @@ function withRecovery(
   return {
     get storageMode() {
       return storage.storageMode;
+    },
+    async applyResponse(claimId, response) {
+      if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+      const original = issuedClaims.get(claimId);
+      if (!original || original.expiresAt <= now()) return { status: 'not_owned' };
+      const parsed = AnalyticsBatchResponseSchema.safeParse(response);
+      if (!parsed.success || !isAnalyticsBatchResponseForEvents(parsed.data, original.events)) {
+        return { status: 'invalid_response' };
+      }
+      const source = storage;
+      try {
+        const result = await source.applyResponse(claimId, original.events, parsed.data);
+        issuedClaims.delete(claimId);
+        return source === storage ? result : { status: 'storage_error' };
+      } catch (error) {
+        if (closed || source.storageMode === 'memory') throw error;
+        degrade(source);
+        return { status: 'storage_error' };
+      }
     },
     async claimBatch(limit = MAX_CLAIM_EVENTS) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
@@ -221,7 +261,17 @@ function withRecovery(
       const source = storage;
       try {
         const result = await source.claimBatch(limit);
-        return source === storage ? result : { status: 'storage_error' };
+        if (source !== storage) return { status: 'storage_error' };
+        for (const [id, existing] of issuedClaims) {
+          if (existing.expiresAt <= now()) issuedClaims.delete(id);
+        }
+        if (result.status === 'claimed') {
+          issuedClaims.set(result.claimId, {
+            expiresAt: result.expiresAt,
+            events: structuredClone(result.events),
+          });
+        }
+        return result;
       } catch (error) {
         if (closed || source.storageMode === 'memory') throw error;
         degrade(source);
@@ -236,6 +286,7 @@ function withRecovery(
       const source = storage;
       try {
         const result = await source.releaseClaim(claimId);
+        issuedClaims.delete(claimId);
         return source === storage ? result : { status: 'storage_error' };
       } catch (error) {
         if (closed || source.storageMode === 'memory') throw error;
@@ -270,6 +321,7 @@ function withRecovery(
     },
     close() {
       closed = true;
+      issuedClaims.clear();
       storage.close();
     },
   };
@@ -294,6 +346,34 @@ function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage
 
   return {
     storageMode: 'memory',
+    async applyResponse(claimId, expected, response) {
+      ensureOpen();
+      const time = now();
+      const owned = [...claims.values()].filter((record) => record.claimId === claimId);
+      if (
+        owned.length !== expected.length ||
+        expected.some((item) => {
+          const record = claims.get(item.eventId);
+          const stored = events.find((entry) => entry.eventId === item.eventId);
+          return (
+            !record ||
+            record.claimId !== claimId ||
+            record.expiresAt <= time ||
+            !stored ||
+            isExpired(stored, time, limits.maxAgeMs)
+          );
+        })
+      )
+        return { status: 'not_owned' };
+      const removed = new Set(
+        response.results
+          .filter((result) => result.status !== 'retry')
+          .map((result) => expected[result.index]!.eventId),
+      );
+      events = events.filter((item) => !removed.has(item.eventId));
+      for (const item of expected) claims.delete(item.eventId);
+      return { status: 'applied' };
+    },
     async claimBatch(limit) {
       ensureOpen();
       const time = now();
@@ -388,6 +468,37 @@ export async function openEventQueue(
   return withRecovery(
     {
       storageMode: 'indexeddb',
+      async applyResponse(claimId, expected, response): Promise<ApplyOutcome> {
+        return inTransaction(database, async (transaction) => {
+          const records = await transaction
+            .objectStore('claims')
+            .index('byClaimId')
+            .getAll(claimId);
+          if (records.length !== expected.length) return { status: 'not_owned' };
+          const stored = await Promise.all(
+            records.map((record) => transaction.objectStore('events').get(record.eventKey)),
+          );
+          const time = now();
+          if (
+            records.some(
+              (record, index) =>
+                record.ownerId !== ownerId ||
+                record.expiresAt <= time ||
+                !stored[index] ||
+                stored[index].eventId !== expected[index]?.eventId ||
+                isExpired(stored[index], time, limits.maxAgeMs),
+            )
+          )
+            return { status: 'not_owned' };
+          for (const result of response.results) {
+            const record = records[result.index]!;
+            if (result.status !== 'retry')
+              await transaction.objectStore('events').delete(record.eventKey);
+            await transaction.objectStore('claims').delete(record.eventKey);
+          }
+          return { status: 'applied' };
+        });
+      },
       async releaseClaim(claimId): Promise<ReleaseOutcome> {
         return inTransaction(database, async (transaction) => {
           let cursor = await transaction
