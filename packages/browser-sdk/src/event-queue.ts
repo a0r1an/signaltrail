@@ -12,6 +12,23 @@ const encoder = new TextEncoder();
 const CLAIM_LEASE_MS = 60_000;
 const MAX_CLAIM_EVENTS = 100;
 
+interface RetryState {
+  retryCount: number;
+  nextEligibleAt: number;
+}
+
+function nextRetryState(
+  previous: RetryState | undefined,
+  time: number,
+  serverDelayMs: number | undefined,
+  random: () => number,
+): RetryState {
+  const retryCount = (previous?.retryCount ?? 0) + 1;
+  const windowMs = Math.min(300_000, 1000 * 2 ** Math.min(retryCount - 1, 9));
+  const delayMs = Math.max(Math.floor(random() * windowMs), serverDelayMs ?? 0);
+  return { retryCount, nextEligibleAt: time + delayMs };
+}
+
 function payloadBytes(event: AnalyticsEvent): number {
   return encoder.encode(JSON.stringify(event)).byteLength;
 }
@@ -33,9 +50,17 @@ interface QueueDatabase extends DBSchema {
     value: { eventKey: number; claimId: string; ownerId: string; expiresAt: number };
     indexes: { byClaimId: string };
   };
+  retries: {
+    key: number;
+    value: RetryState & { eventKey: number };
+  };
 }
 
-type QueueTransaction = IDBPTransaction<QueueDatabase, ['events', 'claims'], 'readwrite'>;
+type QueueTransaction = IDBPTransaction<
+  QueueDatabase,
+  ['events', 'claims', 'retries'],
+  'readwrite'
+>;
 
 function uniqueId(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
@@ -54,6 +79,7 @@ async function readUnexpired(
     if (isExpired(cursor.value, time, maxAgeMs)) {
       await cursor.delete();
       await transaction.objectStore('claims').delete(cursor.primaryKey);
+      await transaction.objectStore('retries').delete(cursor.primaryKey);
     } else {
       events.push(cursor.value);
     }
@@ -66,7 +92,7 @@ async function inTransaction<T>(
   database: IDBPDatabase<QueueDatabase>,
   operation: (transaction: QueueTransaction) => Promise<T>,
 ): Promise<T> {
-  const transaction = database.transaction(['events', 'claims'], 'readwrite');
+  const transaction = database.transaction(['events', 'claims', 'retries'], 'readwrite');
   // Observe completion immediately: a request failure can also reject transaction.done.
   const completion = transaction.done.then(
     () => ({ committed: true as const }),
@@ -153,6 +179,7 @@ interface EventQueueOptions {
   maxBytes?: number;
   maxAgeMs?: number;
   now?: () => number;
+  random?: () => number;
   memory?: {
     maxEvents?: number;
     maxBytes?: number;
@@ -217,6 +244,7 @@ function withRecovery(
   initial: QueueStorage,
   memoryLimits: QueueLimits,
   now: () => number,
+  random: () => number,
 ): EventQueue {
   let storage = initial;
   let closed = false;
@@ -226,7 +254,7 @@ function withRecovery(
     if (storage === source) {
       source.close();
       issuedClaims.clear();
-      storage = createMemoryQueue(memoryLimits, now);
+      storage = createMemoryQueue(memoryLimits, now, random);
     }
   }
 
@@ -327,9 +355,14 @@ function withRecovery(
   };
 }
 
-function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage {
+function createMemoryQueue(
+  limits: QueueLimits,
+  now: () => number,
+  random: () => number,
+): QueueStorage {
   let events: AnalyticsEvent[] = [];
   const claims = new Map<string, { claimId: string; expiresAt: number }>();
+  const retries = new Map<string, RetryState>();
   let closed = false;
 
   function ensureOpen(): void {
@@ -340,6 +373,7 @@ function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage
     events = events.filter((stored) => {
       if (!isExpired(stored, time, limits.maxAgeMs)) return true;
       claims.delete(stored.eventId);
+      retries.delete(stored.eventId);
       return false;
     });
   }
@@ -370,7 +404,18 @@ function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage
           .filter((result) => result.status !== 'retry')
           .map((result) => expected[result.index]!.eventId),
       );
+      const scheduled = response.results
+        .filter((result) => result.status === 'retry')
+        .map((result) => {
+          const eventId = expected[result.index]!.eventId;
+          return [
+            eventId,
+            nextRetryState(retries.get(eventId), time, result.retryAfterMs, random),
+          ] as const;
+        });
       events = events.filter((item) => !removed.has(item.eventId));
+      for (const eventId of removed) retries.delete(eventId);
+      for (const [eventId, state] of scheduled) retries.set(eventId, state);
       for (const item of expected) claims.delete(item.eventId);
       return { status: 'applied' };
     },
@@ -381,7 +426,10 @@ function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage
       const selected = events
         .filter((item) => {
           const existing = claims.get(item.eventId);
-          return !existing || existing.expiresAt <= time;
+          const retry = retries.get(item.eventId);
+          return (
+            (!existing || existing.expiresAt <= time) && (!retry || retry.nextEligibleAt <= time)
+          );
         })
         .slice(0, limit);
       if (!selected.length) return { status: 'empty' };
@@ -422,6 +470,7 @@ function createMemoryQueue(limits: QueueLimits, now: () => number): QueueStorage
       closed = true;
       events = [];
       claims.clear();
+      retries.clear();
     },
   };
 }
@@ -445,8 +494,9 @@ export async function openEventQueue(
   validateLimits(limits);
   validateLimits(memoryLimits, 'memory.');
   const now = options.now ?? Date.now;
+  const random = options.random ?? Math.random;
   const ownerId = uniqueId();
-  const versionNumber = 2;
+  const versionNumber = 3;
   let database: IDBPDatabase<QueueDatabase>;
   try {
     database = await openDB<QueueDatabase>(databaseName, versionNumber, {
@@ -459,10 +509,11 @@ export async function openEventQueue(
           const store = database.createObjectStore('claims', { keyPath: 'eventKey' });
           store.createIndex('byClaimId', 'claimId');
         }
+        if (oldVersion < 3) database.createObjectStore('retries', { keyPath: 'eventKey' });
       },
     });
   } catch {
-    return withRecovery(createMemoryQueue(memoryLimits, now), memoryLimits, now);
+    return withRecovery(createMemoryQueue(memoryLimits, now, random), memoryLimits, now, random);
   }
 
   return withRecovery(
@@ -492,8 +543,14 @@ export async function openEventQueue(
             return { status: 'not_owned' };
           for (const result of response.results) {
             const record = records[result.index]!;
-            if (result.status !== 'retry')
+            if (result.status === 'retry') {
+              const previous = await transaction.objectStore('retries').get(record.eventKey);
+              const state = nextRetryState(previous, time, result.retryAfterMs, random);
+              await transaction.objectStore('retries').put({ eventKey: record.eventKey, ...state });
+            } else {
               await transaction.objectStore('events').delete(record.eventKey);
+              await transaction.objectStore('retries').delete(record.eventKey);
+            }
             await transaction.objectStore('claims').delete(record.eventKey);
           }
           return { status: 'applied' };
@@ -529,11 +586,16 @@ export async function openEventQueue(
             if (isExpired(cursor.value, time, limits.maxAgeMs)) {
               await cursor.delete();
               await transaction.objectStore('claims').delete(cursor.primaryKey);
+              await transaction.objectStore('retries').delete(cursor.primaryKey);
               cursor = await cursor.continue();
               continue;
             }
             const existing = await transaction.objectStore('claims').get(cursor.primaryKey);
-            if (!existing || existing.expiresAt <= time) {
+            const retry = await transaction.objectStore('retries').get(cursor.primaryKey);
+            if (
+              (!existing || existing.expiresAt <= time) &&
+              (!retry || retry.nextEligibleAt <= time)
+            ) {
               events.push(cursor.value);
               await transaction.objectStore('claims').put({
                 eventKey: cursor.primaryKey,
@@ -569,5 +631,6 @@ export async function openEventQueue(
     },
     memoryLimits,
     now,
+    random,
   );
 }

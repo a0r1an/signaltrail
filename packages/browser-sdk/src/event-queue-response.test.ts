@@ -304,7 +304,9 @@ describe('applying batch responses', () => {
           }),
         ).toEqual({ status: 'applied' });
         expect(await queue.getAll()).toEqual({ status: 'read', events: events.slice(2) });
-        expect((await claim(queue)).events).toEqual(events.slice(2));
+        expect((await claim(queue)).events).toEqual(events.slice(3));
+        vi.setSystemTime(captureTime + 1000);
+        expect((await claim(queue)).events).toEqual([events[2]]);
         expect(
           await queue.applyResponse(batch.claimId, { results: [accepted(events[0]!.eventId)] }),
         ).toEqual({ status: 'not_owned' });
