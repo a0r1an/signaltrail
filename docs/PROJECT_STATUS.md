@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-15
+Last updated: 2026-10-20
 
 ## Goal and architecture
 
@@ -419,7 +419,8 @@ source and generated exports, without running application checks.
   remain future work.
 - Project association is request-level; per-event projectKey is omitted from
   the parsed contract. Batch validation supports independent event results, but
-  actual partial publication and client response semantics are not implemented.
+  client response handling is implemented in the SDK; actual ingestion publication
+  and Redpanda acknowledgment remain pending.
 
 ## Completed browser SDK queue session — logged 2026-10-15
 
@@ -454,15 +455,66 @@ reviewed at close; the coach did not run application checks.
   No commit or push was performed by the coach.
 
 Count capacity is a completed slice, not the full persistent delivery queue.
-Configuration validation, byte accounting, expiry, diagnostics, memory fallback,
-project isolation, claims, response-driven removal, and retries remain pending.
+The remaining queue and transport work listed at that session close was
+subsequently implemented below on 2026-10-20; broader diagnostics remain pending.
 Fake IndexedDB tests do not establish real browser durability or eviction behavior.
+
+## Completed resilient SDK queue and transport — 2026-10-20
+
+Stopped for today at the user's request. The agent implemented and verified the
+approved slices directly, using behavior-by-behavior test-first work. The user
+requested scope agreement and design questions before each day's implementation;
+`AGENTS.md` now records this workflow.
+
+- Validated configuration and added serialized UTF-8 byte capacity and capture-time
+  expiry. Defaults remain IndexedDB 500 events/1 MiB/24 hours. Expired entries are
+  removed before capacity decisions; new events are dropped at capacity while
+  older events are preserved. Duplicate IDs return `already_queued` without
+  replacing payload, order, age, or retry state.
+- Isolated persistent queues by normalized ingestion endpoint and public project
+  key. The transport opens its own matching queue from fixed configuration.
+  This prevents accidental cross-project delivery; ingestion authentication and
+  project authorization still need implementation.
+- Added explicit storage outcomes and bounded memory fallback: 100 events/256 KiB,
+  with the same age policy. IndexedDB open/runtime failures switch that instance
+  to memory until reinitialization. Existing disk backlog remains available for
+  recovery; memory fallback does not establish durable storage.
+- Added atomic claims for up to 100 events with 60-second leases, owner-only
+  release, and expiry-based reclamation across IndexedDB connections. Database
+  migrations preserve existing events while adding claims and retry metadata.
+- Added atomic response application against private original-batch snapshots.
+  Accepted/rejected entries are removed, retry entries retained, and incomplete,
+  malformed, mismatched, foreign, or stale responses cannot authorize deletion.
+- Persisted retry timing with full jitter, an exponential window starting at one
+  second and capped at five minutes, and longer server minimum delays. Retry
+  state survives reopening; newer eligible events can bypass waiting entries.
+  Retries preserve event IDs and continue until capture-time expiry, without a
+  separate attempt limit. Server deduplication remains unimplemented.
+- Added explicit `flush()` transport: POST `{ events }` to the configured endpoint
+  using the public project key as a Bearer token, one request in flight per
+  transport, and a 15-second deadline covering response-body parsing. Closing
+  aborts the request; a late response cannot remove timed-out events.
+- Network failures, timeouts, HTTP 5xx, and invalid responses retain events and
+  schedule retries. HTTP 429 respects `Retry-After` seconds or dates, with a
+  one-second fallback, and pauses new sends for that transport during cooldown.
+  HTTP 401/403 pause for authentication; 413 pauses for payload size; other
+  unexpected non-success statuses pause for investigation. Paused events remain
+  queued; reinitialization is required to resume. Automatic splitting is pending.
+- Agent-run verification under Node 24: **196 SDK tests passed across five files**;
+  SDK formatting, lint, typecheck, JavaScript/declaration builds, and
+  `git diff --check` passed. Tests use fake IndexedDB and mocked HTTP, not a live
+  ingestion service. No fresh contracts, full-workspace, or remote CI run was
+  verified today; real browser durability, eviction, and multi-tab behavior remain
+  unverified.
+- At logging time the working tree was clean. Latest inspected commit:
+  `012d067` (batch upload transport); preceding retry timing commit: `ad608d0`.
+  The agent did not commit or push. This documentation update is a new change.
 
 ## Test and build status
 
-- Browser SDK queue: **4 tests passed** learner-reported; final formatting, lint,
-  typecheck, and tsup builds passed from supplied output. Saved source reviewed;
-  actual browser and full-workspace/CI verification remain pending.
+- Browser SDK as of 2026-10-20: **196 tests passed**, agent-run under Node 24;
+  formatting, lint, typecheck, and tsup JavaScript/declaration builds passed.
+  Actual browser, live ingestion, and full-workspace/CI verification remain pending.
 - Contracts as of 2026-10-15: supplied output confirms **57 tests passed**, lint,
   typecheck, and tsup JavaScript/declaration builds passed. Source and generated
   response schema/helper exports inspected. Formatting supplied before final
@@ -477,7 +529,8 @@ Fake IndexedDB tests do not establish real browser durability or eviction behavi
 - CI: learner reported a successful GitHub Actions run after the documentation
   fix. Workflow source was reviewed; remote run logs/URL were not independently
   inspected. Repository: https://github.com/a0r1an/signaltrail.
-- Source was inspected; application checks were not independently run by the coach.
+- Earlier application checks were learner-run; the 2026-10-20 SDK checks above
+  were independently run by the agent.
 - Strict TypeScript settings were inspected, including `strict`,
   `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
 - Build/export verification does not yet demonstrate an application importing
@@ -490,33 +543,27 @@ Fake IndexedDB tests do not establish real browser durability or eviction behavi
 
 ## Exact next step
 
-Next session: continue the browser SDK queue from the completed persistence,
-ordering, and transactional count-capacity slice. Do not repeat scaffolding,
-storage selection, or the four completed tests.
+Next session: propose the day's scope and resolve necessary design questions,
+then wait for approval before implementation. Do not repeat completed queue,
+response matching, retry timing, or explicit transport work.
 
-1. Retrieve why count and insert must share a read/write transaction, and why
-   closing a connection does not delete its database. Revisit next session,
-   one week later, and three weeks later; calendar dates were not assigned.
-2. Validate `maxEvents` configuration through one guided red-to-green behavior;
-   define the allowed range before implementing. Invalid values are currently
-   unchecked. Keep the learner writing and running code.
-3. Add serialized UTF-8 byte capacity and accounting, then expiry separately.
-   Preserve the agreed oldest-first policy and remove expired entries before
-   deciding whether a new event fits. Current enqueue result is not an upload
-   acknowledgment. Define duplicate-ID behavior before relying on its index.
-4. Continue with project isolation, claims and bounded memory fallback. Schedule
-   an actual browser reload test and real multi-tab verification; fake IndexedDB
-   connection tests alone do not establish those browser behaviors.
-5. Later connect response parsing + request matching before queue deletion;
-   test accepted/rejected removal, retry retention, malformed/lost responses, and
-   claim ownership. Preserve original event IDs on uncertain delivery. Scheduler,
-   transport and persistence should remain separate implementation steps.
+1. Choose the next slice: automatic flush scheduling and SDK lifecycle, HTTP 413
+   batch splitting and single-event oversize policy, or live ingestion integration.
+   The explicit transport is ready; automatic sending is not implemented.
+2. For scheduling, agree on triggers, timer ownership, shutdown behavior, and how
+   retries become eligible without creating overlapping requests.
+3. For ingestion, implement request-level authentication, body-size protection,
+   per-event publication outcomes, and acceptance only after Redpanda acknowledgment.
+   Stable client event IDs still require server-side deduplication.
+4. Schedule real browser reload and multi-tab checks. Fake IndexedDB tests cover
+   connection coordination but do not prove browser persistence or eviction behavior.
+5. Public capture/session APIs, project-wide opt-out clearing, broader diagnostics,
+   and full event-to-dashboard integration remain later work. Run full workspace
+   checks and inspect CI before treating repository-wide readiness as verified.
 
-No live ingestion endpoint is required for the first queue slice; use explicit
-test boundaries without claiming end-to-end delivery. Later API work still needs
-request authentication, settled HTTP status semantics, body-size protection,
-producer choice and Redpanda acknowledgment. Restricted S3, Compose, event/batch
-validation and response-contract checks are done; do not repeat finished setup.
+Review lease ownership versus expiry, uncertain acknowledgment versus rejection,
+retry timing versus automatic scheduling, and project isolation versus server
+access control. Restricted S3 and Compose setup are complete; do not repeat them.
 
 Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
 strategy separately. No archive implementation or production deployment is
@@ -615,3 +662,12 @@ key order versus event sequence, transaction atomicity, and fake versus real
 browser evidence at the next session, one week later, and three weeks later.
 This closes the SignalTrail slice only, not a full curriculum day or closing quiz.
 Senior workspace documents were not edited.
+
+2026-10-20 learning evidence: the user explored project queue selection and asked
+for concrete scenarios and HTTP error-code explanations before approving slices.
+Implementation and verification were performed by the agent after scope approval;
+passing tests do not establish independent learner implementation mastery. Review
+queue isolation versus ingestion authorization, lease expiry, response matching,
+retry eligibility, and HTTP pause policies next session, then 2026-10-27 and
+2026-11-10. Senior workspace documents were not edited. Today's SignalTrail work
+is complete; this is not evidence of a full curriculum day or closing quiz.
