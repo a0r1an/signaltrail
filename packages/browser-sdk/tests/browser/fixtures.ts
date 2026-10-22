@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { test as base, expect, type Page, type APIRequestContext } from '@playwright/test';
-import type { AutomaticDelivery, EnqueueResult } from '../src/index.ts';
-import type { Scenario } from './server.ts';
+import type { AutomaticDelivery, EnqueueResult } from '../../src/index.ts';
+import type { Scenario } from './harness/server.ts';
 
 declare global {
   interface Window {

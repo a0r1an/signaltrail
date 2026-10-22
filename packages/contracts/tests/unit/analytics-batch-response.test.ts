@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AnalyticsBatchResponseSchema,
   isAnalyticsBatchResponseForEvents,
-} from './analytics-batch-response.ts';
+} from '../../src/analytics-batch-response.ts';
 
 describe('AnalyticsBatchResponseSchema', () => {
   it('accepts a response containing one accepted event', () => {

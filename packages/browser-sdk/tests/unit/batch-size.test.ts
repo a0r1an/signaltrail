@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB } from 'idb';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AnalyticsEventSchema } from '@signaltrail/contracts';
-import { openBatchTransport } from './batch-transport.ts';
+import { openBatchTransport } from '../../src/batch-transport.ts';
 const config = { projectKey: 'batch-size', ingestionUrl: 'https://ingest.example.com/events' };
 const event = AnalyticsEventSchema.parse({
   schemaVersion: 1,
@@ -131,7 +131,7 @@ it('drops only an event rejected with 413 when alone and continues with its sibl
   }
 });
 it('discards a previously persisted event that no longer fits after lowering the limit', async () => {
-  const { openEventQueue } = await import('./event-queue.ts');
+  const { openEventQueue } = await import('../../src/event-queue.ts');
   const raw = await openEventQueue(config);
   await raw.enqueue(event);
   raw.close();
@@ -153,7 +153,7 @@ it('discards a previously persisted event that no longer fits after lowering the
   }
 });
 it('reports an oversized event through a callback even when automatic delivery owns the flush', async () => {
-  const { openAutomaticDelivery } = await import('./automatic-delivery.ts');
+  const { openAutomaticDelivery } = await import('../../src/automatic-delivery.ts');
   const onEventDropped = vi.fn();
   const delivery = await openAutomaticDelivery(config, {
     fetch,
@@ -189,7 +189,7 @@ it('reports a server-side oversized drop only after durable removal succeeds', a
     expect(await transport.flush()).toEqual({ status: 'storage_error' });
     expect(onEventDropped).not.toHaveBeenCalled();
     failure.mockRestore();
-    const { openEventQueue } = await import('./event-queue.ts');
+    const { openEventQueue } = await import('../../src/event-queue.ts');
     const reopened = await openEventQueue(config);
     try {
       expect(await reopened.getAll()).toEqual({ status: 'read', events: [event] });

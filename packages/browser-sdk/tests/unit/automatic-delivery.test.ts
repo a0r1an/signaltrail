@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB } from 'idb';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AnalyticsEventSchema } from '@signaltrail/contracts';
-import { openAutomaticDelivery } from './automatic-delivery.ts';
+import { openAutomaticDelivery } from '../../src/automatic-delivery.ts';
 
 const config = { projectKey: 'automatic', ingestionUrl: 'https://ingest.example.com/events' };
 const event = AnalyticsEventSchema.parse({
@@ -98,7 +98,7 @@ it('automatically retries at the persisted eligibility time without waiting anot
   }
 });
 it('resumes persisted eligible backlog immediately after initialization', async () => {
-  const { openEventQueue } = await import('./event-queue.ts');
+  const { openEventQueue } = await import('../../src/event-queue.ts');
   const queue = await openEventQueue(config);
   await queue.enqueue(event);
   queue.close();
@@ -334,7 +334,7 @@ it('removes timers and lifecycle listeners on close while retaining the durable 
   expect(vi.getTimerCount()).toBe(0);
   expect(await delivery.flush()).toEqual({ status: 'closed' });
   await expect(delivery.enqueue(event)).rejects.toMatchObject({ name: 'InvalidStateError' });
-  const { openEventQueue } = await import('./event-queue.ts');
+  const { openEventQueue } = await import('../../src/event-queue.ts');
   const queue = await openEventQueue(config);
   try {
     expect(await queue.getAll()).toEqual({ status: 'read', events: [event] });
@@ -372,7 +372,7 @@ it('never sends retry-delayed events in a departure beacon', async () => {
   }
 });
 it('does not beacon events currently leased by another queue connection', async () => {
-  const { openEventQueue } = await import('./event-queue.ts');
+  const { openEventQueue } = await import('../../src/event-queue.ts');
   const queue = await openEventQueue(config);
   await queue.enqueue(event);
   await queue.claimBatch();

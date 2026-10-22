@@ -1,0 +1,30 @@
+{
+  "name": "@signaltrail/ingestion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/main.ts --format esm --dts --clean",
+    "start": "node dist/main.js",
+    "dev": "node --watch src/main.ts",
+    "test": "vitest run",
+    "lint": "eslint src tests --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@signaltrail/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@signaltrail/typescript-config": "workspace:*",
+    "@types/node": "^24.19.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AnalyticsEventSchema } from './analytics-event.ts';
-import { AnalyticsBatchSchema, validateAnalyticsEvents } from './analytics-batch.ts';
+import { AnalyticsEventSchema } from '../../src/analytics-event.ts';
+import { AnalyticsBatchSchema, validateAnalyticsEvents } from '../../src/analytics-batch.ts';
 
 const validEvent = {
   schemaVersion: 1,

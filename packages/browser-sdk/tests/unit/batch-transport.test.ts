@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB } from 'idb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnalyticsEventSchema } from '@signaltrail/contracts';
-import { openBatchTransport } from './batch-transport.ts';
+import { openBatchTransport } from '../../src/batch-transport.ts';
 
 const event = AnalyticsEventSchema.parse({
   schemaVersion: 1,

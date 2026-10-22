@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB, openDB } from 'idb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnalyticsEventSchema } from '@signaltrail/contracts';
-import { openEventQueue, type EventQueue } from './event-queue.ts';
+import { openEventQueue, type EventQueue } from '../../src/event-queue.ts';
 
 const validEvent = AnalyticsEventSchema.parse({
   schemaVersion: 1,

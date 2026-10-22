@@ -15,10 +15,10 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json",
-    "lint": "eslint src e2e *.config.ts --max-warnings 0",
-    "harness:build": "pnpm --filter @signaltrail/contracts build && pnpm build && tsup --config e2e/bundle.config.ts",
-    "harness:serve": "node e2e/server.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/browser/tsconfig.json",
+    "lint": "eslint src tests *.config.ts --max-warnings 0",
+    "harness:build": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/ingestion build && pnpm build && tsup --config tests/browser/harness/bundle.config.ts",
+    "harness:serve": "node tests/browser/harness/server.ts",
     "harness": "pnpm harness:build && pnpm harness:serve",
     "test:browser": "pnpm harness:build && playwright test"
   },
@@ -33,6 +33,7 @@
     "fake-indexeddb": "^6.2.5",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "@signaltrail/ingestion": "workspace:*"
   }
 }

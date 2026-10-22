@@ -1,3 +1,4 @@
+import { createIngestionServer, type PublishedEvent } from '@signaltrail/ingestion';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -7,6 +8,8 @@ interface EventRecord {
   eventName: string;
 }
 export interface Scenario {
+  publications: PublishedEvent[];
+  publicationAttempts: PublishedEvent[];
   status: number;
   delayMs: number;
   maxBytes: number;
@@ -14,7 +17,9 @@ export interface Scenario {
   requests: { events: EventRecord[]; beacon: boolean; status: number; bytes: number; at: number }[];
 }
 const scenarios = new Map<string, Scenario>();
+const realProjects = new Map<string, string>();
 function scenario(id: string): Scenario {
+  realProjects.set(`harness-real-${id}`, `project-${id}`);
   if (!scenarios.has(id))
     scenarios.set(id, {
       status: 200,
@@ -22,6 +27,8 @@ function scenario(id: string): Scenario {
       maxBytes: 256 * 1024,
       retryAfter: '1',
       requests: [],
+      publications: [],
+      publicationAttempts: [],
     });
   return scenarios.get(id)!;
 }
@@ -43,7 +50,7 @@ async function body(request: IncomingMessage, limit: number) {
 const assets = new Map<string, readonly [URL, string]>([
   ['/', [new URL('./fixture.html', import.meta.url), 'text/html']],
   ['/client.js', [new URL('./client.js', import.meta.url), 'text/javascript']],
-  ['/sdk.js', [new URL('../.browser-harness/sdk.js', import.meta.url), 'text/javascript']],
+  ['/sdk.js', [new URL('../../../.browser-harness/sdk.js', import.meta.url), 'text/javascript']],
 ]);
 const server = createServer((request, response) => {
   void (async () => {
@@ -60,6 +67,7 @@ const server = createServer((request, response) => {
       if (route[1] === 'control') {
         if (request.method === 'DELETE') {
           scenarios.delete(route[2]!);
+          realProjects.delete(`harness-real-${route[2]!}`);
           return json(response, 200, { deleted: true });
         }
         if (request.method === 'POST') {
@@ -136,8 +144,25 @@ const server = createServer((request, response) => {
     else response.end();
   });
 });
+const ingestion = createIngestionServer({
+  allowedOrigins: ['http://127.0.0.1:4177'],
+  resolveProjectKey: (key) => realProjects.get(key),
+  publish: async (record, signal) => {
+    const state = scenarios.get(record.projectId.slice('project-'.length));
+    if (!state) throw new Error('Unknown scenario');
+    state.publicationAttempts.push(record);
+    const status = state.status;
+    const wait = state.delayMs;
+    if (wait) await delay(wait, undefined, { signal });
+    if (status !== 200) throw new Error('Controlled publication failure');
+    state.publications.push(record);
+  },
+});
+ingestion.listen(4178, '127.0.0.1');
 server.listen(4177, '127.0.0.1');
 process.on('SIGTERM', () => {
   server.close();
   server.closeAllConnections();
+  ingestion.close();
+  ingestion.closeAllConnections();
 });

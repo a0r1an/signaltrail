@@ -12,8 +12,11 @@ const log = (value) => {
 };
 const delivery = await openAutomaticDelivery(
   {
-    projectKey: 'harness-project',
-    ingestionUrl: `${location.origin}/ingest/${scenario}`,
+    projectKey: params.get('real') === '1' ? `harness-real-${scenario}` : 'harness-project',
+    ingestionUrl:
+      params.get('real') === '1'
+        ? 'http://127.0.0.1:4178/v1/events'
+        : `${location.origin}/ingest/${scenario}`,
   },
   { flushIntervalMs: interval, onEventDropped: log },
 );

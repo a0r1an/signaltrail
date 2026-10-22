@@ -19,7 +19,7 @@
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src --max-warnings 0"
+    "lint": "eslint src tests --max-warnings 0"
   },
   "packageManager": "pnpm@10.27.0",
   "dependencies": {

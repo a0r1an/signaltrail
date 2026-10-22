@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   {
-    files: ['e2e/**/*.js'],
+    files: ['tests/browser/harness/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: {
@@ -20,7 +20,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/**/*.ts', 'e2e/**/*.ts', '*.config.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', '*.config.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       globals: { process: 'readonly', Buffer: 'readonly', URL: 'readonly' },
