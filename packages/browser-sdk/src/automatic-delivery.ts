@@ -38,10 +38,12 @@ export async function openAutomaticDelivery(
   const page = options.page ?? globalThis.window;
   const sendBeacon =
     options.sendBeacon ?? globalThis.navigator?.sendBeacon?.bind(globalThis.navigator);
+  const beaconLimit = Math.min(60 * 1024, options.maxRequestBytes ?? 256 * 1024);
   const maxAge = options.queue?.maxAgeMs ?? 24 * 60 * 60 * 1000;
   const transport = await openBatchTransport(normalized, options);
   let closed = false;
   let running = false;
+  let resized = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timerAt = Infinity;
   let cooldown = 0;
@@ -59,7 +61,7 @@ export async function openAutomaticDelivery(
       const candidate = [...selected, event];
       if (
         new Blob([JSON.stringify({ projectKey: normalized.projectKey, events: candidate })]).size <=
-          60 * 1024 &&
+          beaconLimit &&
         candidate.length <= 100
       )
         selected.push(event);
@@ -141,6 +143,7 @@ export async function openAutomaticDelivery(
       beaconBody = undefined;
       const result = await transport.flush(eventId);
       cooldown = transport.nextRequestAt;
+      resized = result.status === 'batch_resized';
       return result;
     } catch {
       return { status: closed ? 'closed' : 'storage_error' };
@@ -149,6 +152,7 @@ export async function openAutomaticDelivery(
       if (!closed) {
         try {
           await refresh();
+          if (resized) arm(now());
         } catch {
           arm(now() + interval);
         }

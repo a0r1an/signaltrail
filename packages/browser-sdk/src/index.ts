@@ -16,6 +16,7 @@ export type {
   BatchTransport,
   BatchTransportOptions,
   FlushResult,
+  EventDrop,
   TransportPauseReason,
 } from './batch-transport.ts';
 

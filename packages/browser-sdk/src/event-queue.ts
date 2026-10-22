@@ -119,7 +119,7 @@ async function inTransaction<T>(
 type EnqueueOutcome =
   | { status: 'queued' }
   | { status: 'already_queued' }
-  | { status: 'dropped'; reason: 'capacity' | 'expired' };
+  | { status: 'dropped'; reason: 'capacity' | 'expired' | 'event_too_large' };
 
 export type EnqueueResult = EnqueueOutcome | { status: 'storage_error'; fallback: EnqueueOutcome };
 
@@ -203,9 +203,10 @@ export interface EventQueue {
   inspectDelivery(): Promise<DeliverySnapshot>;
   enqueue(event: AnalyticsEvent): Promise<EnqueueResult>;
   getAll(): Promise<QueueReadResult>;
-  claimBatch(limit?: number, eventId?: string): Promise<ClaimBatchResult>;
+  claimBatch(limit?: number, eventId?: string, maxRequestBytes?: number): Promise<ClaimBatchResult>;
   releaseClaim(claimId: string): Promise<ReleaseClaimResult>;
   applyResponse(claimId: string, response: unknown): Promise<ApplyResponseResult>;
+  discardClaim(claimId: string): Promise<ApplyResponseResult>;
   retryClaim(claimId: string, minimumDelayMs?: number): Promise<ApplyResponseResult>;
   close(): void;
 }
@@ -215,7 +216,7 @@ interface QueueStorage {
   readonly storageMode: 'indexeddb' | 'memory';
   enqueue(event: AnalyticsEvent): Promise<EnqueueOutcome>;
   getAll(): Promise<AnalyticsEvent[]>;
-  claimBatch(limit: number, eventId?: string): Promise<ClaimOutcome>;
+  claimBatch(limit: number, eventId?: string, maxRequestBytes?: number): Promise<ClaimOutcome>;
   releaseClaim(claimId: string): Promise<ReleaseOutcome>;
   applyResponse(
     claimId: string,
@@ -280,6 +281,20 @@ function withRecovery(
       }
     },
     applyResponse,
+    async discardClaim(claimId) {
+      if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+      const original = issuedClaims.get(claimId);
+      if (!original) return { status: 'not_owned' };
+      // A local terminal disposition reuses atomic lease checks and removal.
+      // This internal cleanup value is never sent as an ingestion response.
+      return applyResponse(claimId, {
+        results: original.events.map((_event, index) => ({
+          index,
+          status: 'rejected',
+          code: 'INVALID_EVENT',
+        })),
+      });
+    },
     async retryClaim(claimId, minimumDelayMs = 0) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
       if (!Number.isSafeInteger(minimumDelayMs) || minimumDelayMs < 0) {
@@ -298,14 +313,14 @@ function withRecovery(
         })),
       });
     },
-    async claimBatch(limit = MAX_CLAIM_EVENTS, eventId) {
+    async claimBatch(limit = MAX_CLAIM_EVENTS, eventId, maxRequestBytes) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
       if (!Number.isInteger(limit) || limit < 1 || limit > MAX_CLAIM_EVENTS) {
         throw new RangeError('limit must be an integer from 1 to 100');
       }
       const source = storage;
       try {
-        const result = await source.claimBatch(limit, eventId);
+        const result = await source.claimBatch(limit, eventId, maxRequestBytes);
         if (source !== storage) return { status: 'storage_error' };
         for (const [id, existing] of issuedClaims) {
           if (existing.expiresAt <= now()) issuedClaims.delete(id);
@@ -455,11 +470,11 @@ function createMemoryQueue(
       for (const item of expected) claims.delete(item.eventId);
       return { status: 'applied' };
     },
-    async claimBatch(limit, eventId) {
+    async claimBatch(limit, eventId, maxRequestBytes = Infinity) {
       ensureOpen();
       const time = now();
       prune(time);
-      const selected = events
+      const candidates = events
         .filter((item) => {
           const existing = claims.get(item.eventId);
           const retry = retries.get(item.eventId);
@@ -470,6 +485,18 @@ function createMemoryQueue(
           );
         })
         .slice(0, limit);
+      const selected: AnalyticsEvent[] = [];
+      for (const candidate of candidates) {
+        if (
+          selected.length &&
+          encoder.encode(JSON.stringify({ events: [...selected, candidate] })).byteLength >
+            maxRequestBytes
+        )
+          break;
+        selected.push(candidate);
+        if (encoder.encode(JSON.stringify({ events: selected })).byteLength > maxRequestBytes)
+          break;
+      }
       if (!selected.length) return { status: 'empty' };
       const claimId = uniqueId();
       const expiresAt = time + CLAIM_LEASE_MS;
@@ -630,7 +657,7 @@ export async function openEventQueue(
           return { events, ...(Number.isFinite(next) ? { nextEligibleAt: next } : {}) };
         });
       },
-      async claimBatch(limit, eventId): Promise<ClaimOutcome> {
+      async claimBatch(limit, eventId, maxRequestBytes = Infinity): Promise<ClaimOutcome> {
         return inTransaction(database, async (transaction) => {
           await readUnexpired(transaction, now(), limits.maxAgeMs);
           const time = now();
@@ -653,6 +680,10 @@ export async function openEventQueue(
               (!existing || existing.expiresAt <= time) &&
               (!retry || retry.nextEligibleAt <= time)
             ) {
+              const size = encoder.encode(
+                JSON.stringify({ events: [...events, cursor.value] }),
+              ).byteLength;
+              if (events.length && size > maxRequestBytes) break;
               events.push(cursor.value);
               await transaction.objectStore('claims').put({
                 eventKey: cursor.primaryKey,
@@ -660,6 +691,7 @@ export async function openEventQueue(
                 claimId,
                 expiresAt,
               });
+              if (size > maxRequestBytes) break;
             }
             cursor = await cursor.continue();
           }

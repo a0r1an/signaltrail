@@ -10,14 +10,28 @@ export type TransportPauseReason = 'authentication' | 'payload_too_large' | 'une
 export type FlushResult =
   | { status: 'applied' | 'empty' | 'busy' | 'closed' | 'storage_error' | 'not_owned' }
   | { status: 'waiting'; retryAt: number }
-  | { status: 'paused'; reason: TransportPauseReason; httpStatus: number }
+  | { status: 'batch_resized'; maxEvents: number }
+  | {
+      status: 'dropped';
+      reason: 'event_too_large';
+      eventId: string;
+      source: 'client_limit' | 'server_413';
+    }
+  | { status: 'paused'; reason: TransportPauseReason; httpStatus?: number }
   | {
       status: 'retry_scheduled';
       reason: 'network' | 'timeout' | 'server' | 'rate_limit' | 'invalid_response';
       httpStatus?: number;
     };
 
+export interface EventDrop {
+  eventId: string;
+  reason: 'event_too_large';
+  source: 'client_limit' | 'server_413';
+}
 export interface BatchTransportOptions {
+  onEventDropped?: (drop: EventDrop) => void;
+  maxRequestBytes?: number;
   queue?: EventQueueOptions;
   fetch?: typeof globalThis.fetch;
 }
@@ -44,14 +58,44 @@ export async function openBatchTransport(
   options: BatchTransportOptions = {},
 ): Promise<BatchTransport> {
   const normalized = normalizeQueueConfig(config);
+  const maxRequestBytes = options.maxRequestBytes ?? 256 * 1024;
+  if (!Number.isSafeInteger(maxRequestBytes) || maxRequestBytes < 1)
+    throw new RangeError('maxRequestBytes must be a positive safe integer');
+  const onEventDropped = options.onEventDropped;
+  function notifyDrop(eventId: string, source: EventDrop['source']): EventDrop {
+    const drop: EventDrop = { eventId, reason: 'event_too_large', source };
+    try {
+      void Promise.resolve(onEventDropped?.({ ...drop })).catch(() => {});
+    } catch {
+      /* Diagnostics cannot interrupt delivery. */
+    }
+    return drop;
+  }
   const send = options.fetch ?? globalThis.fetch;
   const now = options.queue?.now ?? Date.now;
-  const queue = await openEventQueue(normalized, options.queue);
+  const storedQueue = await openEventQueue(normalized, options.queue);
+  const queue: EventQueue = {
+    ...storedQueue,
+    get storageMode() {
+      return storedQueue.storageMode;
+    },
+    async enqueue(event) {
+      if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+      if (
+        new TextEncoder().encode(JSON.stringify({ events: [event] })).byteLength > maxRequestBytes
+      ) {
+        notifyDrop(event.eventId, 'client_limit');
+        return { status: 'dropped', reason: 'event_too_large' };
+      }
+      return storedQueue.enqueue(event);
+    },
+  };
   let paused: Extract<FlushResult, { status: 'paused' }> | undefined;
   let closed = false;
   let activeController: AbortController | undefined;
   let notBefore = 0;
   let flushing = false;
+  let batchLimit = 100;
 
   async function request(
     events: Parameters<EventQueue['enqueue']>[0][],
@@ -133,13 +177,38 @@ export async function openBatchTransport(
       if (now() < notBefore) return { status: 'waiting', retryAt: notBefore };
       flushing = true;
       try {
-        const batch = await queue.claimBatch(eventId === undefined ? 100 : 1, eventId);
+        const batch = await queue.claimBatch(
+          eventId === undefined ? batchLimit : 1,
+          eventId,
+          maxRequestBytes,
+        );
         if (batch.status !== 'claimed') return batch;
         if (closed) return { status: 'closed' };
+        if (
+          new TextEncoder().encode(JSON.stringify({ events: batch.events })).byteLength >
+          maxRequestBytes
+        ) {
+          const discarded = await queue.discardClaim(batch.claimId);
+          if (discarded.status !== 'applied')
+            return { status: discarded.status === 'not_owned' ? 'not_owned' : 'storage_error' };
+          return { status: 'dropped', ...notifyDrop(batch.events[0]!.eventId, 'client_limit') };
+        }
         const result = await request(batch.events);
         if (closed) return { status: 'closed' };
         if (result.status === 'failed') return await scheduleRetry(batch.claimId, result.reason);
         const response = result.response;
+        if (response.status === 413 && batch.events.length > 1) {
+          const released = await queue.releaseClaim(batch.claimId);
+          if (released.status !== 'released') return { status: released.status };
+          batchLimit = Math.max(1, Math.floor(batch.events.length / 2));
+          return { status: 'batch_resized', maxEvents: batchLimit };
+        }
+        if (response.status === 413) {
+          const discarded = await queue.discardClaim(batch.claimId);
+          if (discarded.status !== 'applied')
+            return { status: discarded.status === 'not_owned' ? 'not_owned' : 'storage_error' };
+          return { status: 'dropped', ...notifyDrop(batch.events[0]!.eventId, 'server_413') };
+        }
         if (response.status === 429) {
           const delay = retryAfterMs(response.headers.get('Retry-After'), now());
           notBefore = now() + delay;

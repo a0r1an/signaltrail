@@ -413,7 +413,7 @@ describe('batch upload transport', () => {
     },
   );
 
-  it.each([401, 403, 413, 400])(
+  it.each([401, 403, 400])(
     'retains events and pauses on HTTP %s instead of resending',
     async (status) => {
       const fetch = vi

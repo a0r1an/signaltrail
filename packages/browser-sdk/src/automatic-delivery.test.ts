@@ -467,3 +467,46 @@ it('uses the configured batching interval without requiring browser globals', as
     delivery.close();
   }
 });
+it('automatically resumes with smaller requests after HTTP 413', async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(new Response(null, { status: 413 }))
+    .mockImplementation(acknowledge);
+  const delivery = await openAutomaticDelivery(config, { fetch });
+  try {
+    for (let i = 0; i < 4; i++) await delivery.enqueue({ ...event, eventId: `split-${i}` });
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetch.mock.calls[1]![1]!.body as string).events).toHaveLength(2);
+  } finally {
+    delivery.close();
+  }
+});
+it('also respects a smaller configured request limit for the complete beacon envelope', async () => {
+  const document = Object.assign(new EventTarget(), {
+    visibilityState: 'visible' as DocumentVisibilityState,
+  });
+  const sendBeacon = vi.fn().mockReturnValue(true);
+  const delivery = await openAutomaticDelivery(config, {
+    fetch: acknowledge,
+    document,
+    sendBeacon,
+    maxRequestBytes: 1024,
+  });
+  try {
+    for (let i = 0; i < 4; i++)
+      await delivery.enqueue({
+        ...event,
+        eventId: `size-${i}`,
+        properties: { text: 'a'.repeat(200) },
+      });
+    document.visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    expect((sendBeacon.mock.calls[0]![1] as Blob).size).toBeLessThanOrEqual(1024);
+  } finally {
+    delivery.close();
+  }
+});
