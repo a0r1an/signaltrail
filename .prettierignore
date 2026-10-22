@@ -7,3 +7,7 @@ coverage
 .turbo
 .local-data
 pnpm-lock.yaml
+.browser-harness
+playwright-report
+test-results
+.pnpm-store

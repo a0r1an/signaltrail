@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SignalTrail SDK browser harness</title>
+  </head>
+  <body>
+    <h1>SignalTrail SDK browser harness</h1>
+    <p>Development fixture using the built SDK and a controlled HTTP receiver.</p>
+    <fieldset id="capture" disabled>
+      <legend>Capture</legend>
+      <button id="event">Capture event</button>
+      <button id="burst">Capture burst</button>
+      <button id="immediate">Send immediately</button>
+      <button id="oversized">Capture oversized event</button>
+      <button id="flush">Flush now</button>
+    </fieldset>
+    <label
+      >Server response
+      <select id="status">
+        <option>200</option>
+        <option>413</option>
+        <option>429</option>
+        <option>503</option>
+      </select></label
+    >
+    <label
+      >Response delay (ms) <input id="delay" type="number" value="0" min="0" max="20000"
+    /></label>
+    <button id="configure">Apply server behavior</button>
+    <p><a href="/away">Navigate away</a></p>
+    <h2>Queue</h2>
+    <pre aria-label="Queue">Loading</pre>
+    <h2>Received events</h2>
+    <pre aria-label="Received events">[]</pre>
+    <h2>Delivery log</h2>
+    <pre aria-label="Delivery log"></pre>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>

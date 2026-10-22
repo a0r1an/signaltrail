@@ -36,3 +36,10 @@ next-env.d.ts
 
 # Local certificates and keys
 *.pem
+# Browser integration test artifacts
+.browser-harness/
+playwright-report/
+test-results/
+
+# Local pnpm cache
+.pnpm-store/
