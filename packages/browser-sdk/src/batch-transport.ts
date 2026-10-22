@@ -25,7 +25,8 @@ export interface BatchTransportOptions {
 export interface BatchTransport {
   readonly queue: EventQueue;
   readonly deliveryState: 'ready' | 'paused' | 'closed';
-  flush(): Promise<FlushResult>;
+  readonly nextRequestAt: number;
+  flush(eventId?: string): Promise<FlushResult>;
   close(): void;
 }
 
@@ -119,17 +120,20 @@ export async function openBatchTransport(
   }
   return {
     queue,
+    get nextRequestAt() {
+      return notBefore;
+    },
     get deliveryState() {
       return closed ? 'closed' : paused ? 'paused' : 'ready';
     },
-    async flush() {
+    async flush(eventId) {
       if (closed) return { status: 'closed' };
       if (flushing) return { status: 'busy' };
       if (paused) return paused;
       if (now() < notBefore) return { status: 'waiting', retryAt: notBefore };
       flushing = true;
       try {
-        const batch = await queue.claimBatch();
+        const batch = await queue.claimBatch(eventId === undefined ? 100 : 1, eventId);
         if (batch.status !== 'claimed') return batch;
         if (closed) return { status: 'closed' };
         const result = await request(batch.events);

@@ -2,6 +2,7 @@ export { openEventQueue } from './event-queue.ts';
 export type {
   ApplyResponseResult,
   ClaimBatchResult,
+  DeliverySnapshot,
   EnqueueResult,
   EventQueue,
   EventQueueConfig,
@@ -17,3 +18,10 @@ export type {
   FlushResult,
   TransportPauseReason,
 } from './batch-transport.ts';
+
+export { openAutomaticDelivery } from './automatic-delivery.ts';
+export type {
+  AutomaticDelivery,
+  AutomaticDeliveryOptions,
+  EnqueueOptions,
+} from './automatic-delivery.ts';

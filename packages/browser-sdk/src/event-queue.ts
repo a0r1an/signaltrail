@@ -193,11 +193,17 @@ function queueDatabaseName(config: EventQueueConfig): string {
   return `signaltrail:analytics:v1:${JSON.stringify([normalized.ingestionUrl, normalized.projectKey])}`;
 }
 
+export type DeliverySnapshot =
+  | { status: 'read'; events: AnalyticsEvent[]; nextEligibleAt?: number }
+  | { status: 'storage_error' };
+type PendingEvents = { events: AnalyticsEvent[]; nextEligibleAt?: number };
+
 export interface EventQueue {
   readonly storageMode: 'indexeddb' | 'memory';
+  inspectDelivery(): Promise<DeliverySnapshot>;
   enqueue(event: AnalyticsEvent): Promise<EnqueueResult>;
   getAll(): Promise<QueueReadResult>;
-  claimBatch(limit?: number): Promise<ClaimBatchResult>;
+  claimBatch(limit?: number, eventId?: string): Promise<ClaimBatchResult>;
   releaseClaim(claimId: string): Promise<ReleaseClaimResult>;
   applyResponse(claimId: string, response: unknown): Promise<ApplyResponseResult>;
   retryClaim(claimId: string, minimumDelayMs?: number): Promise<ApplyResponseResult>;
@@ -205,10 +211,11 @@ export interface EventQueue {
 }
 
 interface QueueStorage {
+  inspectDelivery(): Promise<PendingEvents>;
   readonly storageMode: 'indexeddb' | 'memory';
   enqueue(event: AnalyticsEvent): Promise<EnqueueOutcome>;
   getAll(): Promise<AnalyticsEvent[]>;
-  claimBatch(limit: number): Promise<ClaimOutcome>;
+  claimBatch(limit: number, eventId?: string): Promise<ClaimOutcome>;
   releaseClaim(claimId: string): Promise<ReleaseOutcome>;
   applyResponse(
     claimId: string,
@@ -260,6 +267,18 @@ function withRecovery(
     get storageMode() {
       return storage.storageMode;
     },
+    async inspectDelivery() {
+      if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
+      const source = storage;
+      try {
+        const result = await source.inspectDelivery();
+        return source === storage ? { status: 'read', ...result } : { status: 'storage_error' };
+      } catch (error) {
+        if (closed || source.storageMode === 'memory') throw error;
+        degrade(source);
+        return { status: 'storage_error' };
+      }
+    },
     applyResponse,
     async retryClaim(claimId, minimumDelayMs = 0) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
@@ -279,14 +298,14 @@ function withRecovery(
         })),
       });
     },
-    async claimBatch(limit = MAX_CLAIM_EVENTS) {
+    async claimBatch(limit = MAX_CLAIM_EVENTS, eventId) {
       if (closed) throw new DOMException('The queue connection is closed', 'InvalidStateError');
       if (!Number.isInteger(limit) || limit < 1 || limit > MAX_CLAIM_EVENTS) {
         throw new RangeError('limit must be an integer from 1 to 100');
       }
       const source = storage;
       try {
-        const result = await source.claimBatch(limit);
+        const result = await source.claimBatch(limit, eventId);
         if (source !== storage) return { status: 'storage_error' };
         for (const [id, existing] of issuedClaims) {
           if (existing.expiresAt <= now()) issuedClaims.delete(id);
@@ -378,6 +397,25 @@ function createMemoryQueue(
 
   return {
     storageMode: 'memory',
+    async inspectDelivery() {
+      ensureOpen();
+      const time = now();
+      prune(time);
+      const eligible: AnalyticsEvent[] = [];
+      let next = Infinity;
+      for (const event of events) {
+        const due = Math.max(
+          claims.get(event.eventId)?.expiresAt ?? 0,
+          retries.get(event.eventId)?.nextEligibleAt ?? 0,
+        );
+        if (due <= time) eligible.push(event);
+        else next = Math.min(next, due);
+      }
+      return {
+        events: structuredClone(eligible),
+        ...(Number.isFinite(next) ? { nextEligibleAt: next } : {}),
+      };
+    },
     async applyResponse(claimId, expected, response) {
       ensureOpen();
       const time = now();
@@ -417,7 +455,7 @@ function createMemoryQueue(
       for (const item of expected) claims.delete(item.eventId);
       return { status: 'applied' };
     },
-    async claimBatch(limit) {
+    async claimBatch(limit, eventId) {
       ensureOpen();
       const time = now();
       prune(time);
@@ -426,7 +464,9 @@ function createMemoryQueue(
           const existing = claims.get(item.eventId);
           const retry = retries.get(item.eventId);
           return (
-            (!existing || existing.expiresAt <= time) && (!retry || retry.nextEligibleAt <= time)
+            (eventId === undefined || item.eventId === eventId) &&
+            (!existing || existing.expiresAt <= time) &&
+            (!retry || retry.nextEligibleAt <= time)
           );
         })
         .slice(0, limit);
@@ -572,7 +612,25 @@ export async function openEventQueue(
           return released ? { status: 'released' } : { status: 'not_owned' };
         });
       },
-      async claimBatch(limit): Promise<ClaimOutcome> {
+      async inspectDelivery() {
+        return inTransaction(database, async (transaction) => {
+          const time = now();
+          await readUnexpired(transaction, time, limits.maxAgeMs);
+          const events: AnalyticsEvent[] = [];
+          let next = Infinity;
+          let cursor = await transaction.objectStore('events').openCursor();
+          while (cursor) {
+            const claim = await transaction.objectStore('claims').get(cursor.primaryKey);
+            const retry = await transaction.objectStore('retries').get(cursor.primaryKey);
+            const due = Math.max(claim?.expiresAt ?? 0, retry?.nextEligibleAt ?? 0);
+            if (due <= time) events.push(cursor.value);
+            else next = Math.min(next, due);
+            cursor = await cursor.continue();
+          }
+          return { events, ...(Number.isFinite(next) ? { nextEligibleAt: next } : {}) };
+        });
+      },
+      async claimBatch(limit, eventId): Promise<ClaimOutcome> {
         return inTransaction(database, async (transaction) => {
           await readUnexpired(transaction, now(), limits.maxAgeMs);
           const time = now();
@@ -591,6 +649,7 @@ export async function openEventQueue(
             const existing = await transaction.objectStore('claims').get(cursor.primaryKey);
             const retry = await transaction.objectStore('retries').get(cursor.primaryKey);
             if (
+              (eventId === undefined || cursor.value.eventId === eventId) &&
               (!existing || existing.expiresAt <= time) &&
               (!retry || retry.nextEligibleAt <= time)
             ) {
