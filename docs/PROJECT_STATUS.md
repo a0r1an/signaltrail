@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-20
+Last updated: 2026-10-22
 
 ## Goal and architecture
 
@@ -510,69 +510,100 @@ requested scope agreement and design questions before each day's implementation;
   `012d067` (batch upload transport); preceding retry timing commit: `ad608d0`.
   The agent did not commit or push. This documentation update is a new change.
 
+## Completed ingestion and Redpanda session — 2026-10-22
+
+Today's SignalTrail work is complete. After approved scopes, the agent implemented
+and verified the changes directly. Documentation was updated at the user's request.
+
+- Added automatic SDK delivery, immediate-send bypass, navigation beacon attempts,
+  request-size-aware batches, HTTP 413 splitting, and single-event oversize drops.
+  Events remain queued until a matching acknowledgment; beacon submission alone
+  cannot authorize deletion. Oversized events are rejected before persistence;
+  capacity still preserves oldest events and drops new arrivals.
+- Added a Chromium Playwright harness and browser CI job covering reload persistence,
+  multi-tab leases, navigation beacons, immediate sends, oversized-event handling,
+  and real HTTP ingestion integration. Unit tests now live under package
+  `tests/unit/`; browser tests and their harness live under SDK `tests/browser/`.
+- Implemented `apps/ingestion`: request-level project-key resolution, CORS, bounded
+  body size and JSON nesting, independent event validation, and per-event outcomes.
+  Trusted project identity and server receive time are attached before publication.
+  The entry point retains development-only authentication and refuses production.
+- Connected the real KafkaJS Redpanda publisher: one record per valid event,
+  project/session partition keys, all-in-sync-replica acknowledgments, bounded
+  client retries, and graceful shutdown that drains underlying sends. Acceptance
+  follows broker acknowledgment. Failed or uncertain publication returns retry;
+  cancellation cannot retract a send already started. Producer idempotence does
+  not replace downstream event-ID deduplication.
+- Added the Compose `redpanda-init` one-shot service and
+  `infra/redpanda/init-topics.sh`. It creates missing topics and verifies existing
+  configuration without altering or deleting existing topics. Development defaults:
+  three partitions, one replica, seven-day delete retention, no byte retention cap,
+  and write caching disabled. The existing-topic verification was run successfully
+  against the local broker. One replica provides no broker/host redundancy.
+- Added four real-broker integration tests and a separate CI broker job. Tests use
+  a uniquely named temporary topic; local persistent service volumes were preserved.
+  CI cleanup is scoped to its isolated Compose project.
+- Latest inspected commits: `436796c` topic setup/publisher; `fb85233` ingestion and
+  test organization; preceding commits contain the SDK delivery and browser harness.
+  Working tree was clean before this log update. The agent did not commit or push.
+
+### Review findings and remaining risks
+
+- High priority: outstanding publications have no count or byte capacity bound.
+  HTTP publication deadlines stop waiting, but underlying Kafka sends may continue.
+  Sustained traffic during broker slowness can accumulate pending work in memory.
+  Bound admission and return retry outcomes when full; retain capacity until the
+  underlying send settles, including after the HTTP deadline.
+- Integration coverage includes a missing topic, cancellation before sending, and
+  healthy-broker shutdown draining. Broker interruption during publication,
+  uncertain acknowledgment, and subsequent recovery still need fault testing.
+- Each event currently uses a separate producer send with one broker request in
+  flight. Throughput has not been measured. Separate event records can share a
+  broker request; evaluate this after establishing a measured baseline.
+- Downstream deduplication, ClickHouse processing, archive-lag admission control,
+  production project resolution, and recovery guarantees remain unimplemented.
+
 ## Test and build status
 
-- Browser SDK as of 2026-10-20: **196 tests passed**, agent-run under Node 24;
-  formatting, lint, typecheck, and tsup JavaScript/declaration builds passed.
-  Actual browser, live ingestion, and full-workspace/CI verification remain pending.
-- Contracts as of 2026-10-15: supplied output confirms **57 tests passed**, lint,
-  typecheck, and tsup JavaScript/declaration builds passed. Source and generated
-  response schema/helper exports inspected. Formatting supplied before final
-  guard move; whitespace reviewed afterward.
-- Workspace: learner reported `pnpm test`, `pnpm typecheck`, and `pnpm build`
-  all passing. Full root outputs were not supplied.
-- Formatting: Day 2 root check passed from supplied output. Compose formatting
-  check passed on 2026-10-12; modified contract formatting learner-reported.
-  No fresh root formatting check or CI run verified today.
-- Lint: supplied `pnpm lint` output confirms **three successful tasks** for
-  contracts, dashboard, and demo-store. TypeScript-config has no lint task.
-- CI: learner reported a successful GitHub Actions run after the documentation
-  fix. Workflow source was reviewed; remote run logs/URL were not independently
-  inspected. Repository: https://github.com/a0r1an/signaltrail.
-- Earlier application checks were learner-run; the 2026-10-20 SDK checks above
-  were independently run by the agent.
-- Strict TypeScript settings were inspected, including `strict`,
-  `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`.
-- Build/export verification does not yet demonstrate an application importing
-  the package or runtime service integration. Branch-protection enforcement is
-  not verified.
-- At Day 3 close, `compose.yaml` and unexpected files `rpk` and `--partitions`
-  were untracked. Their purpose is unknown; inspect before staging. They were
-  not removed in that session; both were absent on 2026-10-08. Live service
-  state at close was not rechecked.
+- Agent-run under Node 24: **330 unit tests passed** — 235 browser SDK, 57 contracts,
+  and 38 ingestion tests. **Four real Redpanda integration tests** and **nine
+  Chromium browser tests** passed.
+- Contracts, ingestion, and browser SDK JavaScript/declaration builds passed.
+  Relevant package lint/typechecks, repository formatting, shell syntax, Compose
+  configuration, and `git diff --check` passed. Whole-workspace lint/typecheck
+  passed earlier in the session, before the final publisher additions; ingestion
+  lint/typecheck was rerun for those additions.
+- Browser checks exercise actual IndexedDB and HTTP integration. They do not prove
+  persistence under browser eviction or host failure. Broker checks do not yet
+  establish behavior during mid-publication connection loss.
+- CI jobs are configured; a remote CI run for today's final changes was not
+  independently verified. No deployment or load test was performed.
+- Strict TypeScript settings include `strict`, `noUncheckedIndexedAccess`, and
+  `exactOptionalPropertyTypes`. Branch-protection enforcement remains unverified.
 
 ## Exact next step
 
 Next session: propose the day's scope and resolve necessary design questions,
-then wait for approval before implementation. Do not repeat completed queue,
-response matching, retry timing, or explicit transport work.
+then wait for approval before implementation. Do not repeat completed SDK delivery,
+HTTP ingestion, browser harness, or Redpanda topic setup.
 
-1. Choose the next slice: automatic flush scheduling and SDK lifecycle, HTTP 413
-   batch splitting and single-event oversize policy, or live ingestion integration.
-   The explicit transport is ready; automatic sending is not implemented.
-2. For scheduling, agree on triggers, timer ownership, shutdown behavior, and how
-   retries become eligible without creating overlapping requests.
-3. For ingestion, implement request-level authentication, body-size protection,
-   per-event publication outcomes, and acceptance only after Redpanda acknowledgment.
-   Stable client event IDs still require server-side deduplication.
-4. Schedule real browser reload and multi-tab checks. Fake IndexedDB tests cover
-   connection coordination but do not prove browser persistence or eviction behavior.
-5. Public capture/session APIs, project-wide opt-out clearing, broader diagnostics,
-   and full event-to-dashboard integration remain later work. Run full workspace
-   checks and inspect CI before treating repository-wide readiness as verified.
-
-Review lease ownership versus expiry, uncertain acknowledgment versus rejection,
-retry timing versus automatic scheduling, and project isolation versus server
-access control. Restricted S3 and Compose setup are complete; do not repeat them.
+1. Agree on bounded publisher admission by outstanding event count and serialized
+   bytes, including how saturation maps to existing retry outcomes. Write tests
+   proving concurrent requests cannot exceed capacity and timed-out sends retain
+   their reservation until the underlying operation settles.
+2. Add broker-interruption and recovery tests using isolated infrastructure or
+   controlled network faults; preserve the user's running development broker.
+   Verify deadlines, no false acceptance, retained original event IDs, and shutdown.
+3. Measure throughput and queue growth before tuning producer batching/concurrency.
+   Follow with downstream event-ID deduplication and ClickHouse consumption as a
+   separately approved slice; preserve the minimal ingestion responsibility.
+4. Inspect remote CI after the user pushes. Production authentication, monitoring,
+   archive-lag gating, and a timed restore exercise remain later milestones.
 
 Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
-strategy separately. No archive implementation or production deployment is
-required before continuing contract/API work. S3 is selected; do not restart the
-provider comparison or add a fifth local service by assumption.
-
-Inspect and intentionally stage current changes when committing. Full workspace
-checks and CI for these changes remain pending. SDK and full event-to-dashboard
-integration remain later milestones; production recovery targets remain unverified.
+strategy separately. S3 is selected; do not restart the provider comparison.
+Production RTO/RPO targets remain unverified. No documentation outside this
+SignalTrail status file was updated.
 
 ## Preparation continuity
 
@@ -671,3 +702,12 @@ queue isolation versus ingestion authorization, lease expiry, response matching,
 retry eligibility, and HTTP pause policies next session, then 2026-10-27 and
 2026-11-10. Senior workspace documents were not edited. Today's SignalTrail work
 is complete; this is not evidence of a full curriculum day or closing quiz.
+
+2026-10-22 learning evidence: the user questioned topic ownership and requested
+Compose-managed initialization, then requested a review of the day's work. The
+review identified missing publisher admission bounds and broker-interruption
+coverage. Implementation and tests were agent-performed; passing checks do not
+establish independent learner implementation mastery. Review timeout versus
+cancellation, outstanding-work capacity, broker acknowledgment versus downstream
+deduplication, and one replica versus host resilience next session, then
+2026-10-29 and 2026-11-12. Senior workspace documents were not edited.
