@@ -42,6 +42,23 @@ services:
       retries: 20
       start_period: 15s
 
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/init/init-topics.sh']
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+      SIGNALTRAIL_REDPANDA_TOPIC: ${SIGNALTRAIL_REDPANDA_TOPIC:-signaltrail.analytics.v1}
+      SIGNALTRAIL_TOPIC_PARTITIONS: '3'
+      SIGNALTRAIL_TOPIC_REPLICAS: '1'
+      SIGNALTRAIL_TOPIC_RETENTION_MS: '604800000'
+      SIGNALTRAIL_TOPIC_RETENTION_BYTES: '-1'
+    volumes:
+      - ./infra/redpanda/init-topics.sh:/init/init-topics.sh:ro
+    restart: 'no'
+
   clickhouse:
     image: clickhouse/clickhouse-server:26.8
     environment:

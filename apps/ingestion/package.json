@@ -15,10 +15,12 @@
     "dev": "node --watch src/main.ts",
     "test": "vitest run",
     "lint": "eslint src tests --max-warnings 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:integration": "pnpm --filter @signaltrail/contracts build && vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@signaltrail/contracts": "workspace:*"
+    "@signaltrail/contracts": "workspace:*",
+    "kafkajs": "^2.2.4"
   },
   "devDependencies": {
     "@signaltrail/typescript-config": "workspace:*",

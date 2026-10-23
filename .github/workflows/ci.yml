@@ -83,3 +83,40 @@ jobs:
             packages/browser-sdk/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  ingestion-redpanda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.27.0
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Start isolated Redpanda
+        run: docker compose --project-name signaltrail-ci up -d --wait --wait-timeout 120 redpanda
+      - name: Initialize and verify development topic
+        run: docker compose --project-name signaltrail-ci run --rm redpanda-init
+      - name: Test ingestion against Redpanda
+        run: pnpm --filter @signaltrail/ingestion test:integration
+      - name: Collect broker logs
+        if: ${{ always() }}
+        run: docker compose --project-name signaltrail-ci logs --no-color redpanda > "${{ runner.temp }}/redpanda.log"
+      - name: Upload broker logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-redpanda-logs
+          path: ${{ runner.temp }}/redpanda.log
+          retention-days: 7
+      - name: Remove isolated CI infrastructure
+        if: ${{ always() }}
+        run: docker compose --project-name signaltrail-ci down --volumes

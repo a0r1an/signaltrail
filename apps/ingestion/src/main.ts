@@ -1,37 +1,75 @@
 import { createIngestionServer } from './server.ts';
 import { createDevelopmentProjectResolver } from './development-projects.ts';
+import { createRedpandaPublisher } from './redpanda-publisher.ts';
 
 if (process.env.NODE_ENV === 'production')
-  throw new Error(
-    'A production project resolver and publisher must be configured before production use',
-  );
+  throw new Error('A production project resolver must be configured before production use');
 const resolveProjectKey = createDevelopmentProjectResolver(
   JSON.parse(process.env.SIGNALTRAIL_DEV_PROJECTS ?? '[]') as unknown,
 );
 const port = Number(process.env.PORT ?? 4100);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new RangeError('PORT must be from 1 to 65535');
+const publisher = createRedpandaPublisher({
+  brokers: (process.env.SIGNALTRAIL_REDPANDA_BROKERS ?? '127.0.0.1:19092')
+    .split(',')
+    .map((value) => value.trim()),
+  topic: process.env.SIGNALTRAIL_REDPANDA_TOPIC ?? 'signaltrail.analytics.v1',
+});
 const server = createIngestionServer({
   resolveProjectKey,
   allowedOrigins: (process.env.SIGNALTRAIL_ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean),
-  // Fail closed until the Redpanda adapter is implemented; never fabricate acceptance.
-  publish: async () => {
-    throw new Error('Publisher not configured');
-  },
+  publish: publisher.publish,
 });
-server.listen(port, '127.0.0.1', () =>
-  console.info(
-    `Development ingestion listening on http://127.0.0.1:${port}; publisher is unconfigured`,
-  ),
-);
-process.on('SIGTERM', () => {
-  server.close();
-  server.closeAllConnections();
-});
-process.on('SIGINT', () => {
-  server.close();
-  server.closeAllConnections();
-});
+let stopping: Promise<void> | undefined;
+function shutdown() {
+  if (stopping) return stopping;
+  stopping = (async () => {
+    // Stop new HTTP requests, finish active responses, then drain broker sends.
+    const deadline = setTimeout(() => {
+      console.error('Ingestion shutdown deadline exceeded');
+      server.closeAllConnections();
+      process.exit(1);
+    }, 15_000);
+    deadline.unref();
+    try {
+      if (server.listening)
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      await publisher.close();
+    } finally {
+      clearTimeout(deadline);
+    }
+  })();
+  return stopping;
+}
+for (const signal of ['SIGTERM', 'SIGINT'] as const)
+  process.on(signal, () => {
+    void shutdown().catch((error) => {
+      console.error('Ingestion shutdown failed', error);
+      process.exitCode = 1;
+    });
+  });
+try {
+  await publisher.connect();
+  if (!stopping) {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, '127.0.0.1', () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    console.info(`Development ingestion listening on http://127.0.0.1:${port}`);
+  }
+} catch (error) {
+  if (!stopping) {
+    console.error('Ingestion startup failed', error);
+    process.exitCode = 1;
+  }
+  await shutdown();
+}
