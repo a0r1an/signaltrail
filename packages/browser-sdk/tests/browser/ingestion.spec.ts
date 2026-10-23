@@ -47,3 +47,24 @@ test('a navigation beacon authenticates through the real ingestion endpoint', as
   await expect.poll(async () => (await state(request, scenario)).publications?.length ?? 0).toBe(1);
   expect((await state(request, scenario)).publications![0]!.event.eventId).toBe(captured.eventId);
 });
+
+test('opt-in SDK health reports cross origins without becoming analytics events', async ({
+  page,
+  request,
+  scenario,
+}) => {
+  await page.clock.install();
+  await page.goto(`/?scenario=${scenario}&real=1&telemetry=1`);
+  await expect(page.getByRole('button', { name: 'Send immediately', exact: true })).toBeEnabled();
+  await page.evaluate(() => window.harness.capture({ immediate: true }));
+  await page.clock.fastForward(60000);
+  await expect.poll(async () => (await state(request, scenario)).healthReports.length).toBe(1);
+  const result = await state(request, scenario);
+  expect(result.healthReports[0]!.counters).toMatchObject({
+    queued: 1,
+    uploadAttempts: 1,
+    accepted: 1,
+  });
+  expect(result.publications).toHaveLength(1);
+  expect(JSON.stringify(result.healthReports)).not.toContain('harness-visitor');
+});

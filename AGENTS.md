@@ -32,3 +32,14 @@ the intended failure, then implement and verify it. The agent performs these ste
 after scope approval. Distinguish import or setup errors from a test failing on
 the intended behavior. Never treat a missing-module error alone as evidence that
 validation behavior was tested.
+
+## Operational commands
+
+- Use the `signaltrail-operations` skill for checks, browser/broker tests,
+  load tests, and monitoring.
+- Use `scripts/signaltrail-ops.mjs` for every operation it covers.
+- Do not recreate covered operations with ad hoc shell commands.
+- Focused TDD tests and ordinary file inspection/editing are exceptions.
+- If a needed operation is missing, explain the gap before using an ad hoc
+  command; extend the runner when the operation should be reusable.
+- Reuse existing approvals. The runner does not bypass sandbox permissions.

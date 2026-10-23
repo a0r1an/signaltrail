@@ -18,7 +18,11 @@ const delivery = await openAutomaticDelivery(
         ? 'http://127.0.0.1:4178/v1/events'
         : `${location.origin}/ingest/${scenario}`,
   },
-  { flushIntervalMs: interval, onEventDropped: log },
+  {
+    flushIntervalMs: interval,
+    onEventDropped: log,
+    ...(params.get('telemetry') === '1' ? { telemetry: { enabled: true, sampleRate: 1 } } : {}),
+  },
 );
 let sequence = 0;
 let lastId;

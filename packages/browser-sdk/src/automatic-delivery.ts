@@ -18,6 +18,7 @@ export interface EnqueueOptions {
 }
 
 export interface AutomaticDelivery {
+  getHealth: Awaited<ReturnType<typeof openBatchTransport>>['getHealth'];
   enqueue(event: Event, options?: EnqueueOptions): Promise<EnqueueResult>;
   getAll: EventQueue['getAll'];
   flush(): Promise<FlushResult>;
@@ -88,7 +89,9 @@ export async function openAutomaticDelivery(
     if (!beaconBody) return;
     try {
       hiddenSent = sendBeacon(normalized.ingestionUrl, beaconBody);
+      transport.recordBeacon(hiddenSent);
     } catch {
+      transport.recordBeacon(false);
       /* Retain events for normal acknowledged delivery. */
     }
   }
@@ -169,6 +172,7 @@ export async function openAutomaticDelivery(
   document?.addEventListener('visibilitychange', visibilityChanged);
   page?.addEventListener('pagehide', departure);
   return {
+    getHealth: transport.getHealth,
     async enqueue(event: Event, capture: EnqueueOptions = {}): Promise<EnqueueResult> {
       if (closed) throw new DOMException('Delivery is closed', 'InvalidStateError');
       const id = event.eventId;

@@ -1,0 +1,29 @@
+name: signaltrail-load
+services:
+  redpanda:
+    extends:
+      file: ../../compose.yaml
+      service: redpanda
+    ports: !override
+      - '127.0.0.1:29092:29092'
+      - '127.0.0.1:29644:9644'
+  init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/init/init-topics.sh']
+    volumes:
+      - ../../infra/redpanda/init-topics.sh:/init/init-topics.sh:ro
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+  k6:
+    image: grafana/k6:1.6.0
+    profiles: ['tools']
+    volumes:
+      - ./:/scripts:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+volumes:
+  redpanda_data:

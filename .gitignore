@@ -43,3 +43,9 @@ test-results/
 
 # Local pnpm cache
 .pnpm-store/
+
+/test-results/
+
+/.secrets/
+
+/.env.monitoring

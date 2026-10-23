@@ -107,6 +107,18 @@ jobs:
         run: docker compose --project-name signaltrail-ci run --rm redpanda-init
       - name: Test ingestion against Redpanda
         run: pnpm --filter @signaltrail/ingestion test:integration
+      - name: Verify bounded publisher under load
+        run: pnpm test:load saturation
+        env:
+          DURATION: 5s
+      - name: Upload load-test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-load-smoke
+          path: test-results/load/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Collect broker logs
         if: ${{ always() }}
         run: docker compose --project-name signaltrail-ci logs --no-color redpanda > "${{ runner.temp }}/redpanda.log"

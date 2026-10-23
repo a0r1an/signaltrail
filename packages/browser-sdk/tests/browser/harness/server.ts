@@ -1,3 +1,4 @@
+import type { SdkHealthReport } from '@signaltrail/contracts';
 import { createIngestionServer, type PublishedEvent } from '@signaltrail/ingestion';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -8,6 +9,7 @@ interface EventRecord {
   eventName: string;
 }
 export interface Scenario {
+  healthReports: SdkHealthReport[];
   publications: PublishedEvent[];
   publicationAttempts: PublishedEvent[];
   status: number;
@@ -28,6 +30,7 @@ function scenario(id: string): Scenario {
       retryAfter: '1',
       requests: [],
       publications: [],
+      healthReports: [],
       publicationAttempts: [],
     });
   return scenarios.get(id)!;
@@ -146,6 +149,9 @@ const server = createServer((request, response) => {
 });
 const ingestion = createIngestionServer({
   allowedOrigins: ['http://127.0.0.1:4177'],
+  observeSdkHealth: (report, projectId) => {
+    scenarios.get(projectId.slice('project-'.length))?.healthReports.push(report);
+  },
   resolveProjectKey: (key) => realProjects.get(key),
   publish: async (record, signal) => {
     const state = scenarios.get(record.projectId.slice('project-'.length));

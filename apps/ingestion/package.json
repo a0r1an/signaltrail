@@ -19,6 +19,7 @@
     "test:integration": "pnpm --filter @signaltrail/contracts build && vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@prometheus-io/client": "^0.16.1",
     "@signaltrail/contracts": "workspace:*",
     "kafkajs": "^2.2.4"
   },

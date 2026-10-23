@@ -1,3 +1,4 @@
+import { SdkHealthReportSchema, type SdkHealthReport } from '@signaltrail/contracts';
 import {
   AnalyticsBatchSchema,
   validateAnalyticsEvents,
@@ -9,6 +10,7 @@ export interface PublishedEvent {
   event: ReturnType<typeof AnalyticsEventSchema.parse>;
 }
 export interface IngestionOptions {
+  observeSdkHealth?: (report: SdkHealthReport, projectId: string) => void;
   resolveProjectKey(key: string): string | undefined | Promise<string | undefined>;
   // Resolve only once publication is acknowledged. Cancellation cannot undo publication.
   publish(record: PublishedEvent, signal: AbortSignal): Promise<void>;
@@ -16,6 +18,7 @@ export interface IngestionOptions {
   maxRequestBytes?: number;
   publicationTimeoutMs?: number;
   now?: () => number;
+  observeRequest?: (status: number, seconds: number) => void;
 }
 class BodyTooLarge extends Error {}
 async function readJson(request: Request, maxBytes: number): Promise<unknown> {
@@ -71,7 +74,7 @@ export function createIngestionHandler(options: IngestionOptions) {
   const maxBytes = options.maxRequestBytes ?? 256 * 1024;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
     throw new RangeError('maxRequestBytes must be a positive safe integer');
-  return async (request: Request): Promise<Response> => {
+  const handle = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const origin = request.headers.get('origin');
     const allowed = origin !== null && (origin === url.origin || allowedOrigins.has(origin));
@@ -85,7 +88,8 @@ export function createIngestionHandler(options: IngestionOptions) {
     if (origin && !allowed) return json({ error: 'ORIGIN_NOT_ALLOWED' }, { status: 403 });
     const path = url.pathname;
     if (path === '/health' && request.method === 'GET') return json({ status: 'ok' });
-    if (path !== '/v1/events') return json({ error: 'NOT_FOUND' }, { status: 404 });
+    if (!['/v1/events', '/v1/sdk-health'].includes(path))
+      return json({ error: 'NOT_FOUND' }, { status: 404 });
     if (request.method === 'OPTIONS') {
       const requestedHeaders = (request.headers.get('access-control-request-headers') ?? '')
         .split(',')
@@ -114,7 +118,10 @@ export function createIngestionHandler(options: IngestionOptions) {
       return json({ error: 'UNSUPPORTED_MEDIA_TYPE' }, { status: 415 });
     let payload: unknown;
     try {
-      payload = await readJson(request, maxBytes);
+      payload = await readJson(
+        request,
+        path === '/v1/sdk-health' ? Math.min(maxBytes, 16 * 1024) : maxBytes,
+      );
     } catch (error) {
       return json(
         { error: error instanceof BodyTooLarge ? 'PAYLOAD_TOO_LARGE' : 'INVALID_JSON' },
@@ -139,6 +146,17 @@ export function createIngestionHandler(options: IngestionOptions) {
       return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
     }
     if (!projectId) return json({ error: 'UNAUTHORIZED' }, { status: 401 });
+    if (path === '/v1/sdk-health') {
+      const report = SdkHealthReportSchema.safeParse(payload);
+      if (!report.success) return json({ error: 'INVALID_HEALTH_REPORT' }, { status: 400 });
+      if (!options.observeSdkHealth) return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
+      try {
+        options.observeSdkHealth(report.data, projectId);
+      } catch {
+        return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
+      }
+      return new Response(null, { status: 204, headers });
+    }
     const batch = AnalyticsBatchSchema.safeParse(payload);
     if (!batch.success) return json({ error: 'INVALID_BATCH' }, { status: 400 });
     const receivedAt = new Date((options.now ?? Date.now)()).toISOString();
@@ -175,5 +193,22 @@ export function createIngestionHandler(options: IngestionOptions) {
       }),
     );
     return json({ results });
+  };
+  return async (request: Request): Promise<Response> => {
+    const start = performance.now();
+    let status = 503;
+    try {
+      const response = await handle(request);
+      status = response.status;
+      return response;
+    } finally {
+      try {
+        void Promise.resolve(
+          options.observeRequest?.(status, (performance.now() - start) / 1000),
+        ).catch(() => {});
+      } catch {
+        /* Observability cannot alter an ingestion outcome. */
+      }
+    }
   };
 }

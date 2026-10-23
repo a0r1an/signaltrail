@@ -1,17 +1,27 @@
 import { Kafka, logLevel } from 'kafkajs';
+import { createPublicationCapacity, type PublicationSnapshot } from './publication-capacity.ts';
 import type { PublishedEvent } from './handler.ts';
 
 export interface RedpandaPublisherOptions {
   brokers: readonly string[];
   topic: string;
   clientId?: string;
+  maxOutstandingEvents?: number;
+  maxOutstandingBytes?: number;
+  onPublicationSettled?: (seconds: number, failed: boolean) => void;
 }
 export interface RedpandaPublisher {
+  snapshot(): PublicationSnapshot;
   connect(): Promise<void>;
   publish(record: PublishedEvent, signal: AbortSignal): Promise<void>;
   close(): Promise<void>;
 }
 export function createRedpandaPublisher(options: RedpandaPublisherOptions): RedpandaPublisher {
+  const capacity = createPublicationCapacity({
+    maxEvents: options.maxOutstandingEvents ?? 1000,
+    maxBytes: options.maxOutstandingBytes ?? 8 * 1024 * 1024,
+    ...(options.onPublicationSettled ? { onSettled: options.onPublicationSettled } : {}),
+  });
   const brokers = [...options.brokers];
   const topic = options.topic;
   if (
@@ -46,6 +56,7 @@ export function createRedpandaPublisher(options: RedpandaPublisherOptions): Redp
   let closing: Promise<void> | undefined;
   const inFlight = new Set<Promise<unknown>>();
   return {
+    snapshot: capacity.snapshot,
     connect() {
       if (closed) return Promise.reject(new Error('Publisher is closed'));
       if (connected) return Promise.resolve();
@@ -68,38 +79,30 @@ export function createRedpandaPublisher(options: RedpandaPublisherOptions): Redp
     async publish(record, signal) {
       if (closed || !connected) throw new Error('Publisher is not connected');
       signal.throwIfAborted();
-      const send = producer.send({
-        topic,
-        acks: -1,
-        timeout: 3000,
-        messages: [
-          {
-            key: JSON.stringify([record.projectId, record.event.sessionId]),
-            value: JSON.stringify(record),
-            headers: {
-              'event-id': record.event.eventId,
-              'schema-version': String(record.event.schemaVersion),
+      const value = JSON.stringify(record);
+      await capacity.run(value, signal, () => {
+        const send = producer.send({
+          topic,
+          acks: -1,
+          timeout: 3000,
+          messages: [
+            {
+              key: JSON.stringify([record.projectId, record.event.sessionId]),
+              value,
+              headers: {
+                'event-id': record.event.eventId,
+                'schema-version': String(record.event.schemaVersion),
+              },
             },
-          },
-        ],
+          ],
+        });
+        inFlight.add(send);
+        void send.then(
+          () => inFlight.delete(send),
+          () => inFlight.delete(send),
+        );
+        return send;
       });
-      inFlight.add(send);
-      void send.then(
-        () => inFlight.delete(send),
-        () => inFlight.delete(send),
-      );
-      let onAbort!: () => void;
-      const aborted = new Promise<never>((_resolve, reject) => {
-        onAbort = () => reject(signal.reason);
-        signal.addEventListener('abort', onAbort, { once: true });
-        if (signal.aborted) onAbort();
-      });
-      try {
-        await Promise.race([send, aborted]);
-        signal.throwIfAborted();
-      } finally {
-        signal.removeEventListener('abort', onAbort);
-      }
     },
     close() {
       if (closing) return closing;

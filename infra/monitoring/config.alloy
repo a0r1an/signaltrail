@@ -1,0 +1,36 @@
+prometheus.scrape "ingestion" {
+  targets = [{ "__address__" = sys.env("SIGNALTRAIL_METRICS_TARGET"), "job" = "signaltrail-ingestion", "environment" = "development" }]
+  scrape_interval = "5s"
+  scrape_timeout = "3s"
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.scrape "redpanda" {
+  targets = [{ "__address__" = sys.env("SIGNALTRAIL_REDPANDA_METRICS_TARGET"), "job" = "signaltrail-redpanda", "environment" = "development" }]
+  metrics_path = "/public_metrics"
+  scrape_interval = "5s"
+  scrape_timeout = "3s"
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_METRICS_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_METRICS_USER")
+      password_file = sys.env("GRAFANA_CLOUD_METRICS_TOKEN_FILE")
+    }
+  }
+}
+
+// Only active while the load harness advertises its isolated ingestion target.
+discovery.file "load" {
+  files = ["/etc/alloy/targets/load-targets.json"]
+  refresh_interval = "1s"
+}
+prometheus.scrape "load" {
+  targets = discovery.file.load.targets
+  scrape_interval = "5s"
+  scrape_timeout = "3s"
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}

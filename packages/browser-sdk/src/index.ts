@@ -26,3 +26,6 @@ export type {
   AutomaticDeliveryOptions,
   EnqueueOptions,
 } from './automatic-delivery.ts';
+
+export type { SdkTelemetryOptions } from './sdk-health.ts';
+export type { SdkHealthReport } from '@signaltrail/contracts';

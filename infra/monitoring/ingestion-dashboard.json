@@ -1,0 +1,436 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "title": "SignalTrail ingestion health",
+  "uid": "signaltrail-ingestion",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Outstanding events",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "signaltrail_publications_outstanding_events{job=~\"$job\"}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Outstanding payload bytes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "signaltrail_publications_outstanding_bytes{job=~\"$job\"}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Capacity refusals / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_publications_refused_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Publication completions / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_publications_completed_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Publication failures / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_publications_failed_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Caller cancellations / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_publications_cancelled_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "HTTP p95 duration",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(signaltrail_http_request_duration_seconds_bucket{job=~\"$job\"}[1m])))"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Process resident memory",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "signaltrail_process_resident_memory_bytes{job=~\"$job\"}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Process CPU cores used",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_process_cpu_seconds_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Late broker completions / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_publications_late_completions_total{job=~\"$job\"}[1m])"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Scrape availability",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"signaltrail-.*\"}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "SDK reported capacity drops / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_sdk_reported_dropped_capacity_total{job=~\"$job\"}[5m])"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "SDK reported upload timeouts / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_sdk_reported_timeouts_total{job=~\"$job\"}[5m])"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "SDK health reports by storage mode",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(signaltrail_sdk_health_reports_total{job=~\"$job\"}[5m])"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "SDK reported queue p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(signaltrail_sdk_reported_queue_events_bucket{job=~\"$job\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Broker publication p95 duration",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(signaltrail_publication_duration_seconds_bucket{job=~\"$job\"}[1m])))"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Redpanda disk free bytes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redpanda_storage_disk_free_bytes{job=~\"$broker_job\"}"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Redpanda producer request p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 64
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(redpanda_kafka_request_latency_seconds_bucket{job=~\"$broker_job\",redpanda_request=\"produce\"}[5m])))"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Ingestion target",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(signaltrail_publications_limit_events, job)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": "signaltrail-(ingestion|load)",
+        "current": {
+          "text": "signaltrail-ingestion",
+          "value": "signaltrail-ingestion"
+        }
+      },
+      {
+        "name": "broker_job",
+        "label": "Broker target",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up{job=~\"signaltrail-redpanda(-load)?\"}, job)",
+        "refresh": 1,
+        "current": {
+          "text": "signaltrail-redpanda",
+          "value": "signaltrail-redpanda"
+        }
+      }
+    ]
+  }
+}
