@@ -151,3 +151,31 @@ it('keeps expiry observed during a health read for the next reporting interval',
     queue.close();
   }
 });
+
+it('retains expiry committed by an in-flight transaction after another operation triggers fallback', async () => {
+  let now = capturedAt;
+  const queue = await openEventQueue(
+    { projectKey: 'expiry-concurrent-fallback', ingestionUrl: 'https://ingest.example.com' },
+    { now: () => now, maxAgeMs: 1000 },
+  );
+  try {
+    await queue.enqueue(event);
+    now += 1000;
+    // This transaction is already open and may commit after the connection is closed.
+    const pruning = queue.getAll();
+    const failure = vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(() => {
+      throw new DOMException('Storage failed', 'UnknownError');
+    });
+    await queue.enqueue({
+      ...event,
+      eventId: 'fallback-event',
+      clientTimestamp: new Date(now).toISOString(),
+    });
+    failure.mockRestore();
+    expect(await pruning).toEqual({ status: 'storage_error' });
+    expect(queue.storageMode).toBe('memory');
+    expect(queue.expiredEvents).toBe(1);
+  } finally {
+    queue.close();
+  }
+});

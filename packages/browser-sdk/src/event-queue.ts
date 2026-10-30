@@ -246,13 +246,14 @@ function withRecovery(
   random: () => number,
 ): EventQueue {
   let storage = initial;
-  let previousExpiredEvents = 0;
+  let retiredStorage: QueueStorage | undefined;
   let closed = false;
   const issuedClaims = new Map<string, { expiresAt: number; events: AnalyticsEvent[] }>();
 
   function degrade(source: QueueStorage): void {
     if (storage === source) {
-      previousExpiredEvents += source.expiredEvents;
+      // A previously opened transaction can still commit after database.close().
+      retiredStorage = source;
       source.close();
       issuedClaims.clear();
       storage = createMemoryQueue(memoryLimits, now, random);
@@ -281,7 +282,7 @@ function withRecovery(
 
   return {
     get expiredEvents() {
-      return previousExpiredEvents + storage.expiredEvents;
+      return (retiredStorage?.expiredEvents ?? 0) + storage.expiredEvents;
     },
     get storageMode() {
       return storage.storageMode;
