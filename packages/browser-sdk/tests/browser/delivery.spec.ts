@@ -125,3 +125,82 @@ test('the oversized-event control drops before persistence and leaves healthy de
   expect((await state(request, scenario)).requests[0]!.status).toBe(200);
   await expect(page.getByLabel('Queue')).toHaveText('[]');
 });
+
+test('retains a browser-offline event and delivers the same ID after connectivity returns', async ({
+  page,
+  context,
+  request,
+  scenario,
+}) => {
+  await open(page, scenario, 60_000);
+  await context.setOffline(true);
+  try {
+    const captured = await page.evaluate(async () => {
+      // Bypass the fixture's refresh, which also needs the network.
+      const result = await window.harness.delivery.enqueue({
+        schemaVersion: 1,
+        eventId: 'offline-event',
+        eventName: 'offline_view',
+        distinctId: 'visitor',
+        sessionId: 'session',
+        sequence: 0,
+        clientTimestamp: new Date().toISOString(),
+        url: location.href,
+        properties: {},
+        context: { sdkVersion: 'browser-test' },
+      });
+      await window.harness.delivery.flush();
+      return {
+        result,
+        queue: await window.harness.delivery.getAll(),
+        health: await window.harness.delivery.getHealth(),
+      };
+    });
+    expect(captured.result.status).toBe('queued');
+    expect(captured.queue).toMatchObject({
+      status: 'read',
+      events: [{ eventId: 'offline-event' }],
+    });
+    expect(captured.health.counters.networkErrors).toBe(1);
+    expect(captured.health.counters.accepted ?? 0).toBe(0);
+    expect((await state(request, scenario)).requests).toEqual([]);
+    await context.setOffline(false);
+    await expect.poll(async () => (await state(request, scenario)).requests.length).toBe(1);
+    expect(
+      (await state(request, scenario)).requests[0]!.events.map((event) => event.eventId),
+    ).toEqual(['offline-event']);
+    expect(await page.evaluate(() => window.harness.delivery.getAll())).toEqual({
+      status: 'read',
+      events: [],
+    });
+    expect((await page.evaluate(() => window.harness.delivery.getHealth())).counters.accepted).toBe(
+      1,
+    );
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
+test('reports native IndexedDB expiry once without uploading an expired event', async ({
+  page,
+  request,
+  scenario,
+}) => {
+  const capturedAt = new Date('2026-10-30T12:00:00.000Z');
+  await page.clock.install({ time: capturedAt });
+  await open(page, scenario, 60_000);
+  const captured = await page.evaluate(() => window.harness.capture());
+  expect(captured.status).toBe('queued');
+  await page.clock.setSystemTime(new Date(capturedAt.getTime() + 25 * 60 * 60 * 1000));
+  const result = await page.evaluate(async () => {
+    const queue = await window.harness.delivery.getAll();
+    const first = await window.harness.delivery.getHealth();
+    const second = await window.harness.delivery.getHealth();
+    return { queue, first, second };
+  });
+  expect(result.queue).toEqual({ status: 'read', events: [] });
+  expect(result.first.queue.storageMode).toBe('indexeddb');
+  expect(result.first.counters.droppedExpired).toBe(1);
+  expect(result.second.counters.droppedExpired).toBe(1);
+  expect((await state(request, scenario)).requests).toEqual([]);
+});

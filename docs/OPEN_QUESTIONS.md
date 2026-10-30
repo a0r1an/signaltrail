@@ -14,6 +14,12 @@ Entries are questions, not approvals or completed work.
 - **SDK telemetry consent:** aggregate health reporting is opt-in and sampled.
   Keep those defaults; decide product-facing consent and documentation before
   enabling it in a deployed application.
+- **Public SDK capture API:** the package currently exposes queue/transport APIs
+  that accept complete typed events. A higher-level `init`/`track`/`identify` API,
+  generated session/visitor identities, and runtime validation/error reporting for
+  JavaScript callers are not implemented. Decide those semantics before presenting
+  the SDK as a drop-in analytics integration. Keep the low-level APIs stable during
+  infrastructure verification.
 - **Alert delivery:** Grafana Cloud metrics are configured, but alert recipients,
   notification channels, and production availability objectives are undecided.
   Do not send notifications or create external integrations without instruction.
