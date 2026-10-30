@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createIngestionServer, createRedpandaPublisher } from '../../apps/ingestion/dist/index.js';
 import { exerciseBrokerRecovery } from './broker-recovery.mjs';
+import { finishRun } from './run-result.mjs';
 import { acquireRunLock } from './run-lock.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
@@ -51,12 +52,35 @@ const samples = [];
 let sampling = Promise.resolve();
 let shutdown = false;
 let runError;
+let result = { scenario, config, passed: false, failedStages: [] };
 const stop = () => {
   shutdown = true;
 };
 process.once('SIGINT', stop);
 process.once('SIGTERM', stop);
 try {
+  result = {
+    ...result,
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+    workingTreeDirty:
+      execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()
+        .length > 0,
+    machine: { cpuCount: cpus().length, cpuModel: cpus()[0]?.model, totalMemoryBytes: totalmem() },
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    limitations: [
+      'Same-host generator and broker; development baseline, not production sizing.',
+      scenario === 'recovery'
+        ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
+        : 'Capacity probes do not simulate SDK retries.',
+    ],
+  };
+  // An interrupted process must not leave a successful-looking result.
+  await writeFile(
+    resolve(directory, 'result.json'),
+    JSON.stringify({ ...result, incomplete: true }, null, 2),
+  );
   await docker(['up', '-d', '--wait', '--wait-timeout', '120', 'redpanda']);
   await docker(['run', '--rm', 'init']);
   await writeFile(
@@ -143,7 +167,7 @@ try {
             ['recovery', 10, '10s'],
           ]
         : [[scenario, config.rate, process.env.DURATION ?? '15s']];
-  const failedStages = [];
+  const failedStages = result.failedStages;
   for (const [name, rate, duration] of stages) {
     if (shutdown) throw new Error('Load test interrupted');
     const output = await docker(
@@ -191,39 +215,7 @@ try {
     final.peakEvents <= config.maxEvents &&
     final.peakBytes <= config.maxBytes &&
     (['saturation', 'bytes'].includes(scenario) ? final.refused > 0 : true);
-  await writeFile(
-    resolve(directory, 'result.json'),
-    JSON.stringify(
-      {
-        scenario,
-        failedStages,
-        config,
-        final,
-        passed,
-        commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-        workingTreeDirty:
-          execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()
-            .length > 0,
-        machine: {
-          cpuCount: cpus().length,
-          cpuModel: cpus()[0]?.model,
-          totalMemoryBytes: totalmem(),
-        },
-        node: process.version,
-        platform: process.platform,
-        arch: process.arch,
-        limitations: [
-          'Same-host generator and broker; development baseline, not production sizing.',
-          scenario === 'recovery'
-            ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
-            : 'Capacity probes do not simulate SDK retries.',
-        ],
-      },
-      null,
-      2,
-    ),
-  );
-  console.log(JSON.stringify({ directory, passed, final }, null, 2));
+  result = { ...result, final, passed };
   if (!passed) throw new Error('Load invariants failed');
 } catch (error) {
   runError = error;
@@ -245,52 +237,56 @@ try {
   } catch (diagnosticError) {
     console.error('Could not save broker diagnostics:', diagnosticError);
   }
-  throw error;
 } finally {
   clearInterval(interval);
+  result = { ...result, final: publisher?.snapshot() };
   try {
-    await cleanupResources([
-      { name: 'finish metric sampling', run: () => sampling },
-      {
-        name: 'save samples',
-        run: (signal) =>
-          writeFile(resolve(directory, 'samples.json'), JSON.stringify(samples), { signal }),
-      },
-      {
-        name: 'close ingestion listener',
-        run: (signal) =>
-          new Promise((done, reject) => {
-            if (!server) return done();
-            const forceClose = () => server.closeAllConnections();
-            signal.addEventListener('abort', forceClose, { once: true });
-            server.close((error) => {
-              signal.removeEventListener('abort', forceClose);
-              if (error) reject(error);
-              else done();
-            });
-          }),
-      },
-      { name: 'disconnect publisher', run: () => publisher?.close() },
-      {
-        name: 'withdraw load scrape targets',
-        run: (signal) =>
-          writeFile(resolve(root, 'test-results/load-targets.json'), '[]', { signal }),
-      },
-      { name: 'close metrics', run: () => metrics?.close() },
-      {
-        name: 'remove isolated infrastructure',
-        timeoutMs: 30000,
-        run: async (signal) => {
-          await docker(['down', '--volumes'], false, false, signal);
-          // Retain the lock if teardown failed: a new run must not reuse uncertain state.
-          await releaseRunLock();
-        },
-      },
-    ]);
-  } catch (cleanupError) {
-    if (runError)
-      throw new AggregateError([runError, cleanupError], 'Load run and cleanup both failed');
-    throw cleanupError;
+    await finishRun({
+      result,
+      runError,
+      writeResult: (completed) =>
+        writeFile(resolve(directory, 'result.json'), JSON.stringify(completed, null, 2)),
+      cleanup: () =>
+        cleanupResources([
+          { name: 'finish metric sampling', run: () => sampling },
+          {
+            name: 'save samples',
+            run: (signal) =>
+              writeFile(resolve(directory, 'samples.json'), JSON.stringify(samples), { signal }),
+          },
+          {
+            name: 'close ingestion listener',
+            run: (signal) =>
+              new Promise((done, reject) => {
+                if (!server) return done();
+                const forceClose = () => server.closeAllConnections();
+                signal.addEventListener('abort', forceClose, { once: true });
+                server.close((error) => {
+                  signal.removeEventListener('abort', forceClose);
+                  if (error) reject(error);
+                  else done();
+                });
+              }),
+          },
+          { name: 'disconnect publisher', run: () => publisher?.close() },
+          {
+            name: 'withdraw load scrape targets',
+            run: (signal) =>
+              writeFile(resolve(root, 'test-results/load-targets.json'), '[]', { signal }),
+          },
+          { name: 'close metrics', run: () => metrics?.close() },
+          {
+            name: 'remove isolated infrastructure',
+            timeoutMs: 30000,
+            run: async (signal) => {
+              await docker(['down', '--volumes'], false, false, signal);
+              // Retain the lock if teardown failed: a new run must not reuse uncertain state.
+              await releaseRunLock();
+            },
+          },
+        ]),
+    });
+    console.log(JSON.stringify({ directory, passed: true, final: result.final }, null, 2));
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
