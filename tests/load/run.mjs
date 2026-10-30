@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createIngestionServer, createRedpandaPublisher } from '../../apps/ingestion/dist/index.js';
 import { exerciseBrokerRecovery } from './broker-recovery.mjs';
+import { acquireRunLock } from './run-lock.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 
@@ -22,6 +23,7 @@ if (!Object.hasOwn(scenarios, scenario)) throw new Error(`Unknown scenario: ${sc
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
+const releaseRunLock = await acquireRunLock(resolve(root, 'test-results/load.lock'));
 const compose = ['compose', '-f', 'tests/load/compose.yaml'];
 const dockerEnv = { ...process.env, SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092' };
 function docker(args, capture = false, allowFailure = false, signal) {
@@ -278,7 +280,11 @@ try {
       {
         name: 'remove isolated infrastructure',
         timeoutMs: 30000,
-        run: (signal) => docker(['down', '--volumes'], false, false, signal),
+        run: async (signal) => {
+          await docker(['down', '--volumes'], false, false, signal);
+          // Retain the lock if teardown failed: a new run must not reuse uncertain state.
+          await releaseRunLock();
+        },
       },
     ]);
   } catch (cleanupError) {
