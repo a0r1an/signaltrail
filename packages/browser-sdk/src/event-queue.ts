@@ -64,6 +64,13 @@ type QueueTransaction = IDBPTransaction<
   'readwrite'
 >;
 
+// Expiry counts are published only after the transaction commits.
+const transactionExpirations = new WeakMap<QueueTransaction, number>();
+
+function recordExpiration(transaction: QueueTransaction): void {
+  transactionExpirations.set(transaction, (transactionExpirations.get(transaction) ?? 0) + 1);
+}
+
 function uniqueId(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
     byte.toString(16).padStart(2, '0'),
@@ -80,6 +87,7 @@ async function readUnexpired(
   while (cursor) {
     if (isExpired(cursor.value, time, maxAgeMs)) {
       await cursor.delete();
+      recordExpiration(transaction);
       await transaction.objectStore('claims').delete(cursor.primaryKey);
       await transaction.objectStore('retries').delete(cursor.primaryKey);
     } else {
@@ -93,6 +101,7 @@ async function readUnexpired(
 async function inTransaction<T>(
   database: IDBPDatabase<QueueDatabase>,
   operation: (transaction: QueueTransaction) => Promise<T>,
+  onExpired: (count: number) => void,
 ): Promise<T> {
   const transaction = database.transaction(['events', 'claims', 'retries'], 'readwrite');
   // Observe completion immediately: a request failure can also reject transaction.done.
@@ -104,6 +113,7 @@ async function inTransaction<T>(
     const result = await operation(transaction);
     const outcome = await completion;
     if (!outcome.committed) throw outcome.error;
+    onExpired(transactionExpirations.get(transaction) ?? 0);
     return result;
   } catch (error) {
     try {
@@ -199,6 +209,8 @@ export type DeliverySnapshot =
 type PendingEvents = { events: AnalyticsEvent[]; nextEligibleAt?: number };
 
 export interface EventQueue {
+  /** Committed expiry removals observed by this queue connection, including fallback. */
+  readonly expiredEvents: number;
   readonly storageMode: 'indexeddb' | 'memory';
   inspectDelivery(): Promise<DeliverySnapshot>;
   enqueue(event: AnalyticsEvent): Promise<EnqueueResult>;
@@ -212,6 +224,7 @@ export interface EventQueue {
 }
 
 interface QueueStorage {
+  readonly expiredEvents: number;
   inspectDelivery(): Promise<PendingEvents>;
   readonly storageMode: 'indexeddb' | 'memory';
   enqueue(event: AnalyticsEvent): Promise<EnqueueOutcome>;
@@ -233,11 +246,13 @@ function withRecovery(
   random: () => number,
 ): EventQueue {
   let storage = initial;
+  let previousExpiredEvents = 0;
   let closed = false;
   const issuedClaims = new Map<string, { expiresAt: number; events: AnalyticsEvent[] }>();
 
   function degrade(source: QueueStorage): void {
     if (storage === source) {
+      previousExpiredEvents += source.expiredEvents;
       source.close();
       issuedClaims.clear();
       storage = createMemoryQueue(memoryLimits, now, random);
@@ -265,6 +280,9 @@ function withRecovery(
   }
 
   return {
+    get expiredEvents() {
+      return previousExpiredEvents + storage.expiredEvents;
+    },
     get storageMode() {
       return storage.storageMode;
     },
@@ -393,6 +411,7 @@ function createMemoryQueue(
   random: () => number,
 ): QueueStorage {
   let events: AnalyticsEvent[] = [];
+  let expiredEvents = 0;
   const claims = new Map<string, { claimId: string; expiresAt: number }>();
   const retries = new Map<string, RetryState>();
   let closed = false;
@@ -404,6 +423,7 @@ function createMemoryQueue(
   function prune(time: number): void {
     events = events.filter((stored) => {
       if (!isExpired(stored, time, limits.maxAgeMs)) return true;
+      expiredEvents += 1;
       claims.delete(stored.eventId);
       retries.delete(stored.eventId);
       return false;
@@ -412,6 +432,9 @@ function createMemoryQueue(
 
   return {
     storageMode: 'memory',
+    get expiredEvents() {
+      return expiredEvents;
+    },
     async inspectDelivery() {
       ensureOpen();
       const time = now();
@@ -581,11 +604,20 @@ export async function openEventQueue(
     return withRecovery(createMemoryQueue(memoryLimits, now, random), memoryLimits, now, random);
   }
 
+  let expiredEvents = 0;
+  const transact = <T>(operation: (transaction: QueueTransaction) => Promise<T>) =>
+    inTransaction(database, operation, (count) => {
+      expiredEvents += count;
+    });
+
   return withRecovery(
     {
+      get expiredEvents() {
+        return expiredEvents;
+      },
       storageMode: 'indexeddb',
       async applyResponse(claimId, expected, response): Promise<ApplyOutcome> {
-        return inTransaction(database, async (transaction) => {
+        return transact(async (transaction) => {
           const records = await transaction
             .objectStore('claims')
             .index('byClaimId')
@@ -622,7 +654,7 @@ export async function openEventQueue(
         });
       },
       async releaseClaim(claimId): Promise<ReleaseOutcome> {
-        return inTransaction(database, async (transaction) => {
+        return transact(async (transaction) => {
           let cursor = await transaction
             .objectStore('claims')
             .index('byClaimId')
@@ -640,7 +672,7 @@ export async function openEventQueue(
         });
       },
       async inspectDelivery() {
-        return inTransaction(database, async (transaction) => {
+        return transact(async (transaction) => {
           const time = now();
           await readUnexpired(transaction, time, limits.maxAgeMs);
           const events: AnalyticsEvent[] = [];
@@ -658,7 +690,7 @@ export async function openEventQueue(
         });
       },
       async claimBatch(limit, eventId, maxRequestBytes = Infinity): Promise<ClaimOutcome> {
-        return inTransaction(database, async (transaction) => {
+        return transact(async (transaction) => {
           await readUnexpired(transaction, now(), limits.maxAgeMs);
           const time = now();
           const expiresAt = time + CLAIM_LEASE_MS;
@@ -668,6 +700,7 @@ export async function openEventQueue(
           while (cursor && events.length < limit) {
             if (isExpired(cursor.value, time, limits.maxAgeMs)) {
               await cursor.delete();
+              recordExpiration(transaction);
               await transaction.objectStore('claims').delete(cursor.primaryKey);
               await transaction.objectStore('retries').delete(cursor.primaryKey);
               cursor = await cursor.continue();
@@ -701,7 +734,7 @@ export async function openEventQueue(
         });
       },
       async enqueue(event): Promise<EnqueueOutcome> {
-        return inTransaction(database, async (transaction) => {
+        return transact(async (transaction) => {
           const time = now();
           const events = await readUnexpired(transaction, time, limits.maxAgeMs);
           const result = decideEnqueue(events, event, time, limits);
@@ -710,9 +743,7 @@ export async function openEventQueue(
         });
       },
       async getAll() {
-        return inTransaction(database, (transaction) =>
-          readUnexpired(transaction, now(), limits.maxAgeMs),
-        );
+        return transact((transaction) => readUnexpired(transaction, now(), limits.maxAgeMs));
       },
       close() {
         database.close();

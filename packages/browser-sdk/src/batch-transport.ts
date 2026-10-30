@@ -85,6 +85,9 @@ export async function openBatchTransport(
   const health = createSdkHealth(storedQueue, now);
   const queue: EventQueue = {
     ...storedQueue,
+    get expiredEvents() {
+      return storedQueue.expiredEvents;
+    },
     get storageMode() {
       return storedQueue.storageMode;
     },

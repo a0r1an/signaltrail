@@ -11,16 +11,23 @@ export interface SdkTelemetryOptions {
   onReport?: (report: SdkHealthReport) => void;
 }
 export function createSdkHealth(
-  queue: Pick<EventQueue, 'getAll' | 'storageMode'>,
+  queue: Pick<EventQueue, 'getAll' | 'storageMode'> & Partial<Pick<EventQueue, 'expiredEvents'>>,
   now: () => number,
 ) {
   let started = now();
+  let reportedExpiredEvents = queue.expiredEvents ?? 0;
   let counters: Partial<Record<SdkHealthCounter, number>> = {};
   let timings = { enqueueMs: 0, uploadMs: 0 };
   async function snapshot(): Promise<SdkHealthReport> {
     const time = now();
     // Snapshot local counters before reading the shared queue. New work belongs to the next report.
     const capturedCounters = { ...counters };
+    const expired = Math.max(0, (queue.expiredEvents ?? 0) - reportedExpiredEvents);
+    if (expired)
+      capturedCounters.droppedExpired = Math.min(
+        MAX_COUNT,
+        (capturedCounters.droppedExpired ?? 0) + expired,
+      );
     const capturedTimings = { ...timings };
     const intervalMs = Math.min(MAX_MS, Math.max(0, time - started));
     const stored = await queue.getAll().catch(() => ({ status: 'storage_error' as const }));
@@ -65,6 +72,7 @@ export function createSdkHealth(
     snapshot,
     async take(): Promise<SdkHealthReport> {
       const reporting = snapshot();
+      reportedExpiredEvents = queue.expiredEvents ?? 0;
       started = now();
       counters = {};
       timings = { enqueueMs: 0, uploadMs: 0 };
