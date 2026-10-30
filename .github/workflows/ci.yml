@@ -39,6 +39,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Test load harness cleanup
+        run: ./scripts/signaltrail-ops.mjs load check
+
       - name: Typecheck
         run: pnpm typecheck
 

@@ -4,6 +4,7 @@ import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createIngestionServer, createRedpandaPublisher } from '../../apps/ingestion/dist/index.js';
+import { cleanupResources } from './cleanup.mjs';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -21,11 +22,12 @@ const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
 const compose = ['compose', '-f', 'tests/load/compose.yaml'];
 const dockerEnv = { ...process.env, SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092' };
-function docker(args, capture = false, allowFailure = false) {
+function docker(args, capture = false, allowFailure = false, signal) {
   return new Promise((resolveRun, reject) => {
     const child = spawn('docker', [...compose, ...args], {
       cwd: root,
       env: dockerEnv,
+      signal,
       stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     });
     let output = '';
@@ -44,6 +46,7 @@ let publisher, server, metrics, interval;
 const samples = [];
 let sampling = Promise.resolve();
 let shutdown = false;
+let runError;
 const stop = () => {
   shutdown = true;
 };
@@ -165,6 +168,7 @@ try {
   const final = publisher.snapshot();
   const passed =
     failedStages.length === 0 &&
+    !shutdown &&
     final.outstandingEvents === 0 &&
     final.peakEvents <= config.maxEvents &&
     final.peakBytes <= config.maxBytes &&
@@ -202,18 +206,69 @@ try {
   console.log(JSON.stringify({ directory, passed, final }, null, 2));
   if (!passed) throw new Error('Load invariants failed');
 } catch (error) {
-  const logs = await docker(['logs', '--no-color', '--tail', '100', 'redpanda'], true).catch(
-    () => '',
-  );
-  await writeFile(resolve(directory, 'broker.log'), logs);
+  runError = error;
+  try {
+    await cleanupResources([
+      {
+        name: 'save broker diagnostics',
+        run: async (signal) => {
+          const logs = await docker(
+            ['logs', '--no-color', '--tail', '100', 'redpanda'],
+            true,
+            false,
+            signal,
+          );
+          await writeFile(resolve(directory, 'broker.log'), logs, { signal });
+        },
+      },
+    ]);
+  } catch (diagnosticError) {
+    console.error('Could not save broker diagnostics:', diagnosticError);
+  }
   throw error;
 } finally {
   clearInterval(interval);
-  await sampling;
-  await writeFile(resolve(directory, 'samples.json'), JSON.stringify(samples));
-  if (server) await new Promise((done) => server.close(done));
-  await publisher?.close();
-  await writeFile(resolve(root, 'test-results/load-targets.json'), '[]');
-  metrics?.close();
-  await docker(['down', '--volumes']);
+  try {
+    await cleanupResources([
+      { name: 'finish metric sampling', run: () => sampling },
+      {
+        name: 'save samples',
+        run: (signal) =>
+          writeFile(resolve(directory, 'samples.json'), JSON.stringify(samples), { signal }),
+      },
+      {
+        name: 'close ingestion listener',
+        run: (signal) =>
+          new Promise((done, reject) => {
+            if (!server) return done();
+            const forceClose = () => server.closeAllConnections();
+            signal.addEventListener('abort', forceClose, { once: true });
+            server.close((error) => {
+              signal.removeEventListener('abort', forceClose);
+              if (error) reject(error);
+              else done();
+            });
+          }),
+      },
+      { name: 'disconnect publisher', run: () => publisher?.close() },
+      {
+        name: 'withdraw load scrape targets',
+        run: (signal) =>
+          writeFile(resolve(root, 'test-results/load-targets.json'), '[]', { signal }),
+      },
+      { name: 'close metrics', run: () => metrics?.close() },
+      {
+        name: 'remove isolated infrastructure',
+        timeoutMs: 30000,
+        run: (signal) => docker(['down', '--volumes'], false, false, signal),
+      },
+    ]);
+  } catch (cleanupError) {
+    if (runError)
+      throw new AggregateError([runError, cleanupError], 'Load run and cleanup both failed');
+    throw cleanupError;
+  } finally {
+    process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
+  }
 }

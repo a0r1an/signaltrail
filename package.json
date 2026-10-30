@@ -20,7 +20,8 @@
     "format:check": "prettier --check .",
     "test:load": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/ingestion build && node --experimental-strip-types tests/load/run.mjs",
     "monitoring:up": "docker compose --env-file .env.monitoring -f infra/monitoring/compose.yaml up -d",
-    "monitoring:down": "docker compose --env-file .env.monitoring -f infra/monitoring/compose.yaml down"
+    "monitoring:down": "docker compose --env-file .env.monitoring -f infra/monitoring/compose.yaml down",
+    "test:load:unit": "node --test tests/load/*.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
