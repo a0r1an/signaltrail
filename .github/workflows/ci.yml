@@ -114,6 +114,8 @@ jobs:
         run: pnpm test:load saturation
         env:
           DURATION: 5s
+      - name: Verify SDK recovery after broker interruption
+        run: ./scripts/signaltrail-ops.mjs load recovery
       - name: Upload load-test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

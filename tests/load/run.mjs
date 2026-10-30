@@ -4,12 +4,14 @@ import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createIngestionServer, createRedpandaPublisher } from '../../apps/ingestion/dist/index.js';
+import { exerciseBrokerRecovery } from './broker-recovery.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  recovery: { rate: 0, batch: 3, padding: 0, maxEvents: 2, maxBytes: 8388608 },
   baseline: { rate: 10, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   burst: { rate: 200, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   saturation: { rate: 100, batch: 20, padding: 0, maxEvents: 10, maxBytes: 8388608 },
@@ -98,6 +100,7 @@ try {
   server = createIngestionServer({
     resolveProjectKey: (key) => (key === 'load-test-key' ? 'load-project' : undefined),
     publish: publisher.publish,
+    ...(scenario === 'recovery' ? { publicationTimeoutMs: 250 } : {}),
     observeRequest: metrics.observeRequest,
   });
   // Temporary load-only listener: Docker's k6 reaches the host through its gateway.
@@ -116,15 +119,28 @@ try {
     sampling = sampling.then(async () =>
       writeFile(resolve(directory, 'metrics.prom'), await metrics.registry.metrics()),
     );
+    // Observe rejection immediately; cleanup later reports it without crashing mid-run.
+    void sampling.catch(() => {});
   }, 1000);
+  if (scenario === 'recovery') {
+    const evidence = await exerciseBrokerRecovery({
+      url: `http://127.0.0.1:${port}/v1/events`,
+      publisher,
+      docker,
+      runId,
+    });
+    await writeFile(resolve(directory, 'recovery.json'), JSON.stringify(evidence, null, 2));
+  }
   const stages =
-    scenario === 'burst'
-      ? [
-          ['warmup', 10, '5s'],
-          ['burst', config.rate, process.env.DURATION ?? '10s'],
-          ['recovery', 10, '10s'],
-        ]
-      : [[scenario, config.rate, process.env.DURATION ?? '15s']];
+    scenario === 'recovery'
+      ? []
+      : scenario === 'burst'
+        ? [
+            ['warmup', 10, '5s'],
+            ['burst', config.rate, process.env.DURATION ?? '10s'],
+            ['recovery', 10, '10s'],
+          ]
+        : [[scenario, config.rate, process.env.DURATION ?? '15s']];
   const failedStages = [];
   for (const [name, rate, duration] of stages) {
     if (shutdown) throw new Error('Load test interrupted');
@@ -196,7 +212,9 @@ try {
         arch: process.arch,
         limitations: [
           'Same-host generator and broker; development baseline, not production sizing.',
-          'Capacity probes do not simulate SDK retries.',
+          scenario === 'recovery'
+            ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
+            : 'Capacity probes do not simulate SDK retries.',
         ],
       },
       null,

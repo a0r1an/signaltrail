@@ -30,11 +30,30 @@ Entries are questions, not approvals or completed work.
 - SDK queue limits remain provisional until workload and browser tests justify
   changing them. Preserve older queued events when capacity is reached.
 
+## Newly observed during October 30 work
+
+- **Downstream dedupe is still required:** the isolated recovery probe observed
+  sends settling after the ingestion deadline, followed by SDK retries with the
+  original IDs. Ingestion intentionally permits these duplicates. Before exposing
+  analytics totals, implement and test dedupe by `(projectId, eventId)` downstream;
+  decide query-time consistency expectations before the first query API.
+- **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
+  A local reproduction traced it to KafkaJS 2.2.4's
+  `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can
+  schedule `throttledUntil - Date.now()` with `throttledUntil = -1`. Node 24 clamps
+  that negative delay to 1 ms. The source is identified; production compatibility
+  and the appropriate upstream fix remain unresolved. Do not suppress warnings
+  globally or change the client library without regression tests.
+
 ## Evidence gaps
 
 - October 23 load scenarios covered short local baseline, burst, count, and byte
   saturation runs. Broker interruption, endurance, production sizing, and full
-  SDK-to-storage recovery were not demonstrated by those results.
+  SDK-to-storage recovery were not demonstrated by those results. On October 30,
+  an isolated pause/resume probe verified both late acknowledgements and exhausted
+  Kafka retries, stable SDK event IDs, bounded publication capacity, and actual
+  Redpanda records. That probe uses Node memory fallback; it does not demonstrate
+  browser persistence through a full broker outage or host/disk disaster recovery.
 - The project status document predates the October 23 monitoring and telemetry
   work. Inspect committed code and test evidence before repeating listed tasks.
 
