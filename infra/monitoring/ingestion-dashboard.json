@@ -395,6 +395,64 @@
           "expr": "histogram_quantile(0.95, sum by (le) (rate(redpanda_kafka_request_latency_seconds_bucket{job=~\"$broker_job\",redpanda_request=\"produce\"}[5m])))"
         }
       ]
+    },
+    {
+      "id": 19,
+      "title": "SDK reported expiry drops / second",
+      "description": "Best-effort sampled SDK health reports received by ingestion. This is not an exact count across all browsers; disconnected clients cannot report until connectivity returns.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 72
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(signaltrail_sdk_reported_dropped_expired_total{job=~\"$job\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "SDK reported network errors / second",
+      "description": "Best-effort sampled SDK health reports received by ingestion. This is not an exact count across all browsers; disconnected clients cannot report until connectivity returns.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 72
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(signaltrail_sdk_reported_network_errors_total{job=~\"$job\"}[5m]))"
+        }
+      ]
     }
   ],
   "templating": {
