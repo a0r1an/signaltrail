@@ -54,11 +54,12 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
       return response;
     }
     const parameters = ['projectId', 'from', 'to'];
-    const allowed = listing ? [...parameters, 'limit', 'cursor'] : parameters;
+    const allowed = listing
+      ? [...parameters, 'eventName', 'limit', 'cursor']
+      : [...parameters, 'eventName'];
     if (
       [...url.searchParams.keys()].some((key) => !allowed.includes(key)) ||
-      url.searchParams.getAll('limit').length > 1 ||
-      url.searchParams.getAll('cursor').length > 1 ||
+      allowed.some((key) => url.searchParams.getAll(key).length > 1) ||
       parameters.some(
         (key) =>
           url.searchParams.getAll(key).length !== 1 || !/\S/.test(url.searchParams.get(key) ?? ''),
@@ -79,6 +80,9 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
         controller.signal.throwIfAborted();
         if (access.status === 'unauthenticated') return json({ error: 'UNAUTHENTICATED' }, 401);
         if (access.status !== 'authorized') return json({ error: 'FORBIDDEN' }, 403);
+        const filter = url.searchParams.has('eventName')
+          ? { eventName: url.searchParams.get('eventName')! }
+          : {};
         try {
           if (listing) {
             const rawLimit = url.searchParams.get('limit');
@@ -88,6 +92,7 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
               await options.listReceivedEvents!(
                 {
                   projectId: access.projectId,
+                  ...filter,
                   from: url.searchParams.get('from') ?? '',
                   to: url.searchParams.get('to') ?? '',
                   ...(rawLimit === null ? {} : { limit: Number(rawLimit) }),
@@ -104,6 +109,7 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
             await options.countReceivedEvents(
               {
                 projectId: access.projectId,
+                ...filter,
                 from: url.searchParams.get('from') ?? '',
                 to: url.searchParams.get('to') ?? '',
               },

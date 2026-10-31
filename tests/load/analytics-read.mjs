@@ -74,12 +74,17 @@ export async function exerciseAnalyticsReads({ directory }) {
     ['listing', 'newest', '2026-10-01T12:00:00.000Z'],
     ['listing', 'moved', window.from],
     ['listing', 'moved', '2026-10-02T12:00:00.000Z'],
+    ['filtered', 'changed', window.from, 'old'],
+    ['filtered', 'changed', '2026-10-01T12:00:00.000Z', 'new'],
+    ['filtered', 'tie-a', window.from, 'viewed\\n'],
+    ['filtered', 'tie-z', window.from, 'viewed\\n'],
+    ['filtered', 'newline', window.from, 'viewed\n'],
   ];
   await createClickHouseBatchWriter(connection)(
-    data.map(([projectId, eventId, receivedAt]) => ({
+    data.map(([projectId, eventId, receivedAt, eventName]) => ({
       projectId,
       receivedAt,
-      event: { ...event, eventId },
+      event: { ...event, eventId, eventName: eventName ?? event.eventName },
     })),
   );
   const counts = {};
@@ -147,6 +152,42 @@ export async function exerciseAnalyticsReads({ directory }) {
     cursor = result.nextCursor;
   }
   assert.deepEqual(paged, ['newest', 'event-z', 'event-a']);
+  for (const [eventName, expected] of [
+    ['old', '0'],
+    ['new', '1'],
+    ['viewed\\n', '2'],
+    ['viewed\n', '1'],
+  ]) {
+    assert.deepEqual(
+      await reader.countReceivedEvents({ ...window, projectId: 'filtered', eventName }),
+      { count: expected },
+    );
+    const result = await reader.listReceivedEvents({ ...window, projectId: 'filtered', eventName });
+    assert.equal(String(result.events.length), expected);
+    assert.ok(result.events.every((event) => event.eventName === eventName));
+  }
+  const filteredFirst = await reader.listReceivedEvents({
+    ...window,
+    projectId: 'filtered',
+    eventName: 'viewed\\n',
+    limit: 1,
+  });
+  assert.deepEqual(
+    filteredFirst.events.map((event) => event.eventId),
+    ['tie-z'],
+  );
+  const filteredNext = await reader.listReceivedEvents({
+    ...window,
+    projectId: 'filtered',
+    eventName: 'viewed\\n',
+    limit: 1,
+    cursor: filteredFirst.nextCursor,
+  });
+  assert.deepEqual(
+    filteredNext.events.map((event) => event.eventId),
+    ['tie-a'],
+  );
+  assert.equal(filteredNext.hasMore, false);
   assert.deepEqual(await reader.listReceivedEvents({ ...window, projectId: 'missing' }), {
     events: [],
     hasMore: false,
@@ -160,6 +201,10 @@ export async function exerciseAnalyticsReads({ directory }) {
     countReceivedEvents: async (window, signal) => {
       reads++;
       return reader.countReceivedEvents(window, signal);
+    },
+    listReceivedEvents: async (window, signal) => {
+      reads++;
+      return reader.listReceivedEvents(window, signal);
     },
   });
   const query = new URL('https://fixture.invalid/v1/analytics/count');
@@ -190,6 +235,16 @@ export async function exerciseAnalyticsReads({ directory }) {
   assert.equal(authorized.status, 200);
   assert.deepEqual(await authorized.json(), { count: '1' });
   assert.equal(reads, 1);
+  query.pathname = '/v1/analytics/events';
+  const listedResponse = await handler(
+    new Request(query, { headers: { Authorization: 'Bearer fixture-dashboard-session' } }),
+  );
+  assert.equal(listedResponse.status, 200);
+  assert.deepEqual(
+    (await listedResponse.json()).events.map((event) => event.eventId),
+    ['start'],
+  );
+  assert.equal(reads, 2);
   return {
     passed: true,
     counts,
@@ -199,6 +254,7 @@ export async function exerciseAnalyticsReads({ directory }) {
     authorizedQueryBoundary: true,
     boundedEventListing: true,
     keysetPagingAcrossTimestampTies: true,
+    exactEventNamesAfterReplacement: true,
     limitations: [
       'Server-side read library only; no query HTTP endpoint or membership authentication is deployed.',
       'Counts use latest received time, not client event time.',

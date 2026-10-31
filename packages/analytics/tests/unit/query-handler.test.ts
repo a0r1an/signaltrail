@@ -269,3 +269,23 @@ it('forwards a listing cursor only after membership authorization', async () => 
     expect.any(AbortSignal),
   );
 });
+
+it.each(['count', 'events'])(
+  'forwards event-name filters after authorization for %s',
+  async (route) => {
+    const count = vi.fn(async () => ({ count: '0' }));
+    const list = vi.fn(async () => ({ events: [], hasMore: false }));
+    const handler = createAnalyticsQueryHandler({
+      resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'canonical' }),
+      countReceivedEvents: count,
+      listReceivedEvents: list,
+    });
+    const target = url.replace('/count?', '/' + route + '?') + '&eventName=checkout%20started';
+    expect((await handler(new Request(target))).status).toBe(200);
+    expect(route === 'count' ? count : list).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'canonical', eventName: 'checkout started' }),
+      expect.any(AbortSignal),
+    );
+    expect((await handler(new Request(target + '&eventName=other'))).status).toBe(400);
+  },
+);

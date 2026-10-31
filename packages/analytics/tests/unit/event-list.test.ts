@@ -1,6 +1,22 @@
 import { expect, it, vi } from 'vitest';
 import { createAnalyticsReader } from '../../src/index.ts';
 
+it.each(['', '  ', 'x'.repeat(4097), '\ud800'])(
+  'rejects invalid event-name filters before storage',
+  async (eventName) => {
+    const send = vi.fn(async () => new Response(''));
+    const reader = createAnalyticsReader({
+      endpoint: 'http://clickhouse:8123',
+      username: 'reader',
+      password: 'fixture',
+      fetch: send,
+    });
+    await expect(reader.listReceivedEvents({ ...window, eventName })).rejects.toThrow();
+    await expect(reader.countReceivedEvents({ ...window, eventName })).rejects.toThrow();
+    expect(send).not.toHaveBeenCalled();
+  },
+);
+
 const window = { projectId: 'trusted', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' };
 const row = {
   eventId: 'event-z',
@@ -9,6 +25,31 @@ const row = {
   sequence: '9007199254740993',
   receivedAtMs: '1790812800000',
 };
+
+it.each(['countReceivedEvents', 'listReceivedEvents'] as const)(
+  'binds exact event-name bytes for %s without SQL interpolation',
+  async (operation) => {
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(operation === 'countReceivedEvents' ? '{"count":"0"}' : ''),
+    );
+    const reader = createAnalyticsReader({
+      endpoint: 'http://clickhouse:8123',
+      username: 'reader',
+      password: 'fixture',
+      fetch: send,
+    });
+    const eventName = " viewed\\n' OR 1=1 -- ";
+    await reader[operation]({ ...window, eventName });
+    const target = new URL(String(send.mock.calls[0]?.[0]));
+    expect(target.searchParams.get('query')).toContain(
+      'event_name = unhex({event_name_hex:String})',
+    );
+    expect(target.searchParams.get('query')).not.toContain(eventName);
+    expect(Buffer.from(target.searchParams.get('param_event_name_hex')!, 'hex').toString()).toBe(
+      eventName,
+    );
+  },
+);
 
 it('returns bounded unique-event summaries with exact sequence values', async () => {
   const send = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(row) + '\n'));

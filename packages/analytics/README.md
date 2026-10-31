@@ -91,7 +91,8 @@ When more rows exist, `nextCursor` contains an opaque, bounded position for the
 next request. Pass it as `cursor` with the same project and time window.
 Paging uses `(received_at, event_id)` comparisons, including timestamp ties;
 it never uses an offset. Cursors are unsigned positions, not authorization tokens.
-Every page still requires project membership. Malformed and out-of-window
+Every page still requires project membership. Keep the same filters while paging.
+Malformed and out-of-window
 positions fail before storage. No cursor is returned on the final page.
 
 This is not a database snapshot: concurrent arrivals and later retries can move
@@ -111,3 +112,9 @@ enable `GET /v1/analytics/events` with the count route's parameters and an optio
 to accommodate an at-most-8-KiB cursor. Production proxy URL limits must be
 aligned before exposing this route. Without that dependency the route returns 404. The same membership,
 no-cache, admission, and cancellation policies apply to both operations.
+
+Both reader operations and query routes accept an optional `eventName` filter.
+It is an exact match, including case, whitespace, and literal backslashes. Names
+must contain a non-whitespace character, have valid UTF-8 representation, and
+fit 4 KiB. The filter binds bytes as a parameter and applies to the latest
+replacement row. An older version with a different name is not resurrected.

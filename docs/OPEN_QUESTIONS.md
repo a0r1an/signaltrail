@@ -68,6 +68,14 @@ Entries are questions, not approvals or completed work.
 
 ## Reversible defaults during autonomous work
 
+- **Local fixture follow-up, no user decision required:** the expanded exact-name
+  read probe at `test-results/load/2026-10-31T19-05-10.998Z-analytics-read/` failed
+  on the initial ClickHouse fixture request with a closed socket after Compose
+  reported healthy. Cleanup succeeded. Investigate startup readiness and retained
+  diagnostics on resume; the cause is not established. Filter package checks pass
+  (79 units), but real-storage verification remains pending. Do not hide this
+  failure with an unexplained retry or count it as integration evidence.
+
 - Keep ingestion acknowledgement dependent on Redpanda, with downstream dedupe
   by trusted project identity and stable event ID. Do not introduce a database
   lookup into ingestion to deduplicate.

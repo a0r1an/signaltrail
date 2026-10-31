@@ -24,7 +24,9 @@ commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
 Autonomous development resumed on October 31. Latest verified application commit:
-`775c4db` (bounded event explorer). Work is committed locally; no push, deployment, or remote CI verification
+`43943bd` (fully integration-verified explorer and keyset paging). The subsequent
+event-name filtering slice passes package checks but its expanded real-storage
+probe is not yet verified. Work is committed locally; no push, deployment, or remote CI verification
 has been performed in this continuation. Implementation and checks are
 agent-performed and do not establish independent learner mastery. Dated sections
 below preserve historical evidence; their pending-work statements apply to those
@@ -91,6 +93,8 @@ dates rather than this checkpoint.
   cursors now continue across timestamp ties without growing offsets. Final pages
   omit the cursor; malformed/out-of-window cursors fail before storage. Paging
   under concurrent writes is not a snapshot or a complete export guarantee.
+  Optional exact event-name filters now apply to both counts and lists using
+  parameter-bound UTF-8 bytes and the same canonical authorized project scope.
 - **Server-side analytics read foundation:** `@signaltrail/analytics` counts unique
   events using a fixed parameterized `FINAL` query scoped to a trusted project ID.
   Required UTC receive-time windows are half-open and capped at 31 days. Client
@@ -187,21 +191,21 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                                  |
-| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                     |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                      |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                    |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                           |
-| Analytics reader and query boundary unit tests |                            71 | Includes bounded lists, cursor validation, malformed Unicode, and authorization |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                   |
+| Suite                                          | Latest observed passing count | Evidence scope                                                               |
+| ---------------------------------------------- | ----------------------------: | ---------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes             |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                  |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                   |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                 |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                        |
+| Analytics reader and query boundary unit tests |                            79 | Includes exact event-name filters, bounded lists, cursors, and authorization |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 71 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 79 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
@@ -213,6 +217,13 @@ claim that the entire workspace or remote CI ran at final HEAD.
   `test-results/load/2026-10-31T18-57-29.203Z-analytics-read/` with final cleanup.
   Multi-page keyset traversal across ties passed with final cleanup in
   `test-results/load/2026-10-31T19-01-31.767Z-analytics-read/`.
+  The later event-name filter probe failed in
+  `test-results/load/2026-10-31T19-05-10.998Z-analytics-read/`: the initial fixture
+  ClickHouse request failed with `UND_ERR_SOCKET` / `other side closed` after
+  Compose reported healthy. It did not establish filter correctness against
+  real storage. Containers and temporary volumes were removed successfully.
+  The cause is unresolved; a startup/readiness race is a hypothesis, not a finding.
+  No retries or readiness changes were added before stopping at the user's request.
   CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
@@ -248,7 +259,14 @@ The full native browser/crash-recovery pipeline passed after producer coalescing
 The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
-Next, add exact event-name filtering to counts and paged summaries. Integrate a
+Stopped at the user's request after committing and recording the current work.
+Next, investigate the isolated ClickHouse fixture's initial connection failure,
+then run `./scripts/signaltrail-ops.mjs load analytics-read` to verify the new
+event-name filters, replacement behavior, filtered paging, and real authorized
+listing. Preserve the failed run as failed evidence. The filter implementation
+already passes all 79 analytics units, lint, types, and builds; do not describe
+its real-storage integration as passing until a new completed probe proves it.
+Then continue the explorer/product work. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by
 fixture tests; public ingestion keys must never authorize reads. Longer endurance

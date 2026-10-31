@@ -15,6 +15,7 @@ export interface ReceivedEventWindow {
   projectId: string;
   from: string;
   to: string;
+  eventName?: string;
 }
 export interface EventSummary {
   eventId: string;
@@ -143,6 +144,23 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       throw new RangeError('Received-time window must be positive and at most 31 days');
     const target = new URL(endpoint);
     if (query) target.searchParams.set('query', query);
+    if (window.eventName !== undefined) {
+      const name = window.eventName;
+      if (
+        typeof name !== 'string' ||
+        !/\S/.test(name) ||
+        Buffer.byteLength(name) > 4096 ||
+        Buffer.from(name).toString() !== name
+      )
+        throw new TypeError('Invalid event-name filter');
+      target.searchParams.set(
+        'query',
+        target.searchParams
+          .get('query')!
+          .replace(' WHERE ', ' WHERE event_name = unhex({event_name_hex:String}) AND '),
+      );
+      target.searchParams.set('param_event_name_hex', Buffer.from(name).toString('hex'));
+    }
     if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
     if (cursor) {
       target.searchParams.set('param_before', cursor.receivedAt);
