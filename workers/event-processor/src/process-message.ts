@@ -60,16 +60,20 @@ export function createEventProcessor(options: ProcessorOptions) {
     const value = message.value ?? new Uint8Array();
     let decoded: { record: PublishedAnalyticsEvent } | { reason: DeadLetterRecord['reason'] };
     if (value.byteLength > maxBytes) decoded = { reason: 'MESSAGE_TOO_LARGE' };
-    else
+    else {
+      let failureReason: 'INVALID_JSON' | 'INVALID_RECORD' = 'INVALID_JSON';
       try {
         const payload: unknown = JSON.parse(
           new TextDecoder('utf-8', { fatal: true }).decode(value),
         );
+        // JSON decoding succeeded; schema resource failures are record failures.
+        failureReason = 'INVALID_RECORD';
         const parsed = PublishedAnalyticsEventSchema.safeParse(payload);
         decoded = parsed.success ? { record: parsed.data } : { reason: 'INVALID_RECORD' };
       } catch {
-        decoded = { reason: 'INVALID_JSON' };
+        decoded = { reason: failureReason };
       }
+    }
     if ('reason' in decoded) {
       await options.writeDeadLetter({
         schemaVersion: 1,

@@ -261,3 +261,28 @@ it.each([0, -1, 1.5, NaN, 524289])(
     ).toThrow(RangeError);
   },
 );
+
+it('classifies valid but excessively nested JSON as an invalid record and preserves DLQ-before-commit ordering', async () => {
+  const encoded = JSON.stringify({
+    ...record,
+    event: { ...record.event, properties: { nested: '__deep__' } },
+  });
+  const value = Buffer.from(
+    encoded.replace('"__deep__"', '['.repeat(20000) + '0' + ']'.repeat(20000)),
+  );
+  expect(() => JSON.parse(value.toString()) as unknown).not.toThrow();
+  const effects: string[] = [];
+  const processMessage = createEventProcessor({
+    writeEvent: async () => {
+      effects.push('storage');
+    },
+    writeDeadLetter: async (letter) => {
+      effects.push(letter.reason);
+    },
+    commit: async () => {
+      effects.push('commit');
+    },
+  });
+  await expect(processMessage({ ...message, value })).resolves.toEqual({ status: 'dead_lettered' });
+  expect(effects).toEqual(['INVALID_RECORD', 'commit']);
+});
