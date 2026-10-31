@@ -1,3 +1,4 @@
+import { PublishedAnalyticsEventSchema } from '@signaltrail/contracts';
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { Kafka, logLevel, type KafkaMessage } from 'kafkajs';
@@ -125,8 +126,8 @@ it('accepts only acknowledged valid events and stores trusted metadata in separa
       ],
     });
     const messages = await consume(2);
-    const records = messages.map(
-      (message) => JSON.parse(message.value!.toString()) as PublishedEvent,
+    const records = messages.map((message) =>
+      PublishedAnalyticsEventSchema.parse(JSON.parse(message.value!.toString())),
     );
     expect(records.map((record) => record.event.eventId).sort()).toEqual([
       'event-one',

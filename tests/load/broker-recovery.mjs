@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
+import { PublishedAnalyticsEventSchema } from '../../packages/contracts/dist/index.js';
 import { cleanupResources } from './cleanup.mjs';
 import { openBatchTransport } from '../../packages/browser-sdk/dist/index.js';
 // Resolve the same Kafka client version used by ingestion, without a second installation.
@@ -137,7 +138,7 @@ export async function exerciseBrokerRecovery({ url, publisher, docker, runId }) 
     await consumer.subscribe({ topic: 'signaltrail.analytics.v1', fromBeginning: true });
     await consumer.run({
       eachMessage: async ({ message }) => {
-        const record = JSON.parse(message.value.toString());
+        const record = PublishedAnalyticsEventSchema.parse(JSON.parse(message.value.toString()));
         assert.equal(record.projectId, 'load-project');
         observed.add(record.event.eventId);
       },

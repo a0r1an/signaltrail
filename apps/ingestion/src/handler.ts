@@ -2,13 +2,9 @@ import { SdkHealthReportSchema, type SdkHealthReport } from '@signaltrail/contra
 import {
   AnalyticsBatchSchema,
   validateAnalyticsEvents,
-  type AnalyticsEventSchema,
+  type PublishedAnalyticsEvent,
 } from '@signaltrail/contracts';
-export interface PublishedEvent {
-  projectId: string;
-  receivedAt: string;
-  event: ReturnType<typeof AnalyticsEventSchema.parse>;
-}
+export type PublishedEvent = PublishedAnalyticsEvent;
 export interface IngestionOptions {
   observeSdkHealth?: (report: SdkHealthReport, projectId: string) => void;
   resolveProjectKey(key: string): string | undefined | Promise<string | undefined>;
