@@ -46,4 +46,34 @@ Verification:
 
 The isolated probe verifies separate projects, exact backslash/newline project
 IDs, time boundaries, and latest-version dedupe before time filtering. It does
-not implement membership authentication, query HTTP routing, or dashboard views.
+not implement production membership authentication or dashboard views.
+
+## Query integration boundary
+
+`createAnalyticsQueryHandler` accepts a standard `Request` and returns a
+`Response` for `GET /v1/analytics/count?projectId=...&from=...&to=...`.
+It opens no listener and registers no application route by itself. Supply a
+server-owned `resolveProjectAccess(request, requestedProjectId, signal)` that
+authenticates a dashboard session and checks project membership. It must return
+`authorized` with the canonical project ID, `unauthenticated`, or `forbidden`.
+No default resolver exists. Never use the public ingestion-key resolver here.
+Supply the configured reader's `countReceivedEvents` as the storage operation.
+
+Responses disable caching and add no cross-origin access headers. Authentication
+and membership failures return 401/403 before reads. Invalid request shapes or
+authorized windows return 400; dependency failures, deadlines, and full admission
+return generic 503 responses. Unknown paths and unsupported methods return
+404/405. Duplicate/unknown parameters are rejected, and URLs are capped at 4 KiB.
+
+The provisional defaults admit 32 requests per handler and bound each response
+wait to ten seconds. A timed-out or disconnected request aborts the resolver's
+signal; late authorization cannot begin a storage read. Admission stays reserved
+until the underlying work settles, including dependencies that ignore abort.
+The supplied reader has its own storage deadline; an already-started read is not
+cancelled by the handler's signal. Deploy one shared handler instance per service,
+not one per request. These are instance limits, not proxy or distributed quotas.
+
+The isolated probe uses a fixture-only membership resolver to verify denied
+requests never reach storage and an authorized request returns a real count.
+Production session validation, membership persistence, credentials, host routing,
+CSRF/origin policy for the chosen session scheme, and query metrics remain pending.

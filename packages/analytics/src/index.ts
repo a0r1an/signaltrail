@@ -1,3 +1,6 @@
+export { createAnalyticsQueryHandler } from './query-handler.ts';
+export type { AnalyticsQueryOptions, ProjectAccess } from './query-handler.ts';
+
 export interface AnalyticsReaderOptions {
   endpoint: string;
   username: string;

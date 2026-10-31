@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
-import { createAnalyticsReader } from '../../packages/analytics/dist/index.js';
+import {
+  createAnalyticsReader,
+  createAnalyticsQueryHandler,
+} from '../../packages/analytics/dist/index.js';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 
 export async function exerciseAnalyticsReads({ directory }) {
@@ -103,12 +106,53 @@ export async function exerciseAnalyticsReads({ directory }) {
     }),
     { count: '3' },
   );
+  let reads = 0;
+  const handler = createAnalyticsQueryHandler({
+    resolveProjectAccess: async (request, projectId) => {
+      if (request.headers.get('Authorization') !== 'Bearer fixture-dashboard-session')
+        return { status: 'unauthenticated' };
+      return projectId === 'a' ? { status: 'authorized', projectId: 'a' } : { status: 'forbidden' };
+    },
+    countReceivedEvents: async (window) => {
+      reads++;
+      return reader.countReceivedEvents(window);
+    },
+  });
+  const query = new URL('https://fixture.invalid/v1/analytics/count');
+  for (const [key, value] of Object.entries({ ...window, projectId: 'a' }))
+    query.searchParams.set(key, value);
+  assert.equal(
+    (
+      await handler(
+        new Request(query, { headers: { Authorization: 'Bearer fixture-ingestion-key' } }),
+      )
+    ).status,
+    401,
+  );
+  query.searchParams.set('projectId', 'b');
+  assert.equal(
+    (
+      await handler(
+        new Request(query, { headers: { Authorization: 'Bearer fixture-dashboard-session' } }),
+      )
+    ).status,
+    403,
+  );
+  assert.equal(reads, 0);
+  query.searchParams.set('projectId', 'a');
+  const authorized = await handler(
+    new Request(query, { headers: { Authorization: 'Bearer fixture-dashboard-session' } }),
+  );
+  assert.equal(authorized.status, 200);
+  assert.deepEqual(await authorized.json(), { count: '1' });
+  assert.equal(reads, 1);
   return {
     passed: true,
     counts,
     halfOpenWindow: true,
     latestVersionBeforeTimeFilter: true,
     exactProjectBytes: true,
+    authorizedQueryBoundary: true,
     limitations: [
       'Server-side read library only; no query HTTP endpoint or membership authentication is deployed.',
       'Counts use latest received time, not client event time.',

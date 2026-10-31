@@ -24,7 +24,7 @@ commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
 Autonomous development resumed on October 31. Latest verified application commit:
-`c696597`. Work is committed locally; no push, deployment, or remote CI verification
+`31e489b` (reader foundation). Work is committed locally; no push, deployment, or remote CI verification
 has been performed in this continuation. Implementation and checks are
 agent-performed and do not establish independent learner mastery. Dated sections
 below preserve historical evidence; their pending-work statements apply to those
@@ -89,6 +89,13 @@ dates rather than this checkpoint.
   timestamps, and replacement selection before time filtering. This is a private
   library, not a public query endpoint; membership authorization and production
   read credentials remain pending. See [the package guide](../packages/analytics/README.md).
+- **Query authorization boundary:** a portable Request/Response handler requires
+  an injected dashboard-session/project-membership resolver. It reads only the
+  canonical authorized project, denies before storage, disables shared caching,
+  rejects ambiguous parameters, and bounds admission and response waits. No
+  resolver, application route, listener, or production identity provider is
+  installed. The real-storage probe also exercises fixture-authorized and denied
+  requests. Hanging dependencies retain their admission slot until settlement.
 - **Ingestion admission and recovery:** publisher work is bounded by outstanding
   event count and serialized bytes, including sends still pending after an HTTP
   deadline. Defaults are 1,000 events and 8 MiB, pending workload measurements.
@@ -165,23 +172,25 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                       | Latest observed passing count | Evidence scope                                                           |
-| --------------------------- | ----------------------------: | ------------------------------------------------------------------------ |
-| Contracts                   |                            72 | Prior autonomous package checks; unchanged by final worker fixes         |
-| Ingestion                   |                            63 | October 31 producer and request-processing admission checks              |
-| Browser SDK unit tests      |                           252 | Includes IndexedDB lifecycle/fallback work                               |
-| Chromium browser tests      |                            13 | Includes native database upgrade cooperation                             |
-| Event processor unit tests  |                           105 | October 31 process and storage-latency metrics checks                    |
-| Analytics reader unit tests |                            17 | Input bounds, exact counts, failures, and stalled request/body deadlines |
-| Load harness unit tests     |                            25 | Includes measurements, reports, and safe storage interruption            |
+| Suite                                          | Latest observed passing count | Evidence scope                                                                |
+| ---------------------------------------------- | ----------------------------: | ----------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes              |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                   |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                    |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                  |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                         |
+| Analytics reader and query boundary unit tests |                            32 | Input bounds, exact counts, authorization denial, cancellation, and deadlines |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                 |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 17 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 32 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
+  The expanded fixture-authorization probe also passed and cleaned up in
+  `test-results/load/2026-10-31T16-19-27.614Z-analytics-read/`.
   CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
@@ -214,11 +223,12 @@ repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
 ClickHouse consumption, batch inserts, or the existing recovery probes.
 
 The full native browser/crash-recovery pipeline passed after producer coalescing.
-The server-side project-scoped analytics read foundation also passed unit and
-real ClickHouse verification. Next, add an authenticated query-service boundary
-with an injected server-side membership resolver and test denial/isolation before
-dashboard integration. Keep the production identity-provider choice deferred in
-the question log; public ingestion keys must never authorize reads. Longer endurance
+The server-side project-scoped analytics reader and injected membership boundary
+passed unit verification; real ClickHouse checks cover the reader and fixture
+authorization. Next, propagate query cancellation into the underlying storage
+read, then integrate a session/membership resolver and dashboard route once the
+identity-provider decision is settled. No production authentication is implied by
+fixture tests; public ingestion keys must never authorize reads. Longer endurance
 and connection/proxy admission can follow the established performance harness. Fixed-session higher-rate,
 larger-payload, and short storage-outage measurements already pass. A short sustained ClickHouse outage is already
 verified; do not repeat it as if no failure-under-load coverage exists. The basic sustained measurement
