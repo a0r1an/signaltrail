@@ -8,6 +8,7 @@ import {
 } from '../../workers/event-processor/dist/index.js';
 import { cleanupResources } from './cleanup.mjs';
 import { startWorkerProcess } from './worker-process.mjs';
+import { openInsertResponseGate } from './insert-response-gate.mjs';
 const { Kafka, logLevel } = createRequire(
   new URL('../../apps/ingestion/package.json', import.meta.url),
 )('kafkajs');
@@ -38,6 +39,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
   const producer = kafka.producer({ allowAutoTopicCreation: false });
   let worker;
   let workerProcess;
+  let responseGate;
   const dlqConsumer = kafka.consumer({
     groupId: runId + '-dlq',
     sessionTimeout: 6000,
@@ -57,6 +59,22 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       await delay(100);
     }
     throw new Error(message);
+  };
+  const waitForCommitted = async (highOffsets) => {
+    const deadline = Date.now() + 25000;
+    while (Date.now() < deadline) {
+      const current = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
+      if (
+        highOffsets.every(
+          ({ partition, offset }) =>
+            BigInt(offset) === 0n ||
+            current[0].partitions.find((entry) => entry.partition === partition)?.offset === offset,
+        )
+      )
+        return current;
+      await delay(100);
+    }
+    throw new Error('Replacement worker did not acknowledge retained source records');
   };
   try {
     await query(
@@ -223,23 +241,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       metricsPort: 9466,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
-    const recoveryDeadline = Date.now() + 25000;
-    let recoveredOffsets;
-    let recovered = false;
-    while (Date.now() < recoveryDeadline) {
-      const current = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
-      recovered = highOffsets.every(
-        ({ partition, offset }) =>
-          BigInt(offset) === 0n ||
-          current[0].partitions.find((entry) => entry.partition === partition)?.offset === offset,
-      );
-      if (recovered) {
-        recoveredOffsets = current;
-        break;
-      }
-      await delay(100);
-    }
-    assert.ok(recovered, 'Replacement worker did not acknowledge the retained source record');
+    const recoveredOffsets = await waitForCommitted(highOffsets);
     assert.equal(
       Number(
         await query(
@@ -263,7 +265,71 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     });
     assert.equal(unknownMetricsPath.status, 404);
     assert.equal((await workerProcess.stop()).code, 0);
+    responseGate = await openInsertResponseGate();
+    workerProcess = startWorkerProcess({
+      groupId: runId,
+      topic,
+      deadLetterTopic,
+      clickhouseUrl: responseGate.endpoint,
+      timeoutMs: 30000,
+    });
+    await workerProcess.waitFor('SignalTrail event processor started');
+    await ingest('load-test-key', [{ ...event, eventId: 'pipeline-lost-ack', sequence: 3 }]);
+    await responseGate.waitForStored();
+    assert.equal(
+      Number(
+        await query(
+          "SELECT count() FROM signaltrail.analytics_events FINAL WHERE project_id = 'load-project' AND event_id = 'pipeline-lost-ack'",
+        ),
+      ),
+      1,
+    );
+    const lostAckHigh = await admin.fetchTopicOffsets(topic);
+    const lostAckPending = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
+    assert.ok(
+      lostAckHigh.some(
+        ({ partition, offset }) =>
+          BigInt(
+            lostAckPending[0].partitions.find((entry) => entry.partition === partition)?.offset ??
+              '-1',
+          ) < BigInt(offset),
+      ),
+      'A stored insert without a delivered response must remain uncommitted',
+    );
+    assert.equal((await workerProcess.stop('SIGKILL')).signal, 'SIGKILL');
+    await responseGate.close();
+    responseGate = undefined;
+    workerProcess = startWorkerProcess({
+      groupId: runId,
+      topic,
+      deadLetterTopic,
+      metricsPort: 9466,
+    });
+    await workerProcess.waitFor('SignalTrail event processor started');
+    const lostAckRecovered = await waitForCommitted(lostAckHigh);
+    assert.equal(
+      Number(
+        await query(
+          "SELECT count() FROM signaltrail.analytics_events FINAL WHERE project_id = 'load-project' AND event_id = 'pipeline-lost-ack'",
+        ),
+      ),
+      1,
+    );
+    const replayMetrics = await fetch('http://127.0.0.1:9466/metrics', {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(replayMetrics.status, 200);
+    assert.match(await replayMetrics.text(), /signaltrail_processor_stored_total 1/);
+    assert.equal((await workerProcess.stop()).code, 0);
     return {
+      lostStorageAcknowledgement: {
+        storedBeforeCrash: true,
+        uncommittedBeforeCrash: lostAckPending,
+        sourceHighOffsets: lostAckHigh,
+        committedAfterRestart: lostAckRecovered,
+        replacementStoredAgain: true,
+        uniqueLogicalRows: 1,
+      },
       passed: true,
       processRecovery: {
         abruptTermination: 'SIGKILL',
@@ -302,6 +368,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
           run: (signal) =>
             storagePaused ? docker(['unpause', 'clickhouse'], false, false, signal) : undefined,
         },
+        { name: 'close insert response gate', run: () => responseGate?.close() },
         { name: 'stop owned worker process', timeoutMs: 25000, run: () => workerProcess?.stop() },
         { name: 'stop pipeline consumer', run: () => worker?.close() },
         { name: 'stop dead-letter observer', run: () => dlqConsumer.disconnect() },

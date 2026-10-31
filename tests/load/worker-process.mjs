@@ -2,7 +2,14 @@ import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Own only this child; never signal an existing development worker.
-export function startWorkerProcess({ groupId, topic, deadLetterTopic, metricsPort }) {
+export function startWorkerProcess({
+  groupId,
+  topic,
+  deadLetterTopic,
+  metricsPort,
+  clickhouseUrl = 'http://127.0.0.1:38123',
+  timeoutMs = 250,
+}) {
   const child = spawn(process.execPath, ['workers/event-processor/dist/main.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
@@ -11,10 +18,10 @@ export function startWorkerProcess({ groupId, topic, deadLetterTopic, metricsPor
       SIGNALTRAIL_REDPANDA_TOPIC: topic,
       SIGNALTRAIL_REDPANDA_DLQ_TOPIC: deadLetterTopic,
       SIGNALTRAIL_PROCESSOR_GROUP_ID: groupId,
-      SIGNALTRAIL_CLICKHOUSE_URL: 'http://127.0.0.1:38123',
+      SIGNALTRAIL_CLICKHOUSE_URL: clickhouseUrl,
       SIGNALTRAIL_CLICKHOUSE_USERNAME: 'signaltrail',
       SIGNALTRAIL_CLICKHOUSE_PASSWORD: 'signaltrail_local',
-      SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS: '250',
+      SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS: String(timeoutMs),
       ...(metricsPort ? { SIGNALTRAIL_PROCESSOR_METRICS_PORT: String(metricsPort) } : {}),
     },
   });

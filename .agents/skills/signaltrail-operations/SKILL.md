@@ -109,7 +109,11 @@ reads across repeated event IDs and separate projects, DLQ publication, and
 acknowledged Kafka offsets. It also runs the worker entrypoint as an owned child,
 pauses storage until a write fails, verifies an uncommitted source offset, kills
 that child, and restarts with the same consumer group. Recovery must produce one
-logical row and acknowledge the source offset before graceful shutdown. The
+logical row and acknowledge the source offset before graceful shutdown. A second
+crash window uses an owned ephemeral loopback HTTP gate: ClickHouse confirms the
+insert, the gate withholds that response, and the child is killed before its
+source commit. The replacement must insert again while `FINAL` still returns
+one logical row. The gate is test-only and is closed during cleanup. The
 replacement may wait for the old group session to expire. The probe also owns
 worker metrics port 9466 and checks retry/completion metrics through real HTTP.
 The worker endpoint is optional and loopback-only; it is not automatically
