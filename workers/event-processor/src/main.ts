@@ -2,6 +2,7 @@ import { createClickHouseWriter } from './clickhouse-writer.ts';
 import { parseProcessorEnvironment, ProcessorConfigurationError } from './environment.ts';
 import { createRedpandaEventConsumer } from './redpanda-consumer.ts';
 import { createProcessorMetrics } from './metrics.ts';
+import { ProcessorStartupTimeoutError, startWithDeadline } from './startup.ts';
 
 let worker: ReturnType<typeof createRedpandaEventConsumer> | undefined;
 let metrics: ReturnType<typeof createProcessorMetrics> | undefined;
@@ -49,7 +50,8 @@ try {
       exporter.server.listen(endpoint.port, endpoint.host, resolve);
     });
   }
-  await worker.start();
+  const startingWorker = worker;
+  await startWithDeadline(() => startingWorker.start());
   if (!stopping) console.log('SignalTrail event processor started');
   await worker.finished;
 } catch (error) {
@@ -57,7 +59,9 @@ try {
     console.error(
       error instanceof ProcessorConfigurationError
         ? error.message
-        : 'SignalTrail event processor failed',
+        : error instanceof ProcessorStartupTimeoutError
+          ? 'SignalTrail event processor startup deadline exceeded'
+          : 'SignalTrail event processor failed',
     );
     process.exitCode = 1;
   }
