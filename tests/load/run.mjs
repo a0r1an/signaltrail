@@ -14,6 +14,7 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'browser-pipeline': { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   pipeline: { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   recovery: { rate: 0, batch: 3, padding: 0, maxEvents: 2, maxBytes: 8388608 },
   baseline: { rate: 10, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
@@ -23,6 +24,7 @@ const scenarios = {
 };
 const config = scenarios[scenario];
 if (!Object.hasOwn(scenarios, scenario)) throw new Error(`Unknown scenario: ${scenario}`);
+const isPipeline = ['pipeline', 'browser-pipeline'].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
@@ -75,7 +77,7 @@ try {
       'Same-host generator and broker; development baseline, not production sizing.',
       scenario === 'recovery'
         ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
-        : scenario === 'pipeline'
+        : isPipeline
           ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
           : 'Capacity probes do not simulate SDK retries.',
     ],
@@ -85,6 +87,19 @@ try {
     resolve(directory, 'result.json'),
     JSON.stringify({ ...result, incomplete: true }, null, 2),
   );
+  if (scenario === 'browser-pipeline')
+    execFileSync(
+      'pnpm',
+      [
+        '--filter',
+        '@signaltrail/browser-sdk',
+        'exec',
+        'tsup',
+        '--config',
+        'tests/browser/harness/bundle.config.ts',
+      ],
+      { cwd: root, stdio: 'inherit' },
+    );
   await docker([
     'up',
     '-d',
@@ -92,7 +107,7 @@ try {
     '--wait-timeout',
     '120',
     'redpanda',
-    ...(scenario === 'pipeline' ? ['clickhouse'] : []),
+    ...(isPipeline ? ['clickhouse'] : []),
   ]);
   await docker(['run', '--rm', 'init']);
   await writeFile(
@@ -139,11 +154,12 @@ try {
     resolveProjectKey: (key) =>
       key === 'load-test-key'
         ? 'load-project'
-        : scenario === 'pipeline' && key === 'pipeline-other-key'
+        : isPipeline && key === 'pipeline-other-key'
           ? 'load-other-project'
           : undefined,
     publish: publisher.publish,
-    ...(scenario === 'recovery' ? { publicationTimeoutMs: 250 } : {}),
+    ...(['recovery', 'browser-pipeline'].includes(scenario) ? { publicationTimeoutMs: 250 } : {}),
+    ...(scenario === 'browser-pipeline' ? { allowedOrigins: ['http://127.0.0.1:4179'] } : {}),
     observeRequest: metrics.observeRequest,
   });
   // Temporary load-only listener: Docker's k6 reaches the host through its gateway.
@@ -174,16 +190,18 @@ try {
     });
     await writeFile(resolve(directory, 'recovery.json'), JSON.stringify(evidence, null, 2));
   }
-  if (scenario === 'pipeline') {
+  if (isPipeline) {
     const { exerciseEventPipeline } = await import('./event-pipeline.mjs');
     const evidence = await exerciseEventPipeline({
       url: `http://127.0.0.1:${port}/v1/events`,
       runId,
       docker,
+      browser: scenario === 'browser-pipeline',
+      directory,
     });
     await writeFile(resolve(directory, 'pipeline.json'), JSON.stringify(evidence, null, 2));
   }
-  const stages = ['recovery', 'pipeline'].includes(scenario)
+  const stages = ['recovery', 'pipeline', 'browser-pipeline'].includes(scenario)
     ? []
     : scenario === 'burst'
       ? [

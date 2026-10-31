@@ -70,6 +70,11 @@ Entries are questions, not approvals or completed work.
   The isolated pipeline verifies retry and completion metrics. Decide production
   scrape networking, lag visibility, and alert thresholds before deployment; the
   endpoint is not yet added to the live Alloy configuration.
+- **Browser bundle budget:** the unminified test harness bundle is about 791 kB
+  plus its source map. This is a development artifact, not a measured production
+  transfer size. Measure minified gzip/Brotli size and startup cost before setting
+  a public SDK size budget or deciding whether validation dependencies need to
+  change. No dependency replacement is assumed.
 - **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
   A local reproduction traced it to KafkaJS 2.2.4's
   `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can
@@ -87,6 +92,11 @@ Entries are questions, not approvals or completed work.
   Kafka retries, stable SDK event IDs, bounded publication capacity, and actual
   Redpanda records. That probe uses Node memory fallback; it does not demonstrate
   browser persistence through a full broker outage or host/disk disaster recovery.
+  A later native-Chromium pipeline now verifies an event survives page close in
+  IndexedDB, is retained after an actual broker publication retry, and reaches
+  ClickHouse after broker recovery with the original ID and one logical row.
+  This covers one browser context, not browser-process restart, eviction, or
+  host/disk disaster recovery.
 - The project status document predates the October 23 monitoring and telemetry
   work. Inspect committed code and test evidence before repeating listed tasks.
 

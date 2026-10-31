@@ -28,7 +28,7 @@ async function query(sql) {
   return response.text();
 }
 
-export async function exerciseEventPipeline({ url, runId, docker }) {
+export async function exerciseEventPipeline({ url, runId, docker, browser = false, directory }) {
   const kafka = new Kafka({
     brokers: ['127.0.0.1:29092'],
     clientId: runId,
@@ -320,8 +320,15 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     });
     assert.equal(replayMetrics.status, 200);
     assert.match(await replayMetrics.text(), /signaltrail_processor_stored_total 1/);
+    let browserPipeline;
+    if (browser) {
+      const { exerciseBrowserPipeline } = await import('./browser-pipeline.mjs');
+      browserPipeline = await exerciseBrowserPipeline({ url, docker, query, directory });
+      await waitForCommitted(await admin.fetchTopicOffsets(topic));
+    }
     assert.equal((await workerProcess.stop()).code, 0);
     return {
+      browserPipeline,
       lostStorageAcknowledgement: {
         storedBeforeCrash: true,
         uncommittedBeforeCrash: lostAckPending,

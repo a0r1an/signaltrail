@@ -34,6 +34,7 @@ Preview an operation without side effects:
 | Development broker status            | `./scripts/signaltrail-ops.mjs broker status`                         |
 | Development broker public metrics    | `./scripts/signaltrail-ops.mjs broker metrics`                        |
 | Load-harness unit checks             | `./scripts/signaltrail-ops.mjs load check`                            |
+| Native Chromium-to-storage recovery  | `./scripts/signaltrail-ops.mjs load browser-pipeline`                 |
 | Isolated event-to-ClickHouse probe   | `./scripts/signaltrail-ops.mjs load pipeline`                         |
 | Isolated broker outage and SDK retry | `./scripts/signaltrail-ops.mjs load recovery`                         |
 | Baseline / burst and recovery        | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
@@ -121,6 +122,16 @@ added to the live Alloy configuration. Production process
 supervision, retention, and the query API remain separate work.
 The fixture preserves unusual client timestamps as strings. This is a small
 correctness probe, not a storage-throughput benchmark.
+
+`load browser-pipeline` includes all pipeline checks and a native Chromium SDK
+probe. It builds the browser bundle, owns a fixture on loopback port 4179, queues
+one event offline in IndexedDB, closes the page, reopens while the isolated
+broker is paused, verifies the retry response retains the original ID, and then
+checks recovery into ClickHouse with one logical row. Chromium must already be
+installed (`browser install` locally; CI also installs its system dependencies).
+Failure traces are retained in the load artifact directory. This covers page
+closure in one browser context, not browser-process restart, browser eviction,
+or host loss. Do not run it alongside another owner of fixture port 4179.
 
 The harness advertises temporary scrape targets in
 `test-results/load-targets.json`; Alloy collects them while they exist and they
