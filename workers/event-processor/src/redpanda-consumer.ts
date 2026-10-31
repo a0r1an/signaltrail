@@ -122,10 +122,13 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
   const eachBatch = async (payload: EachBatchPayload) => {
     const { batch, isRunning, isStale, resolveOffset } = payload;
     const ownsBatch = () => !controller.signal.aborted && isRunning() && !isStale();
+    const ensureOwned = () => {
+      if (!ownsBatch()) throw new Error('Partition batch is no longer owned');
+    };
     const heartbeat = async () => {
-      if (!ownsBatch()) throw new Error('Partition batch is no longer owned');
+      ensureOwned();
       await payload.heartbeat();
-      if (!ownsBatch()) throw new Error('Partition batch is no longer owned');
+      ensureOwned();
     };
     for (let start = 0; start < batch.messages.length;) {
       if (!ownsBatch()) return;
@@ -151,8 +154,14 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
       let outcomes: ('stored' | 'dead_lettered')[] = [];
       const process = createBatchProcessor({
         signal: controller.signal,
-        writeEvents: options.writeEvents!,
-        writeDeadLetter,
+        writeEvents: async (records) => {
+          ensureOwned();
+          await options.writeEvents!(records);
+        },
+        writeDeadLetter: async (letter) => {
+          ensureOwned();
+          await writeDeadLetter(letter);
+        },
         commit: async (cursor) => {
           await heartbeat();
           await consumer.commitOffsets([cursor]);

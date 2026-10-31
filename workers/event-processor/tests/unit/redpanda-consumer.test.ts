@@ -410,3 +410,45 @@ it('splits fetched partitions into chunks of at most 100 events', async () => {
     await worker.close();
   }
 });
+
+it('does not start another sink write after a partition batch becomes stale', async () => {
+  let stale = false;
+  clients.producer.send.mockImplementationOnce(async () => {
+    stale = true;
+    return [];
+  });
+  const writeEvents = vi.fn(async () => {});
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-stale-dlq-test',
+    writeEvent: async () => {},
+    writeEvents,
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    const input = payload();
+    await config.eachBatch!({
+      batch: {
+        topic: input.topic,
+        partition: input.partition,
+        messages: [0, 1].map((index) => ({
+          ...input.message,
+          offset: String(index),
+          value: Buffer.from('broken'),
+        })),
+      },
+      heartbeat: input.heartbeat,
+      isRunning: () => true,
+      isStale: () => stale,
+      resolveOffset: vi.fn(),
+    } as unknown as EachBatchPayload);
+    expect(clients.producer.send).toHaveBeenCalledTimes(1);
+    expect(writeEvents).not.toHaveBeenCalled();
+    expect(clients.consumer.commitOffsets).not.toHaveBeenCalled();
+  } finally {
+    await worker.close();
+  }
+});
