@@ -256,3 +256,37 @@ it('refuses empty or oversized batches before making a storage request', async (
   ).rejects.toThrow(RangeError);
   expect(send).not.toHaveBeenCalled();
 });
+
+it('reports storage acknowledgement latency without letting diagnostics change the write outcome', async () => {
+  const observations: { outcome: string; seconds: number }[] = [];
+  const write = createClickHouseBatchWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test',
+    fetch: async () => new Response(null),
+    onAttempt: async (outcome, seconds) => {
+      observations.push({ outcome, seconds });
+      throw new Error('diagnostics rejected');
+    },
+  });
+  await expect(write([record])).resolves.toBeUndefined();
+  await Promise.resolve();
+  expect(observations).toHaveLength(1);
+  expect(observations[0]).toMatchObject({ outcome: 'confirmed' });
+  expect(observations[0]!.seconds).toBeGreaterThanOrEqual(0);
+});
+
+it('reports failed storage attempts while preserving the generic unacknowledged error', async () => {
+  const onAttempt = vi.fn(() => {
+    throw new Error('diagnostics failure');
+  });
+  const write = createClickHouseBatchWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test',
+    fetch: async () => new Response('private storage error', { status: 500 }),
+    onAttempt,
+  });
+  await expect(write([record])).rejects.toThrow('ClickHouse insert was not acknowledged');
+  expect(onAttempt).toHaveBeenCalledWith('failed', expect.any(Number));
+});

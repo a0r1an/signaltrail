@@ -35,10 +35,15 @@ process.on('SIGINT', onSignal);
 process.on('SIGTERM', onSignal);
 try {
   const options = parseProcessorEnvironment(process.env);
+  const storageOptions = {
+    ...options.clickhouse,
+    onAttempt: (outcome: 'confirmed' | 'failed', seconds: number) =>
+      metrics?.observeStorageWrite(outcome, seconds),
+  };
   worker = createRedpandaEventConsumer({
     ...options.consumer,
-    writeEvent: createClickHouseWriter(options.clickhouse),
-    writeEvents: createClickHouseBatchWriter(options.clickhouse),
+    writeEvent: createClickHouseWriter(storageOptions),
+    writeEvents: createClickHouseBatchWriter(storageOptions),
     onChunk: (records, bytes) => metrics?.observeChunk(records, bytes),
     onRetry: () => console.error('SignalTrail event processor retry scheduled'),
     onAttempt: (outcome, seconds) => metrics?.observeAttempt(outcome, seconds),

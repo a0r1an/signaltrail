@@ -100,3 +100,25 @@ it('exposes process resource measurements for load-test CPU and memory compariso
     await metrics.close();
   }
 });
+
+it('separates confirmed and failed ClickHouse acknowledgement latency from total chunk time', async () => {
+  const metrics = createProcessorMetrics(() => ({
+    running: true,
+    stored: 0,
+    deadLettered: 0,
+    retries: 0,
+  }));
+  try {
+    metrics.observeStorageWrite('confirmed', 0.125);
+    metrics.observeStorageWrite('failed', 5);
+    const text = await metrics.registry.metrics();
+    expect(text).toContain(
+      'signaltrail_processor_storage_write_duration_seconds_sum{outcome="confirmed"} 0.125',
+    );
+    expect(text).toContain(
+      'signaltrail_processor_storage_write_duration_seconds_count{outcome="failed"} 1',
+    );
+  } finally {
+    await metrics.close();
+  }
+});

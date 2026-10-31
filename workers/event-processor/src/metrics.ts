@@ -47,6 +47,13 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
     buckets: [1024, 4096, 16384, 65536, 262144, 524288, 1048576],
     registers: [registry],
   });
+  const storageDuration = new Histogram({
+    name: 'signaltrail_processor_storage_write_duration_seconds',
+    help: 'ClickHouse HTTP insert time through acknowledgement, excluding validation and source commit',
+    labelNames: ['outcome'],
+    buckets: [0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 30],
+    registers: [registry],
+  });
   const attemptDuration = new Histogram({
     name: 'signaltrail_processor_attempt_duration_seconds',
     help: 'Chunk processing attempt duration including sink acknowledgement and source-offset commit; mixed chunks use stored outcome',
@@ -78,6 +85,9 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
   return {
     registry,
     server,
+    observeStorageWrite(outcome: 'confirmed' | 'failed', seconds: number) {
+      storageDuration.observe({ outcome }, seconds);
+    },
     observeChunk(records: number, bytes: number) {
       chunkRecords.observe(records);
       chunkBytes.observe(bytes);

@@ -8,6 +8,7 @@ export interface ClickHouseWriterOptions {
   password: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  onAttempt?(outcome: 'confirmed' | 'failed', seconds: number): void;
 }
 async function readAcknowledgement(response: Response, signal: AbortSignal): Promise<void> {
   const reader = response.body?.getReader();
@@ -102,6 +103,8 @@ export function createClickHouseBatchWriter(options: ClickHouseWriterOptions) {
       .join('');
     if (Buffer.byteLength(body, 'utf8') > 4 * 1024 * 1024)
       throw new RangeError('ClickHouse batch exceeds 4 MiB');
+    const started = performance.now();
+    let outcome: 'confirmed' | 'failed' = 'failed';
     const controller = new AbortController();
     let rejectDeadline!: (error: Error) => void;
     const deadline = new Promise<never>((_resolve, reject) => {
@@ -139,11 +142,19 @@ export function createClickHouseBatchWriter(options: ClickHouseWriterOptions) {
         })(),
         deadline,
       ]);
+      outcome = 'confirmed';
     } catch {
       // Storage exceptions can contain SQL, event values, credentials, or response bodies.
       throw new Error('ClickHouse insert was not acknowledged');
     } finally {
       clearTimeout(timeout);
+      try {
+        void Promise.resolve(
+          options.onAttempt?.(outcome, Math.max(0, performance.now() - started) / 1000),
+        ).catch(() => {});
+      } catch {
+        /* Diagnostics cannot change the acknowledgement outcome. */
+      }
     }
   };
 }
