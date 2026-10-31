@@ -10,7 +10,7 @@ import {
 import { cleanupResources } from './cleanup.mjs';
 import { startWorkerProcess } from './worker-process.mjs';
 import { openInsertResponseGate } from './insert-response-gate.mjs';
-const { Kafka, logLevel } = createRequire(
+const { Kafka, logLevel, CompressionTypes } = createRequire(
   new URL('../../apps/ingestion/package.json', import.meta.url),
 )('kafkajs');
 const topic = 'signaltrail.analytics.v1';
@@ -49,6 +49,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
   const deadLetterTopic = 'signaltrail.analytics.dlq.v1';
   const outcomes = [];
   const insertSizes = [];
+  const sourceChunks = [];
   const letters = [];
   let storagePaused = false;
   let processingError;
@@ -121,6 +122,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
         })(records);
         insertSizes.push(records.length);
       },
+      onChunk: (records, bytes) => sourceChunks.push({ records, bytes }),
       onProcessed: (status) => outcomes.push({ status }),
     });
     void worker.finished.catch((error) => {
@@ -243,6 +245,56 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       recordsPerInsert: bulkInsertSizes,
       elapsedSeconds: (performance.now() - bulkStarted) / 1000,
       limitation: 'Small local correctness sample, not sustained throughput or production sizing.',
+    };
+    const firstByteInsert = insertSizes.length;
+    const firstByteChunk = sourceChunks.length;
+    await producer.send({
+      topic,
+      acks: -1,
+      compression: CompressionTypes.GZIP,
+      messages: Array.from({ length: 20 }, (_, index) => ({
+        partition: 0,
+        value: JSON.stringify({
+          projectId: 'load-project',
+          receivedAt: new Date().toISOString(),
+          event: {
+            ...event,
+            eventId: `pipeline-bytes-${index}`,
+            sequence: index,
+            properties: { padding: 'x'.repeat(60 * 1024) },
+          },
+        }),
+      })),
+    });
+    await waitFor(
+      () => outcomes.length === 230,
+      'Processor did not complete the compressed byte-bound probe',
+    );
+    await waitForCommitted(await admin.fetchTopicOffsets(topic));
+    const byteChunks = sourceChunks.slice(firstByteChunk);
+    assert.equal(
+      byteChunks.reduce((total, chunk) => total + chunk.records, 0),
+      20,
+    );
+    assert.ok(
+      byteChunks.length > 1,
+      'Decoded source data must split even when the compressed fetch is small',
+    );
+    assert.ok(byteChunks.every((chunk) => chunk.bytes <= 1024 * 1024));
+    assert.equal(
+      Number(
+        await query(
+          "SELECT count() FROM signaltrail.analytics_events FINAL WHERE startsWith(event_id, 'pipeline-bytes-')",
+        ),
+      ),
+      20,
+    );
+    const boundedBytes = {
+      events: 20,
+      compression: 'gzip',
+      sourceChunks: byteChunks,
+      recordsPerInsert: insertSizes.slice(firstByteInsert),
+      sourceByteLimit: 1024 * 1024,
     };
     await worker.close();
     workerProcess = startWorkerProcess({
@@ -388,6 +440,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
     return {
       browserPipeline,
       boundedBulk,
+      boundedBytes,
       lostStorageAcknowledgement: {
         recordsPerInsert: 2,
         storedBeforeCrash: true,

@@ -74,6 +74,10 @@ Entries are questions, not approvals or completed work.
   Non-transient storage failures currently retry the entire chunk rather than
   discarding schema-valid events. Decide operator repair/quarantine procedures
   before production; do not infer that every storage error is a poison event.
+  KafkaJS expands compressed fetches before application chunking, so the chunk
+  byte cap bounds processor work and insert construction, not total decoder
+  memory. Keep broker access restricted and measure compressed workloads plus
+  broker record-batch limits before claiming a whole-process memory bound.
 - **Worker monitoring:** the worker has an optional loopback-only metrics endpoint
   (`SIGNALTRAIL_PROCESSOR_METRICS_PORT`), disabled by default. Its running gauge
   means the consumer loop is active, not that storage is healthy or lag is zero.
