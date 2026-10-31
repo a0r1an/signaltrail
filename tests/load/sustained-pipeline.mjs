@@ -43,6 +43,7 @@ export async function openSustainedPipeline({
   docker,
   interrupted,
   storageInterruption = false,
+  expectedPaddingBytes = 0,
 }) {
   const kafka = new Kafka({
     brokers: ['127.0.0.1:29092'],
@@ -231,6 +232,21 @@ export async function openSustainedPipeline({
         const uniqueRows = Number(
           await query('SELECT count() FROM signaltrail.analytics_events FINAL'),
         );
+        const padding = JSON.parse(
+          await query(
+            "SELECT min(length(JSONExtractString(properties_json, 'padding'))) AS minimum, max(length(JSONExtractString(properties_json, 'padding'))) AS maximum FROM signaltrail.analytics_events FINAL FORMAT JSONEachRow",
+          ),
+        );
+        assert.equal(
+          Number(padding.minimum),
+          expectedPaddingBytes,
+          'Stored minimum padding length must match the generated payload',
+        );
+        assert.equal(
+          Number(padding.maximum),
+          expectedPaddingBytes,
+          'Stored maximum padding length must match the generated payload',
+        );
         const dlq = await admin.fetchTopicOffsets(deadLetterTopic);
         const totals = {
           accepted: summary.metrics.events_accepted?.values.count,
@@ -248,6 +264,7 @@ export async function openSustainedPipeline({
         const report = {
           passed: false,
           totals,
+          verifiedPaddingBytes: expectedPaddingBytes,
           drainSeconds: (performance.now() - stoppedTraffic) / 1000,
           maxSampledLag: samples.reduce(
             (max, entry) => (BigInt(entry.source.total) > BigInt(max) ? entry.source.total : max),
@@ -292,10 +309,10 @@ export async function openSustainedPipeline({
             'Outage must exercise a real storage failure and retry',
           );
         }
-        report.passed = true;
-        await writeFile(resolve(directory, 'sustained.json'), JSON.stringify(report, null, 2));
         const exited = await worker.stop();
         assert.equal(exited.code, 0, 'Sustained worker must exit gracefully');
+        report.passed = true;
+        await writeFile(resolve(directory, 'sustained.json'), JSON.stringify(report, null, 2));
         return report;
       },
     };

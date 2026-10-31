@@ -39,6 +39,12 @@ Entries are questions, not approvals or completed work.
   and performance objectives before interpreting these as a supported workload.
   Current rates are local measurement inputs, not customer capacity promises.
 
+- **Whole-ingestion admission:** publisher limits bound admitted broker work;
+  HTTP currently has per-body/header/time limits but no total active-request/body
+  budget. The sustained generator's maximum of 100 VUs does not verify behavior
+  with many concurrent slow uploads. Choose HTTP/proxy admission and per-project
+  quotas alongside expected traffic before claiming bounded whole-process memory.
+
 ## Reversible defaults during autonomous work
 
 - Keep ingestion acknowledgement dependent on Redpanda, with downstream dedupe

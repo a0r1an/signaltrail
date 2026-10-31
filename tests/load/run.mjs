@@ -14,6 +14,14 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'sustained-bytes': {
+    rate: 10,
+    batch: 20,
+    padding: 8000,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    duration: '60s',
+  },
   'sustained-outage': {
     rate: 10,
     batch: 20,
@@ -66,6 +74,7 @@ const isSustained = [
   'sustained',
   'sustained-stress',
   'sustained-outage',
+  'sustained-bytes',
 ].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
@@ -233,6 +242,7 @@ try {
       docker,
       interrupted: () => shutdown,
       storageInterruption: config.storageInterruption ?? false,
+      expectedPaddingBytes: config.padding,
     });
   }
   if (scenario === 'recovery') {

@@ -60,7 +60,12 @@ dates rather than this checkpoint.
   reached unique rows with zero final lag or dead letters after resume.
 - The initial load generator tied sessions to active VUs, confounding partition
   mix across latency changes. Sustained profiles now use a fixed 100-session
-  pool, independent of VU scheduling; fresh workload verification is in progress.
+  pool, independent of VU scheduling. Its fresh 1,000-events/s run passed with
+  60,020 unique rows, zero retries/drops, and traffic across all three partitions.
+- The fixed-session larger-payload profile passed: 12,000 accepted/unique events,
+  each preserving its 8,000-byte padding value, with zero retries/drops/dead
+  letters/final lag. Repeated padding is a byte-integrity probe, not a realistic
+  compression or production sizing workload.
 - Detailed measurements, artifact paths, report limitations, and unchanged limits
   are in [the performance report](performance/2026-10-31-analytics-pipeline.md).
   The initial baseline's raw k6 summary was overwritten by a filename collision;
@@ -184,8 +189,9 @@ repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
 ClickHouse consumption, batch inserts, or the existing recovery probes.
 
 The full native browser/crash-recovery pipeline passed after producer coalescing.
-Finish fresh verification of fixed-session sustained profiles, then extend
-payload diversity and endurance. A short sustained ClickHouse outage is already
+Next, bound concurrent request parsing independently of admitted broker work,
+then extend endurance or move to a product slice. Fixed-session higher-rate,
+larger-payload, and short storage-outage measurements already pass. A short sustained ClickHouse outage is already
 verified; do not repeat it as if no failure-under-load coverage exists. The basic sustained measurement
 harness and one measured producer improvement are complete. Keep this isolated
 from the user's development services and distinguish overload/recovery correctness

@@ -110,8 +110,25 @@ partition-distribution benchmark.
 
 Sustained profiles now select a fixed pool of 100 session IDs using the global
 scenario iteration number, independent of virtual-user scheduling. Future reports
-record `config.sessionCount`; fresh verification of this workload is in progress.
+record `config.sessionCount`. A fresh nominal 1,000-events/s run with that fixed
+pool passed: 60,020 accepted/unique rows, zero retries/drops/dead letters/final lag,
+HTTP p95 about 11.1 ms, and partition totals of 23,400, 18,620, and 18,000 records.
+Peak sampled lag was 80; peak admitted work was 380. This establishes a new
+reproducible baseline rather than retroactively correcting earlier comparisons.
 Normal non-sustained scenarios keep their earlier session selection.
+
+## Larger payload verification
+
+The fixed-session `sustained-bytes` profile passed at nominal 200 events/second
+for 60 seconds: 12,000 accepted events became 12,000 unique rows, with zero
+retries, drops, dead letters, or final lag. Minimum and maximum stored padding
+lengths both matched the generated 8,000 bytes. HTTP p95 was about 22.8 ms and
+mean confirmed storage-write time was about 7.0 ms. Sampled lag was zero; that
+is not a claim of continuously zero lag between observations.
+
+Repeated ASCII padding compresses very well in analytical storage. This verifies
+payload preservation and byte handling, not representative replay compression or
+production disk requirements. The scenario does not change the admission limits.
 
 ## Evidence
 
@@ -124,6 +141,10 @@ regression coverage. Read `result.json` for final success after teardown.
   `test-results/load/2026-10-31T15-25-27.070Z-sustained-stress/`.
 - Higher-rate post-change run, clean commit `3d1e504`, passed:
   `test-results/load/2026-10-31T15-33-04.987Z-sustained-stress/`.
+- Larger-payload profile, passed (working tree):
+  `test-results/load/2026-10-31T15-45-36.678Z-sustained-bytes/`.
+- Fixed-session higher-rate run, passed (working tree):
+  `test-results/load/2026-10-31T15-42-59.235Z-sustained-stress/`.
 - Sustained storage interruption after coalescing, passed (working tree):
   `test-results/load/2026-10-31T15-38-26.906Z-sustained-outage/`.
 - Full native-browser pipeline after coalescing, passed:

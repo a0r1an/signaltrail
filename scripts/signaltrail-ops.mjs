@@ -10,7 +10,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
-  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage
+  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs install
@@ -103,6 +103,7 @@ try {
       'sustained',
       'sustained-stress',
       'sustained-outage',
+      'sustained-bytes',
     ].includes(action)
   )
     pnpm('test:load', action);

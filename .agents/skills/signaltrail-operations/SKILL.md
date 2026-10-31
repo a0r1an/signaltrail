@@ -159,6 +159,12 @@ resume. Cancellation and pause errors still trigger a resume attempt; cleanup
 preserves errors from both the interruption and resumption. Do not replace the
 isolated service with the development ClickHouse.
 
+`load sustained-bytes` runs 60 seconds at 200 events/second with 8,000 ASCII
+padding bytes per event and the fixed session pool. All sustained profiles verify
+minimum/maximum stored padding length as well as event counts. This is a payload
+integrity/byte-load probe: repeated padding compresses well and is not a realistic
+replay or JSON-compression workload.
+
 The scenario samples exact source offsets, worker Prometheus metrics, and Compose
 container CPU/memory stats. It requires zero generator drops, malformed responses,
 rejections, or retry outcomes, then drains for up to 60 seconds and reconciles
