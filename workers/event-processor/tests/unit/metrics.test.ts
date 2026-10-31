@@ -15,7 +15,7 @@ it('exports process-local completions and retries without customer labels', asyn
     expect(first).toContain('signaltrail_processor_stored_total 4');
     expect(first).toContain('signaltrail_processor_dead_lettered_total 1');
     expect(first).toContain('signaltrail_processor_retries_total 3');
-    expect(await metrics.registry.metrics()).toBe(first);
+    expect(await metrics.registry.metrics()).toContain('signaltrail_processor_stored_total 4');
     state.stored++;
     const values = await metrics.registry.getMetricsAsJSON();
     expect(
@@ -79,6 +79,23 @@ it('measures chunk records and source bytes without project or event labels', as
     expect(text).toContain('signaltrail_processor_chunk_records_sum 105');
     expect(text).toContain('signaltrail_processor_chunk_source_bytes_sum 8704');
     expect(text).toContain('signaltrail_processor_chunk_records_bucket{le="100"} 2');
+  } finally {
+    await metrics.close();
+  }
+});
+
+it('exposes process resource measurements for load-test CPU and memory comparisons', async () => {
+  const metrics = createProcessorMetrics(() => ({
+    running: true,
+    stored: 0,
+    deadLettered: 0,
+    retries: 0,
+  }));
+  try {
+    const text = await metrics.registry.metrics();
+    expect(text).toMatch(/signaltrail_processor_process_resident_memory_bytes [1-9]\d*/);
+    expect(text).toMatch(/signaltrail_processor_process_cpu_seconds_total [\d.e+-]+/);
+    expect(text).toMatch(/signaltrail_processor_nodejs_heap_size_used_bytes [1-9]\d*/);
   } finally {
     await metrics.close();
   }

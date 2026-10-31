@@ -1,4 +1,4 @@
-import { Counter, Gauge, Histogram, Registry } from '@prometheus-io/client';
+import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from '@prometheus-io/client';
 import { createServer } from 'node:http';
 
 interface ProcessorSnapshot {
@@ -9,6 +9,7 @@ interface ProcessorSnapshot {
 }
 export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
   const registry = new Registry();
+  collectDefaultMetrics({ register: registry, prefix: 'signaltrail_processor_' });
   new Gauge({
     name: 'signaltrail_processor_running',
     help: 'Consumer loop is running; not proof of storage availability or zero lag',
