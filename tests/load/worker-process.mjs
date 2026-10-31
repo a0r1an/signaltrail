@@ -39,7 +39,8 @@ export function startWorkerProcess({ groupId, topic, deadLetterTopic, metricsPor
     });
   });
   return {
-    async waitFor(marker, timeoutMs = 75000) {
+    // Covers the 90-second startup deadline plus the 15-second shutdown bound.
+    async waitFor(marker, timeoutMs = 110000) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (output.includes(marker)) return;
