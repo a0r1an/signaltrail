@@ -80,7 +80,7 @@ jobs:
         run: ./scripts/signaltrail-ops.mjs browser benchmark
 
       - name: Test browser SDK in Chromium
-        run: pnpm --filter @signaltrail/browser-sdk test:browser
+        run: ./scripts/signaltrail-ops.mjs browser test
 
       - name: Upload browser test report and failure traces
         if: ${{ !cancelled() }}
@@ -117,9 +117,9 @@ jobs:
       - name: Initialize and verify development topic
         run: docker compose --project-name signaltrail-ci run --rm redpanda-init
       - name: Test ingestion against Redpanda
-        run: pnpm --filter @signaltrail/ingestion test:integration
+        run: ./scripts/signaltrail-ops.mjs broker test
       - name: Verify bounded publisher under load
-        run: pnpm test:load saturation
+        run: ./scripts/signaltrail-ops.mjs load saturation
         env:
           DURATION: 5s
       - name: Verify SDK recovery after broker interruption
