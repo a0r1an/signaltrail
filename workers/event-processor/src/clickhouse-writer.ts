@@ -35,7 +35,7 @@ async function readAcknowledgement(response: Response, signal: AbortSignal): Pro
   }
 }
 
-export function createClickHouseWriter(options: ClickHouseWriterOptions) {
+export function createClickHouseBatchWriter(options: ClickHouseWriterOptions) {
   options = { ...options };
   const timeoutMs = options.timeoutMs ?? 5000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
@@ -77,22 +77,31 @@ export function createClickHouseWriter(options: ClickHouseWriterOptions) {
   endpoint.searchParams.set('async_insert', '0');
   endpoint.searchParams.set('date_time_input_format', 'best_effort');
   const send = options.fetch ?? globalThis.fetch;
-  return async (record: PublishedAnalyticsEvent) => {
-    const event = record.event;
-    const body =
-      JSON.stringify({
-        project_id: record.projectId,
-        event_id: event.eventId,
-        received_at: record.receivedAt,
-        client_timestamp: event.clientTimestamp,
-        event_name: event.eventName,
-        distinct_id: event.distinctId,
-        session_id: event.sessionId,
-        sequence: event.sequence,
-        url: event.url,
-        properties_json: JSON.stringify(event.properties),
-        context_json: JSON.stringify(event.context),
-      }) + '\n';
+  return async (records: readonly PublishedAnalyticsEvent[]) => {
+    if (records.length < 1 || records.length > 100)
+      throw new RangeError('ClickHouse batches must contain from 1 to 100 records');
+    const body = records
+      .map((record) => {
+        const event = record.event;
+        return (
+          JSON.stringify({
+            project_id: record.projectId,
+            event_id: event.eventId,
+            received_at: record.receivedAt,
+            client_timestamp: event.clientTimestamp,
+            event_name: event.eventName,
+            distinct_id: event.distinctId,
+            session_id: event.sessionId,
+            sequence: event.sequence,
+            url: event.url,
+            properties_json: JSON.stringify(event.properties),
+            context_json: JSON.stringify(event.context),
+          }) + '\n'
+        );
+      })
+      .join('');
+    if (Buffer.byteLength(body, 'utf8') > 4 * 1024 * 1024)
+      throw new RangeError('ClickHouse batch exceeds 4 MiB');
     const controller = new AbortController();
     let rejectDeadline!: (error: Error) => void;
     const deadline = new Promise<never>((_resolve, reject) => {
@@ -137,4 +146,9 @@ export function createClickHouseWriter(options: ClickHouseWriterOptions) {
       clearTimeout(timeout);
     }
   };
+}
+
+export function createClickHouseWriter(options: ClickHouseWriterOptions) {
+  const writeBatch = createClickHouseBatchWriter(options);
+  return async (record: PublishedAnalyticsEvent) => writeBatch([record]);
 }

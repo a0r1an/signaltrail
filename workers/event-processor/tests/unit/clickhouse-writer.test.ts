@@ -1,5 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import { createClickHouseWriter } from '../../src/clickhouse-writer.ts';
+import {
+  createClickHouseBatchWriter,
+  createClickHouseWriter,
+} from '../../src/clickhouse-writer.ts';
 import { record } from '../fixtures.ts';
 
 it('sends a JSONEachRow insert and waits for server acknowledgement', async () => {
@@ -213,4 +216,43 @@ it('preserves credential whitespace through HTTP authentication without putting 
   await write(record);
   expect(authorization).toBe('Basic ' + Buffer.from('writer:' + password).toString('base64'));
   expect(target).not.toContain('password-with-spaces');
+});
+
+it('writes multiple stable event IDs in one acknowledged insert', async () => {
+  const bodies: string[] = [];
+  const write = createClickHouseBatchWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test',
+    fetch: async (_url, init) => {
+      bodies.push(init!.body as string);
+      return new Response(null);
+    },
+  });
+  await write([record, { ...record, event: { ...record.event, eventId: 'second-id' } }]);
+  expect(bodies).toHaveLength(1);
+  expect(
+    bodies[0]!
+      .trim()
+      .split('\n')
+      .map((row) => (JSON.parse(row) as { event_id: string }).event_id),
+  ).toEqual(['stable-id', 'second-id']);
+});
+
+it('refuses empty or oversized batches before making a storage request', async () => {
+  const send = vi.fn(async () => new Response(null));
+  const write = createClickHouseBatchWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test',
+    fetch: send,
+  });
+  await expect(write([])).rejects.toThrow(RangeError);
+  await expect(write(Array.from({ length: 101 }, () => record))).rejects.toThrow(RangeError);
+  await expect(
+    write([
+      { ...record, event: { ...record.event, properties: { large: 'é'.repeat(2 * 1024 * 1024) } } },
+    ]),
+  ).rejects.toThrow(RangeError);
+  expect(send).not.toHaveBeenCalled();
 });

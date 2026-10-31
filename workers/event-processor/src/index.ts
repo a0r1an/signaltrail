@@ -5,7 +5,7 @@ export type {
   DeadLetterRecord,
   ProcessorOptions,
 } from './process-message.ts';
-export { createClickHouseWriter } from './clickhouse-writer.ts';
+export { createClickHouseWriter, createClickHouseBatchWriter } from './clickhouse-writer.ts';
 export type { ClickHouseWriterOptions } from './clickhouse-writer.ts';
 export { createRedpandaEventConsumer } from './redpanda-consumer.ts';
 export type { RedpandaEventConsumerOptions } from './redpanda-consumer.ts';
