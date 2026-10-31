@@ -83,3 +83,22 @@ test('does not call a run successful when the generator drops requests or receiv
   for (const wrong of [{ droppedIterations: 1 }, { malformedResponses: 1 }])
     assert.throws(() => verifyPipelineTotals({ ...valid, ...wrong }));
 });
+
+test('distinguishes an unsustained offered load from missing accepted data', () => {
+  const totals = {
+    accepted: 10,
+    retried: 1,
+    rejected: 0,
+    brokerRecords: '10',
+    uniqueRows: 10,
+    sourceLag: '0',
+    deadLetters: '0',
+    droppedIterations: 1,
+    malformedResponses: 0,
+  };
+  assert.throws(() => verifyPipelineTotals(totals), /Offered load target/);
+  assert.throws(
+    () => verifyPipelineTotals({ ...totals, uniqueRows: 9 }),
+    /storage\/offset reconciliation/,
+  );
+});

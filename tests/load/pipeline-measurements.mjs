@@ -31,15 +31,18 @@ export function verifyPipelineTotals(totals) {
   if (
     !Number.isSafeInteger(totals.accepted) ||
     totals.accepted < 1 ||
-    totals.droppedIterations !== 0 ||
-    totals.malformedResponses !== 0 ||
-    totals.retried !== 0 ||
-    totals.rejected !== 0 ||
     totals.uniqueRows !== totals.accepted ||
     BigInt(totals.brokerRecords) < BigInt(totals.accepted) ||
     BigInt(totals.sourceLag) !== 0n ||
     BigInt(totals.deadLetters) !== 0n
   )
-    throw new Error('Sustained pipeline totals did not reconcile');
+    throw new Error('Accepted-event storage/offset reconciliation failed');
+  if (
+    totals.droppedIterations !== 0 ||
+    totals.malformedResponses !== 0 ||
+    totals.retried !== 0 ||
+    totals.rejected !== 0
+  )
+    throw new Error('Offered load target was not sustained without drops or retries');
   return totals;
 }
