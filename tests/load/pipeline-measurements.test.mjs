@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { measureSourceLag } from './pipeline-measurements.mjs';
+import { measureSourceLag, verifyPipelineTotals } from './pipeline-measurements.mjs';
 
 test('measures exact source lag including partitions with no committed offset', () => {
   const lag = measureSourceLag(
@@ -40,4 +40,46 @@ test('rejects incomplete or inconsistent broker snapshots instead of fabricating
   ]) {
     assert.throws(() => measureSourceLag(high, [{ partition: 0, offset: '4' }]));
   }
+});
+
+test('requires accepted events, drained source offsets, unique stored rows and no dead letters', async () => {
+  const { verifyPipelineTotals } = await import('./pipeline-measurements.mjs');
+  const valid = {
+    accepted: 10,
+    retried: 0,
+    rejected: 0,
+    brokerRecords: '11',
+    uniqueRows: 10,
+    sourceLag: '0',
+    deadLetters: '0',
+    droppedIterations: 0,
+    malformedResponses: 0,
+  };
+  assert.doesNotThrow(() => verifyPipelineTotals(valid));
+  for (const wrong of [
+    { accepted: 0 },
+    { retried: 1 },
+    { uniqueRows: 9 },
+    { sourceLag: '1' },
+    { deadLetters: '1' },
+    { brokerRecords: '9' },
+  ])
+    assert.throws(() => verifyPipelineTotals({ ...valid, ...wrong }));
+});
+
+test('does not call a run successful when the generator drops requests or receives malformed responses', () => {
+  const valid = {
+    accepted: 10,
+    retried: 0,
+    rejected: 0,
+    brokerRecords: '10',
+    uniqueRows: 10,
+    sourceLag: '0',
+    deadLetters: '0',
+    droppedIterations: 0,
+    malformedResponses: 0,
+  };
+  assert.doesNotThrow(() => verifyPipelineTotals(valid));
+  for (const wrong of [{ droppedIterations: 1 }, { malformedResponses: 1 }])
+    assert.throws(() => verifyPipelineTotals({ ...valid, ...wrong }));
 });

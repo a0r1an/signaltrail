@@ -140,6 +140,31 @@ The harness advertises temporary scrape targets in
 are withdrawn afterward. During normal dashboard use choose
 `signaltrail-ingestion` and `signaltrail-redpanda`; load targets are separate.
 
+## Sustained pipeline measurements
+
+Use `load sustained-smoke` for a five-second harness check, `load sustained` for
+60 seconds at 10 requests/second, and `load sustained-stress` for 60 seconds at
+50 requests/second. Each request contains 20 events. These fixed profiles ignore
+`DURATION`, run on isolated Redpanda/ClickHouse, and use the runnable worker on
+metrics port 9466. No normal development services are restarted.
+
+The scenario samples exact source offsets, worker Prometheus metrics, and Compose
+container CPU/memory stats. It requires zero generator drops, malformed responses,
+rejections, or retry outcomes, then drains for up to 60 seconds and reconciles
+accepted counts with unique `FINAL` rows and committed source offsets. Failure to
+keep up is a failed measurement at that offered load, not automatic evidence of
+lost events. Inspect k6 summaries, `sustained.json`, `worker-samples.json`,
+`worker.prom`, `container-samples.json`, and the authoritative `result.json`.
+Only the final result establishes successful cleanup.
+
+Sampling is sequential and skips ticks while a previous sample is pending.
+Container stats cover the whole isolated project (including k6 while running):
+this Compose version accepts at most one explicit stats service argument.
+Generator, worker, broker, and storage share the development machine. This is
+neither a production sizing estimate nor a browser/SDK retry simulation. Do not
+tune limits from one short run or confuse chunk-attempt latency with storage-only
+acknowledgement latency.
+
 ## Monitoring and secrets
 
 Monitoring configuration lives under `infra/monitoring/`. It reads ignored

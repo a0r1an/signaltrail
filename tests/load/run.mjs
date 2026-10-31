@@ -14,6 +14,30 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'sustained-smoke': {
+    rate: 10,
+    batch: 20,
+    padding: 0,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    duration: '5s',
+  },
+  sustained: {
+    rate: 10,
+    batch: 20,
+    padding: 0,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    duration: '60s',
+  },
+  'sustained-stress': {
+    rate: 50,
+    batch: 20,
+    padding: 0,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    duration: '60s',
+  },
   'browser-pipeline': { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   pipeline: { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   recovery: { rate: 0, batch: 3, padding: 0, maxEvents: 2, maxBytes: 8388608 },
@@ -25,6 +49,7 @@ const scenarios = {
 const config = scenarios[scenario];
 if (!Object.hasOwn(scenarios, scenario)) throw new Error(`Unknown scenario: ${scenario}`);
 const isPipeline = ['pipeline', 'browser-pipeline'].includes(scenario);
+const isSustained = ['sustained-smoke', 'sustained', 'sustained-stress'].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
@@ -51,7 +76,7 @@ function docker(args, capture = false, allowFailure = false, signal) {
     );
   });
 }
-let publisher, server, metrics, interval;
+let publisher, server, metrics, interval, sustained;
 const samples = [];
 let sampling = Promise.resolve();
 let shutdown = false;
@@ -77,9 +102,11 @@ try {
       'Same-host generator and broker; development baseline, not production sizing.',
       scenario === 'recovery'
         ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
-        : isPipeline
-          ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
-          : 'Capacity probes do not simulate SDK retries.',
+        : isSustained
+          ? 'Sustained local pipeline measurement; not production sizing or SDK retry simulation.'
+          : isPipeline
+            ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
+            : 'Capacity probes do not simulate SDK retries.',
     ],
   };
   // An interrupted process must not leave a successful-looking result.
@@ -107,7 +134,7 @@ try {
     '--wait-timeout',
     '120',
     'redpanda',
-    ...(isPipeline ? ['clickhouse'] : []),
+    ...(isPipeline || isSustained ? ['clickhouse'] : []),
   ]);
   await docker(['run', '--rm', 'init']);
   await writeFile(
@@ -181,6 +208,15 @@ try {
     // Observe rejection immediately; cleanup later reports it without crashing mid-run.
     void sampling.catch(() => {});
   }, 1000);
+  if (isSustained) {
+    const { openSustainedPipeline } = await import('./sustained-pipeline.mjs');
+    sustained = await openSustainedPipeline({
+      runId,
+      directory,
+      docker,
+      interrupted: () => shutdown,
+    });
+  }
   if (scenario === 'recovery') {
     const evidence = await exerciseBrokerRecovery({
       url: `http://127.0.0.1:${port}/v1/events`,
@@ -209,7 +245,7 @@ try {
           ['burst', config.rate, process.env.DURATION ?? '10s'],
           ['recovery', 10, '10s'],
         ]
-      : [[scenario, config.rate, process.env.DURATION ?? '15s']];
+      : [[scenario, config.rate, config.duration ?? process.env.DURATION ?? '15s']];
   const failedStages = result.failedStages;
   for (const [name, rate, duration] of stages) {
     if (shutdown) throw new Error('Load test interrupted');
@@ -229,6 +265,9 @@ try {
         `BATCH_SIZE=${config.batch}`,
         '-e',
         `PADDING_BYTES=${config.padding}`,
+        ...(isSustained
+          ? ['-e', 'PREALLOCATED_VUS=20', '-e', 'MAX_VUS=100', '-e', 'STRICT_ACCEPTANCE=true']
+          : []),
         'k6',
         'run',
         '--quiet',
@@ -246,6 +285,10 @@ try {
       )
     )
       failedStages.push(name);
+    if (sustained) {
+      const evidence = await sustained.finish(summary);
+      result.sustained = { totals: evidence.totals, drainSeconds: evidence.drainSeconds };
+    }
   }
   const drainDeadline = Date.now() + 15000;
   while (publisher.snapshot().outstandingEvents && Date.now() < drainDeadline)
@@ -291,6 +334,7 @@ try {
         writeFile(resolve(directory, 'result.json'), JSON.stringify(completed, null, 2)),
       cleanup: () =>
         cleanupResources([
+          { name: 'close sustained pipeline', timeoutMs: 45000, run: () => sustained?.close() },
           { name: 'finish metric sampling', run: () => sampling },
           {
             name: 'save samples',

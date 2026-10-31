@@ -14,8 +14,8 @@ export const options = {
       rate,
       timeUnit: '1s',
       duration: __ENV.DURATION || '15s',
-      preAllocatedVUs: 250,
-      maxVUs: 500,
+      preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 250),
+      maxVUs: Number(__ENV.MAX_VUS || 500),
     },
   },
   thresholds: {
@@ -23,6 +23,7 @@ export const options = {
     responses_malformed: ['count==0'],
     events_rejected: ['count==0'],
     dropped_iterations: ['count==0'],
+    ...(__ENV.STRICT_ACCEPTANCE === 'true' ? { events_retry: ['count==0'] } : {}),
   },
 };
 export default function () {
