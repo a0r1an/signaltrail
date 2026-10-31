@@ -6,8 +6,8 @@ Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_Q
 
 ## Goal and architecture
 
-Build a product analytics and privacy-conscious session-replay platform while
-preparing for Staff Software Engineer interviews at Vercel.
+Build a complete, reliable product analytics and privacy-conscious session-replay
+platform through autonomous implementation and verification.
 Next.js dashboard and demo store on Vercel; TypeScript browser SDK; Node.js
 ingestion/query APIs; PostgreSQL metadata; ClickHouse analytics; Redpanda event
 transport; Valkey caching/rate limits; Amazon S3 replay object storage
@@ -80,6 +80,15 @@ dates rather than this checkpoint.
 
 ### Completed since the October 22 checkpoint
 
+- **Server-side analytics read foundation:** `@signaltrail/analytics` counts unique
+  events using a fixed parameterized `FINAL` query scoped to a trusted project ID.
+  Required UTC receive-time windows are half-open and capped at 31 days. Client
+  deadlines, query memory/thread settings, and response-size limits bound reads;
+  counts remain decimal strings to preserve UInt64 precision. The isolated real
+  ClickHouse probe verifies project separation, exact project-ID bytes, boundary
+  timestamps, and replacement selection before time filtering. This is a private
+  library, not a public query endpoint; membership authorization and production
+  read credentials remain pending. See [the package guide](../packages/analytics/README.md).
 - **Ingestion admission and recovery:** publisher work is bounded by outstanding
   event count and serialized bytes, including sends still pending after an HTTP
   deadline. Defaults are 1,000 events and 8 MiB, pending workload measurements.
@@ -156,19 +165,24 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                      | Latest observed passing count | Evidence scope                                                   |
-| -------------------------- | ----------------------------: | ---------------------------------------------------------------- |
-| Contracts                  |                            72 | Prior autonomous package checks; unchanged by final worker fixes |
-| Ingestion                  |                            63 | October 31 producer and request-processing admission checks      |
-| Browser SDK unit tests     |                           252 | Includes IndexedDB lifecycle/fallback work                       |
-| Chromium browser tests     |                            13 | Includes native database upgrade cooperation                     |
-| Event processor unit tests |                           105 | October 31 process and storage-latency metrics checks            |
-| Load harness unit tests    |                            25 | Includes measurements, reports, and safe storage interruption    |
+| Suite                       | Latest observed passing count | Evidence scope                                                           |
+| --------------------------- | ----------------------------: | ------------------------------------------------------------------------ |
+| Contracts                   |                            72 | Prior autonomous package checks; unchanged by final worker fixes         |
+| Ingestion                   |                            63 | October 31 producer and request-processing admission checks              |
+| Browser SDK unit tests      |                           252 | Includes IndexedDB lifecycle/fallback work                               |
+| Chromium browser tests      |                            13 | Includes native database upgrade cooperation                             |
+| Event processor unit tests  |                           105 | October 31 process and storage-latency metrics checks                    |
+| Analytics reader unit tests |                            17 | Input bounds, exact counts, failures, and stalled request/body deadlines |
+| Load harness unit tests     |                            25 | Includes measurements, reports, and safe storage interruption            |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
+- Analytics lint, 17 units, types, and JavaScript/declaration builds passed.
+  The real-storage read probe passed with final cleanup in
+  `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
+  CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
 - Native full-pipeline recovery passed in
@@ -200,9 +214,11 @@ repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
 ClickHouse consumption, batch inserts, or the existing recovery probes.
 
 The full native browser/crash-recovery pipeline passed after producer coalescing.
-Next, build the server-side project-scoped analytics read foundation for the
-future query/dashboard slice. Public project ingestion keys must not authorize
-reads; production membership authentication remains pending. Longer endurance
+The server-side project-scoped analytics read foundation also passed unit and
+real ClickHouse verification. Next, add an authenticated query-service boundary
+with an injected server-side membership resolver and test denial/isolation before
+dashboard integration. Keep the production identity-provider choice deferred in
+the question log; public ingestion keys must never authorize reads. Longer endurance
 and connection/proxy admission can follow the established performance harness. Fixed-session higher-rate,
 larger-payload, and short storage-outage measurements already pass. A short sustained ClickHouse outage is already
 verified; do not repeat it as if no failure-under-load coverage exists. The basic sustained measurement

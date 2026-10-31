@@ -128,6 +128,8 @@ jobs:
         run: ./scripts/signaltrail-ops.mjs load request-admission
       - name: Verify sustained processing and measurement artifacts
         run: ./scripts/signaltrail-ops.mjs load sustained-smoke
+      - name: Verify project-scoped analytics reads against ClickHouse
+        run: ./scripts/signaltrail-ops.mjs load analytics-read
       - name: Install Chromium for the full pipeline probe
         run: pnpm --filter @signaltrail/browser-sdk exec playwright install --with-deps chromium
       - name: Verify browser persistence, worker recovery, dedupe, and dead-letter commits

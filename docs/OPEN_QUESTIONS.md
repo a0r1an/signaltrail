@@ -46,6 +46,14 @@ Entries are questions, not approvals or completed work.
   admission and per-project quotas remain unresolved; a processing-slot cap is
   not a whole-process RSS guarantee or connection-flood test.
 
+- **Analytics read semantics and access:** the new server-only reader counts
+  unique events by latest `received_at`, using a required UTC window of at most
+  31 days. A later retry can move an event between received-time windows. Decide
+  event-time versus receive-time product semantics before exposing dashboard
+  totals. A server must authorize project membership before calling the reader;
+  public ingestion keys must never grant read access. Production read-only
+  ClickHouse credentials and allowed query settings remain to be provisioned.
+
 ## Reversible defaults during autonomous work
 
 - Keep ingestion acknowledgement dependent on Redpanda, with downstream dedupe

@@ -197,6 +197,21 @@ remains available before that gate. `Retry-After` is exposed to allowed browser
 origins. This gate is separate from outstanding broker event/byte reservations;
 it does not claim to bound all TCP connections or whole-process RSS.
 
+## Analytics read foundation
+
+`check analytics` runs the private server reader's lint, units, types, and build.
+`load analytics-read` creates only isolated fixture rows and verifies project
+separation, exact project bytes, half-open UTC windows, and `FINAL` replacement
+before time filtering. It builds the analytics package with the other load-test
+packages. This is not a query HTTP endpoint or an authentication implementation;
+public ingestion keys must not grant read access.
+
+The ClickHouse HTTP GET path already enforces read-only queries. Explicitly
+setting `readonly=1` on GET is rejected by the pinned server. Keep the fixed query,
+resource bounds, parameter binding, and response validation. Probe diagnostics,
+when needed, contain only owned synthetic fixture errors, never real tenant data
+or request authorization headers.
+
 ## Monitoring and secrets
 
 Monitoring configuration lives under `infra/monitoring/`. It reads ignored

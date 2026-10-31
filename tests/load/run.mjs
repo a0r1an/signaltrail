@@ -14,6 +14,7 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'analytics-read': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'request-admission': {
     rate: 0,
     batch: 1,
@@ -171,7 +172,7 @@ try {
     '--wait-timeout',
     '120',
     'redpanda',
-    ...(isPipeline || isSustained ? ['clickhouse'] : []),
+    ...(isPipeline || isSustained || scenario === 'analytics-read' ? ['clickhouse'] : []),
   ]);
   await docker(['run', '--rm', 'init']);
   await writeFile(
@@ -259,6 +260,13 @@ try {
       expectedPaddingBytes: config.padding,
     });
   }
+  if (scenario === 'analytics-read') {
+    const { exerciseAnalyticsReads } = await import('./analytics-read.mjs');
+    await writeFile(
+      resolve(directory, 'analytics-read.json'),
+      JSON.stringify(await exerciseAnalyticsReads({ directory }), null, 2),
+    );
+  }
   if (scenario === 'request-admission') {
     const { exerciseRequestAdmission } = await import('./request-admission.mjs');
     const evidence = await exerciseRequestAdmission({
@@ -291,17 +299,16 @@ try {
     });
     await writeFile(resolve(directory, 'pipeline.json'), JSON.stringify(evidence, null, 2));
   }
-  const stages = ['recovery', 'pipeline', 'browser-pipeline', 'request-admission'].includes(
-    scenario,
-  )
-    ? []
-    : scenario === 'burst'
-      ? [
-          ['warmup', 10, '5s'],
-          ['burst', config.rate, process.env.DURATION ?? '10s'],
-          ['recovery', 10, '10s'],
-        ]
-      : [[scenario, config.rate, config.duration ?? process.env.DURATION ?? '15s']];
+  const stages =
+    config.rate === 0
+      ? []
+      : scenario === 'burst'
+        ? [
+            ['warmup', 10, '5s'],
+            ['burst', config.rate, process.env.DURATION ?? '10s'],
+            ['recovery', 10, '10s'],
+          ]
+        : [[scenario, config.rate, config.duration ?? process.env.DURATION ?? '15s']];
   const failedStages = result.failedStages;
   for (const [name, rate, duration] of stages) {
     if (shutdown) throw new Error('Load test interrupted');
