@@ -40,10 +40,11 @@ Entries are questions, not approvals or completed work.
   Current rates are local measurement inputs, not customer capacity promises.
 
 - **Whole-ingestion admission:** publisher limits bound admitted broker work;
-  HTTP currently has per-body/header/time limits but no total active-request/body
-  budget. The sustained generator's maximum of 100 VUs does not verify behavior
-  with many concurrent slow uploads. Choose HTTP/proxy admission and per-project
-  quotas alongside expected traffic before claiming bounded whole-process memory.
+  HTTP now also has a provisional 128-slot body/auth/publication processing gate,
+  configurable with `SIGNALTRAIL_MAX_CONCURRENT_REQUESTS`. A real slow-upload
+  probe verifies early 503 refusal and SDK retention/retry. TCP/proxy connection
+  admission and per-project quotas remain unresolved; a processing-slot cap is
+  not a whole-process RSS guarantee or connection-flood test.
 
 ## Reversible defaults during autonomous work
 
