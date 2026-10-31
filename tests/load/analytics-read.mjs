@@ -69,6 +69,11 @@ export async function exerciseAnalyticsReads({ directory }) {
     ['literal\\n', 'one', '2026-10-01T12:00:00.000Z'],
     ['literal\\n', 'two', '2026-10-01T12:00:00.000Z'],
     ['literal\n', 'one', '2026-10-01T12:00:00.000Z'],
+    ['listing', 'event-z', window.from],
+    ['listing', 'event-a', window.from],
+    ['listing', 'newest', '2026-10-01T12:00:00.000Z'],
+    ['listing', 'moved', window.from],
+    ['listing', 'moved', '2026-10-02T12:00:00.000Z'],
   ];
   await createClickHouseBatchWriter(connection)(
     data.map(([projectId, eventId, receivedAt]) => ({
@@ -107,6 +112,27 @@ export async function exerciseAnalyticsReads({ directory }) {
     { count: '3' },
   );
   let reads = 0;
+  const summaries = await reader.listReceivedEvents({ ...window, projectId: 'listing', limit: 2 });
+  assert.deepEqual(
+    summaries.events.map((event) => event.eventId),
+    ['newest', 'event-z'],
+  );
+  assert.equal(summaries.hasMore, true);
+  assert.equal(summaries.events[1].receivedAt, window.from);
+  const allSummaries = await reader.listReceivedEvents({
+    ...window,
+    projectId: 'listing',
+    limit: 100,
+  });
+  assert.deepEqual(
+    allSummaries.events.map((event) => event.eventId),
+    ['newest', 'event-z', 'event-a'],
+  );
+  assert.equal(allSummaries.hasMore, false);
+  assert.deepEqual(await reader.listReceivedEvents({ ...window, projectId: 'missing' }), {
+    events: [],
+    hasMore: false,
+  });
   const handler = createAnalyticsQueryHandler({
     resolveProjectAccess: async (request, projectId) => {
       if (request.headers.get('Authorization') !== 'Bearer fixture-dashboard-session')
@@ -153,6 +179,7 @@ export async function exerciseAnalyticsReads({ directory }) {
     latestVersionBeforeTimeFilter: true,
     exactProjectBytes: true,
     authorizedQueryBoundary: true,
+    boundedEventListing: true,
     limitations: [
       'Server-side read library only; no query HTTP endpoint or membership authentication is deployed.',
       'Counts use latest received time, not client event time.',

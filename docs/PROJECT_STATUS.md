@@ -80,6 +80,15 @@ dates rather than this checkpoint.
 
 ### Completed since the October 22 checkpoint
 
+- **Bounded event explorer reads:** the reader now lists event ID/name, session,
+  receive time, and exact sequence summaries in stable newest-first order.
+  Defaults are 50 rows, at most 100, with a 64 KiB response cap and an extra-row
+  `hasMore` indicator. Both count and list use shared deadline/cancellation,
+  validation, and `FINAL` execution. Optional list routing shares membership
+  authorization and admission; raw event payloads are excluded. First-page reads
+  passed the real ClickHouse probe, including ties, cross-project isolation,
+  replacement before time filtering, empty results, and cleanup. Cursor paging
+  is the next independent slice.
 - **Server-side analytics read foundation:** `@signaltrail/analytics` counts unique
   events using a fixed parameterized `FINAL` query scoped to a trusted project ID.
   Required UTC receive-time windows are half-open and capped at 31 days. Client
@@ -176,21 +185,21 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                                        |
-| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                      |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                           |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                            |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                          |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                                 |
-| Analytics reader and query boundary unit tests |                            37 | Input bounds, exact counts, authorization denial, storage cancellation, and deadlines |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                         |
+| Suite                                          | Latest observed passing count | Evidence scope                                                                     |
+| ---------------------------------------------- | ----------------------------: | ---------------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                   |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                        |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                         |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                       |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                              |
+| Analytics reader and query boundary unit tests |                            58 | Includes bounded list results, malformed rows, and list authorization/limit checks |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                      |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 37 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 58 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
@@ -198,6 +207,8 @@ claim that the entire workspace or remote CI ran at final HEAD.
   The final probe passed again at clean application commit `1c15314` in
   `test-results/load/2026-10-31T16-23-05.164Z-analytics-read/`, including final
   container/volume cleanup. Full-repository Prettier checking also passed.
+  Bounded list ordering and filtering passed the expanded real-storage probe in
+  `test-results/load/2026-10-31T18-57-29.203Z-analytics-read/` with final cleanup.
   CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
@@ -233,7 +244,8 @@ The full native browser/crash-recovery pipeline passed after producer coalescing
 The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
-Next, integrate a session/membership resolver and dashboard route once the
+Next, add bounded cursor paging to the event explorer. Integrate a
+session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by
 fixture tests; public ingestion keys must never authorize reads. Longer endurance
 and connection/proxy admission can follow the established performance harness. Fixed-session higher-rate,

@@ -1,4 +1,4 @@
-import type { ReceivedEventWindow } from './index.ts';
+import type { ReceivedEventWindow, EventListWindow, EventSummary } from './index.ts';
 
 export type ProjectAccess =
   | { status: 'authorized'; projectId: string }
@@ -15,6 +15,10 @@ export interface AnalyticsQueryOptions {
     window: ReceivedEventWindow,
     signal?: AbortSignal,
   ): Promise<{ count: string }>;
+  listReceivedEvents?(
+    window: EventListWindow,
+    signal?: AbortSignal,
+  ): Promise<{ events: EventSummary[]; hasMore: boolean }>;
   timeoutMs?: number;
   maxConcurrentRequests?: number;
 }
@@ -40,15 +44,19 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
   return async (request: Request): Promise<Response> => {
     if (request.url.length > 4096) return json({ error: 'URI_TOO_LONG' }, 414);
     const url = new URL(request.url);
-    if (url.pathname !== '/v1/analytics/count') return json({ error: 'NOT_FOUND' }, 404);
+    const listing = url.pathname === '/v1/analytics/events' && !!options.listReceivedEvents;
+    if (!listing && url.pathname !== '/v1/analytics/count')
+      return json({ error: 'NOT_FOUND' }, 404);
     if (request.method !== 'GET') {
       const response = json({ error: 'METHOD_NOT_ALLOWED' }, 405);
       response.headers.set('Allow', 'GET');
       return response;
     }
     const parameters = ['projectId', 'from', 'to'];
+    const allowed = listing ? [...parameters, 'limit'] : parameters;
     if (
-      [...url.searchParams.keys()].some((key) => !parameters.includes(key)) ||
+      [...url.searchParams.keys()].some((key) => !allowed.includes(key)) ||
+      url.searchParams.getAll('limit').length > 1 ||
       parameters.some(
         (key) =>
           url.searchParams.getAll(key).length !== 1 || !/\S/.test(url.searchParams.get(key) ?? ''),
@@ -70,6 +78,23 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
         if (access.status === 'unauthenticated') return json({ error: 'UNAUTHENTICATED' }, 401);
         if (access.status !== 'authorized') return json({ error: 'FORBIDDEN' }, 403);
         try {
+          if (listing) {
+            const rawLimit = url.searchParams.get('limit');
+            if (rawLimit !== null && (!/^[1-9]\d{0,2}$/.test(rawLimit) || Number(rawLimit) > 100))
+              return json({ error: 'INVALID_WINDOW' }, 400);
+            return json(
+              await options.listReceivedEvents!(
+                {
+                  projectId: access.projectId,
+                  from: url.searchParams.get('from') ?? '',
+                  to: url.searchParams.get('to') ?? '',
+                  ...(rawLimit === null ? {} : { limit: Number(rawLimit) }),
+                },
+                controller.signal,
+              ),
+              200,
+            );
+          }
           return json(
             await options.countReceivedEvents(
               {

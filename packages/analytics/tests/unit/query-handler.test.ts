@@ -203,3 +203,53 @@ it.each(['deadline', 'disconnect'] as const)(
     }
   },
 );
+
+it('lists events under the canonical authorized project with a bounded requested limit', async () => {
+  const list = vi.fn(async () => ({ events: [], hasMore: false }));
+  const count = vi.fn(async () => ({ count: '0' }));
+  const handler = createAnalyticsQueryHandler({
+    resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'canonical' }),
+    countReceivedEvents: count,
+    listReceivedEvents: list,
+  });
+  const response = await handler(new Request(url.replace('/count?', '/events?') + '&limit=10'));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ events: [], hasMore: false });
+  expect(list).toHaveBeenCalledWith(
+    { projectId: 'canonical', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z', limit: 10 },
+    expect.any(AbortSignal),
+  );
+  expect(count).not.toHaveBeenCalled();
+});
+
+it.each(['unauthenticated', 'forbidden'] as const)(
+  'denies %s event listing before storage',
+  async (status) => {
+    const list = vi.fn(async () => ({ events: [], hasMore: false }));
+    const handler = createAnalyticsQueryHandler({
+      resolveProjectAccess: async () => ({ status }),
+      countReceivedEvents: async () => ({ count: '0' }),
+      listReceivedEvents: list,
+    });
+    expect((await handler(new Request(url.replace('/count?', '/events?')))).status).toBe(
+      status === 'unauthenticated' ? 401 : 403,
+    );
+    expect(list).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['0', '101', '1.5', '', '1&limit=2'])(
+  'rejects invalid or duplicate listing limits: %s',
+  async (limit) => {
+    const list = vi.fn(async () => ({ events: [], hasMore: false }));
+    const handler = createAnalyticsQueryHandler({
+      resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'a' }),
+      countReceivedEvents: async () => ({ count: '0' }),
+      listReceivedEvents: list,
+    });
+    expect(
+      (await handler(new Request(url.replace('/count?', '/events?') + '&limit=' + limit))).status,
+    ).toBe(400);
+    expect(list).not.toHaveBeenCalled();
+  },
+);

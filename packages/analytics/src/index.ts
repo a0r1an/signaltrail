@@ -16,6 +16,16 @@ export interface ReceivedEventWindow {
   from: string;
   to: string;
 }
+export interface EventSummary {
+  eventId: string;
+  eventName: string;
+  sessionId: string;
+  sequence: string;
+  receivedAt: string;
+}
+export interface EventListWindow extends ReceivedEventWindow {
+  limit?: number;
+}
 function timestamp(value: string) {
   if (
     typeof value !== 'string' ||
@@ -31,7 +41,7 @@ function timestamp(value: string) {
   return milliseconds;
 }
 
-async function boundedBody(response: Response, signal: AbortSignal) {
+async function boundedBody(response: Response, signal: AbortSignal, maximum: number) {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Missing query result');
   const cancel = () => {
@@ -47,7 +57,7 @@ async function boundedBody(response: Response, signal: AbortSignal) {
       signal.throwIfAborted();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > 4096) throw new Error('Query result exceeded its bound');
+      if (size > maximum) throw new Error('Query result exceeded its bound');
       chunks.push(chunk.value);
     }
     return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
@@ -109,79 +119,151 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
   endpoint.searchParams.set('optimize_move_to_prewhere', '0');
   // HTTP GET enforces readonly; explicitly changing that setting is rejected.
   endpoint.searchParams.set('wait_end_of_query', '1');
+  async function execute<T>(
+    window: ReceivedEventWindow,
+    signal: AbortSignal | undefined,
+    maximum: number,
+    decode: (body: string) => T,
+    query?: string,
+    limit?: number,
+  ): Promise<T> {
+    if (signal?.aborted) throw new Error('Analytics query was not confirmed');
+    if (
+      typeof window.projectId !== 'string' ||
+      !/\S/.test(window.projectId) ||
+      Buffer.byteLength(window.projectId) > 1024 ||
+      Buffer.from(window.projectId).toString('utf8') !== window.projectId
+    )
+      throw new TypeError('Invalid authorized project scope');
+    const from = timestamp(window.from);
+    const to = timestamp(window.to);
+    if (to <= from || to - from > 31 * 86400000)
+      throw new RangeError('Received-time window must be positive and at most 31 days');
+    const target = new URL(endpoint);
+    if (query) target.searchParams.set('query', query);
+    if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
+    // HTTP String parameters use ClickHouse's escaped format. Hex binds exact
+    // project bytes, including literal backslashes and control characters.
+    target.searchParams.set('param_project_hex', Buffer.from(window.projectId).toString('hex'));
+    target.searchParams.set('param_from', new Date(from).toISOString());
+    target.searchParams.set('param_to', new Date(to).toISOString());
+    const controller = new AbortController();
+    let rejectDeadline!: (error: Error) => void;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      rejectDeadline = reject;
+    });
+    const cancel = () => {
+      controller.abort();
+      rejectDeadline(new Error('Analytics query was not confirmed'));
+    };
+    const timer = setTimeout(cancel, timeoutMs);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+    try {
+      return await Promise.race([
+        (async () => {
+          controller.signal.throwIfAborted();
+          const response = await send(target.href, {
+            method: 'GET',
+            headers: { Authorization: authorization },
+            signal: controller.signal,
+            credentials: 'omit',
+            redirect: 'error',
+            cache: 'no-store',
+          });
+          if (
+            controller.signal.aborted ||
+            response.status !== 200 ||
+            ![null, '0'].includes(response.headers.get('X-ClickHouse-Exception-Code'))
+          ) {
+            void response.body?.cancel().catch(() => {});
+            throw new Error('Unconfirmed query');
+          }
+          return decode(await boundedBody(response, controller.signal, maximum));
+        })(),
+        deadline,
+      ]);
+    } catch {
+      throw new Error('Analytics query was not confirmed');
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
+    }
+  }
   return {
-    async countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
-      if (signal?.aborted) throw new Error('Analytics query was not confirmed');
-      if (
-        typeof window.projectId !== 'string' ||
-        !/\S/.test(window.projectId) ||
-        Buffer.byteLength(window.projectId) > 1024 ||
-        Buffer.from(window.projectId).toString('utf8') !== window.projectId
-      )
-        throw new TypeError('Invalid authorized project scope');
-      const from = timestamp(window.from);
-      const to = timestamp(window.to);
-      if (to <= from || to - from > 31 * 86400000)
-        throw new RangeError('Received-time window must be positive and at most 31 days');
-      const target = new URL(endpoint);
-      // HTTP String parameters use ClickHouse's escaped format. Hex binds exact
-      // project bytes, including literal backslashes and control characters.
-      target.searchParams.set('param_project_hex', Buffer.from(window.projectId).toString('hex'));
-      target.searchParams.set('param_from', new Date(from).toISOString());
-      target.searchParams.set('param_to', new Date(to).toISOString());
-      const controller = new AbortController();
-      let rejectDeadline!: (error: Error) => void;
-      const deadline = new Promise<never>((_resolve, reject) => {
-        rejectDeadline = reject;
-      });
-      const cancel = () => {
-        controller.abort();
-        rejectDeadline(new Error('Analytics query was not confirmed'));
-      };
-      const timer = setTimeout(cancel, timeoutMs);
-      signal?.addEventListener('abort', cancel, { once: true });
-      if (signal?.aborted) cancel();
-      try {
-        return await Promise.race([
-          (async () => {
-            controller.signal.throwIfAborted();
-            const response = await send(target.href, {
-              method: 'GET',
-              headers: { Authorization: authorization },
-              signal: controller.signal,
-              credentials: 'omit',
-              redirect: 'error',
-              cache: 'no-store',
-            });
+    async listReceivedEvents(
+      window: EventListWindow,
+      signal?: AbortSignal,
+    ): Promise<{ events: EventSummary[]; hasMore: boolean }> {
+      const limit = window.limit ?? 50;
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+        throw new RangeError('Event list limit must be between 1 and 100');
+      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
+      return execute(
+        window,
+        signal,
+        65536,
+        (body) => {
+          const rows = body.trim()
+            ? body
+                .trim()
+                .split('\n')
+                .map((line) => JSON.parse(line) as Record<string, string>)
+            : [];
+          if (rows.length > limit + 1) throw new Error('Too many event rows');
+          const ids = new Set<string>();
+          for (const row of rows) {
             if (
-              controller.signal.aborted ||
-              response.status !== 200 ||
-              ![null, '0'].includes(response.headers.get('X-ClickHouse-Exception-Code'))
-            ) {
-              void response.body?.cancel().catch(() => {});
-              throw new Error('Unconfirmed query');
-            }
-            const result = JSON.parse(await boundedBody(response, controller.signal)) as {
-              count?: unknown;
-            } | null;
-            if (
-              !result ||
-              Object.keys(result).length !== 1 ||
-              typeof result.count !== 'string' ||
-              !/^(0|[1-9]\d{0,19})$/.test(result.count) ||
-              BigInt(result.count) > 18446744073709551615n
+              !row ||
+              Object.keys(row).length !== 5 ||
+              !['eventId', 'eventName', 'sessionId'].every(
+                (key) =>
+                  typeof row[key] === 'string' &&
+                  /\S/.test(row[key]!) &&
+                  Buffer.byteLength(row[key]!) <= 4096,
+              ) ||
+              typeof row.sequence !== 'string' ||
+              !/^(0|[1-9]\d{0,19})$/.test(row.sequence) ||
+              BigInt(row.sequence) > 18446744073709551615n ||
+              typeof row.receivedAtMs !== 'string' ||
+              !/^-?(0|[1-9]\d{0,15})$/.test(row.receivedAtMs) ||
+              !Number.isSafeInteger(Number(row.receivedAtMs)) ||
+              !Number.isFinite(new Date(Number(row.receivedAtMs)).getTime()) ||
+              ids.has(row.eventId!)
             )
-              throw new Error('Invalid query count');
-            return { count: result.count };
-          })(),
-          deadline,
-        ]);
-      } catch {
-        throw new Error('Analytics query was not confirmed');
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', cancel);
-      }
+              throw new Error('Invalid event row');
+            ids.add(row.eventId!);
+          }
+          const events = rows
+            .slice(0, limit)
+            .map((row) => ({
+              eventId: row.eventId!,
+              eventName: row.eventName!,
+              sessionId: row.sessionId!,
+              sequence: row.sequence!,
+              receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
+            }));
+          return { events, hasMore: rows.length > limit };
+        },
+        query,
+        limit + 1,
+      );
+    },
+    countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
+      return execute(window, signal, 4096, (body) => {
+        const result = JSON.parse(body) as {
+          count?: unknown;
+        } | null;
+        if (
+          !result ||
+          Object.keys(result).length !== 1 ||
+          typeof result.count !== 'string' ||
+          !/^(0|[1-9]\d{0,19})$/.test(result.count) ||
+          BigInt(result.count) > 18446744073709551615n
+        )
+          throw new Error('Invalid query count');
+        return { count: result.count };
+      });
     },
   };
 }

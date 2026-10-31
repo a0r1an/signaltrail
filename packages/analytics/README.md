@@ -79,3 +79,24 @@ The isolated probe uses a fixture-only membership resolver to verify denied
 requests never reach storage and an authorized request returns a real count.
 Production session validation, membership persistence, credentials, host routing,
 CSRF/origin policy for the chosen session scheme, and query metrics remain pending.
+
+## Event explorer summaries
+
+`reader.listReceivedEvents({ projectId, from, to, limit? }, signal?)` uses the
+same authorized project, UTC window, `FINAL` uniqueness, deadlines, and query
+resource settings as counts. It returns newest-first summaries ordered by
+receive timestamp and event ID, with a default of 50 and a maximum of 100 rows.
+One extra row determines `hasMore`; there is no unbounded offset or arbitrary SQL.
+Pagination beyond the first page is a separate slice.
+
+Summaries contain only event ID, name, session ID, exact decimal sequence, and
+receive timestamp. They exclude URL, identity, properties, and context payloads.
+The entire storage response is capped at 64 KiB, including the extra row. Each
+identifier/name is capped at 4 KiB; an oversized or malformed response fails as
+unconfirmed rather than returning partial data. These provisional read bounds
+do not change event-ingestion validation.
+
+Supply `listReceivedEvents: reader.listReceivedEvents` to the query handler to
+enable `GET /v1/analytics/events` with the count route's parameters and an optional
+`limit`. Without that dependency the route returns 404. The same membership,
+no-cache, admission, and cancellation policies apply to both operations.
