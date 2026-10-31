@@ -595,8 +595,20 @@ export async function openEventQueue(
   const ownerId = uniqueId();
   const versionNumber = 3;
   let database: IDBPDatabase<QueueDatabase>;
+  let opening: Promise<IDBPDatabase<QueueDatabase>> | undefined;
+  let openDeadline: ReturnType<typeof setTimeout> | undefined;
+  let rejectBlocked!: (error: Error) => void;
+  const blocked = new Promise<never>((_, reject) => {
+    rejectBlocked = reject;
+  });
   try {
-    database = await openDB<QueueDatabase>(databaseName, versionNumber, {
+    opening = openDB<QueueDatabase>(databaseName, versionNumber, {
+      blocked() {
+        rejectBlocked(new Error('IndexedDB upgrade is blocked'));
+      },
+      blocking() {
+        database?.close();
+      },
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           const store = database.createObjectStore('events', { autoIncrement: true });
@@ -609,8 +621,26 @@ export async function openEventQueue(
         if (oldVersion < 3) database.createObjectStore('retries', { keyPath: 'eventKey' });
       },
     });
+    database = await Promise.race([
+      opening,
+      blocked,
+      new Promise<never>((_, reject) => {
+        openDeadline = setTimeout(
+          () => reject(new Error('IndexedDB open deadline exceeded')),
+          5000,
+        );
+      }),
+    ]);
   } catch {
+    // Open requests cannot be cancelled; an abandoned late connection must not
+    // keep another tab's future upgrade or database deletion blocked.
+    void opening?.then(
+      (opened) => opened.close(),
+      () => {},
+    );
     return withRecovery(createMemoryQueue(memoryLimits, now, random), memoryLimits, now, random);
+  } finally {
+    clearTimeout(openDeadline);
   }
 
   let expiredEvents = 0;

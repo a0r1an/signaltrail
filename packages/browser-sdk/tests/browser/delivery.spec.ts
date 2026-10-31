@@ -204,3 +204,52 @@ test('reports native IndexedDB expiry once without uploading an expired event', 
   expect(result.second.counters.droppedExpired).toBe(1);
   expect((await state(request, scenario)).requests).toEqual([]);
 });
+
+test('a future native IndexedDB upgrade preserves durable events and the older SDK continues in memory', async ({
+  page,
+  scenario,
+}) => {
+  await open(page, scenario, 60_000);
+  const captured = await page.evaluate(() => window.harness.capture());
+  const durableIds = await page.evaluate(async () => {
+    const database = (await indexedDB.databases()).find((entry) =>
+      entry.name?.startsWith('signaltrail:analytics:'),
+    );
+    if (!database?.name || database.version === undefined)
+      throw new Error('Expected native queue database');
+    return new Promise<string[]>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Native queue upgrade stayed blocked')),
+        3000,
+      );
+      const request = indexedDB.open(database.name!, database.version! + 1);
+      request.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error('Native queue upgrade failed'));
+      };
+      request.onsuccess = () => {
+        const upgraded = request.result;
+        const read = upgraded.transaction('events').objectStore('events').getAll();
+        read.onerror = () => {
+          clearTimeout(timer);
+          upgraded.close();
+          reject(new Error('Native durable read failed'));
+        };
+        read.onsuccess = () => {
+          const ids = (read.result as { eventId: string }[]).map((event) => event.eventId);
+          clearTimeout(timer);
+          upgraded.close();
+          resolve(ids);
+        };
+      };
+    });
+  });
+  expect(durableIds).toEqual([captured.eventId]);
+  const next = await page.evaluate(() => window.harness.capture());
+  const remaining = await page.evaluate(async () => ({
+    queue: await window.harness.delivery.getAll(),
+    health: await window.harness.delivery.getHealth(),
+  }));
+  expect(remaining.health.queue.storageMode).toBe('memory');
+  expect(remaining.queue).toMatchObject({ status: 'read', events: [{ eventId: next.eventId }] });
+});

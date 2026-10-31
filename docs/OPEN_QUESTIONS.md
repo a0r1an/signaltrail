@@ -70,6 +70,21 @@ Entries are questions, not approvals or completed work.
   The isolated pipeline verifies retry and completion metrics. Decide production
   scrape networking, lag visibility, and alert thresholds before deployment; the
   endpoint is not yet added to the live Alloy configuration.
+- **Queue capacity evidence:** the native Chromium benchmark records three fill
+  trials each at 100, 500, and 1,000 events with a 128-character property value.
+  On the local Apple M3 Pro, replacing cursor-based scans with atomic bulk reads
+  reduced median fill time from about 1.19 s to 0.64 s at 500 events and from
+  4.25 s to 2.49 s at 1,000. These are local queue-only measurements, not upload
+  throughput or a supported-device budget. Defaults remain unchanged; profile
+  representative payloads, weaker devices, concurrent tabs, and real delivery
+  before changing capacity or adding cached counters/schema migrations.
+- **IndexedDB upgrade fallback:** blocked opens use the existing bounded memory
+  fallback immediately; silent opens have a five-second timer. Abandoned late
+  opens are closed. Existing connections close for future version upgrades and
+  subsequent operations degrade to memory while durable data stays in IndexedDB.
+  Unit and native Chromium tests verify this behavior. Review whether a grace
+  period or later durable reattachment is needed before public SDK rollouts;
+  memory fallback remains best effort and is not page-close persistence.
 - **Browser bundle budget:** the unminified test harness bundle is about 791 kB
   plus its source map. This is a development artifact, not a measured production
   transfer size. Measure minified gzip/Brotli size and startup cost before setting
