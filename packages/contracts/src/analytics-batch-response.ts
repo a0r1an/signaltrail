@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 const sameSize = (results: readonly { index: number }[]): boolean => {
   const a = results.map((result) => result.index);

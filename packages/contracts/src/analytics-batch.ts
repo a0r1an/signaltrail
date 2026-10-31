@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { AnalyticsEventSchema } from './analytics-event.ts';
 
 type EventValidationResult = {

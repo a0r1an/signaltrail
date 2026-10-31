@@ -73,6 +73,9 @@ jobs:
       - name: Install Chromium and system dependencies
         run: pnpm --filter @signaltrail/browser-sdk exec playwright install --with-deps chromium
 
+      - name: Measure browser SDK bundle sizes
+        run: ./scripts/signaltrail-ops.mjs browser size
+
       - name: Test browser SDK in Chromium
         run: pnpm --filter @signaltrail/browser-sdk test:browser
 
@@ -84,6 +87,7 @@ jobs:
           path: |
             packages/browser-sdk/playwright-report/
             packages/browser-sdk/test-results/
+            test-results/sdk-size/
           retention-days: 7
           if-no-files-found: ignore
 

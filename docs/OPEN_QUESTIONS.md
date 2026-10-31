@@ -77,7 +77,12 @@ Entries are questions, not approvals or completed work.
   change. The initial standalone minified bundle measured 479,294 bytes
   (100,956 gzip; 83,690 Brotli) for all public exports and nearly the same for
   the delivery-only import. The report identifies validation modules and locale
-  code as major contributors. No dependency replacement is assumed.
+  code as major contributors. Native ESM namespace imports in contracts reduced
+  this pinned-esbuild measurement to 125,199 bytes minified, 36,739 gzip, and
+  32,614 Brotli while preserving the schema behavior. This comparison does not
+  establish the savings in a different application bundler. CI now records the
+  size report without enforcing an arbitrary budget. No dependency replacement
+  is assumed.
 - **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
   A local reproduction traced it to KafkaJS 2.2.4's
   `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can

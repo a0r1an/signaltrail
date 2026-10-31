@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { AnalyticsEventSchema } from './analytics-event.ts';
 
 // The broker boundary carries server metadata outside the client-controlled event.

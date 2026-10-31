@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 const count = z.number().int().min(0).max(1_000_000_000);
 const duration = z.number().finite().min(0).max(86_400_000);
 export const SDK_HEALTH_COUNTERS = [

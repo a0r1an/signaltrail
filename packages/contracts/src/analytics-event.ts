@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 export const AnalyticsEventSchema = z.object({
   schemaVersion: z.literal(1),
