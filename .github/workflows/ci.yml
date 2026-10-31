@@ -124,6 +124,8 @@ jobs:
           DURATION: 5s
       - name: Verify SDK recovery after broker interruption
         run: ./scripts/signaltrail-ops.mjs load recovery
+      - name: Verify sustained processing and measurement artifacts
+        run: ./scripts/signaltrail-ops.mjs load sustained-smoke
       - name: Install Chromium for the full pipeline probe
         run: pnpm --filter @signaltrail/browser-sdk exec playwright install --with-deps chromium
       - name: Verify browser persistence, worker recovery, dedupe, and dead-letter commits

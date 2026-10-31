@@ -1,6 +1,6 @@
 # Open questions and working assumptions
 
-Updated: 2026-10-30. Record unresolved decisions here for asynchronous review.
+Updated: 2026-10-31. Record unresolved decisions here for asynchronous review.
 Entries are questions, not approvals or completed work.
 
 ## Needs user input before production
@@ -32,6 +32,12 @@ Entries are questions, not approvals or completed work.
 - **Alert delivery:** Grafana Cloud metrics are configured, but alert recipients,
   notification channels, and production availability objectives are undecided.
   Do not send notifications or create external integrations without instruction.
+
+- **Representative analytics workload:** sustained profiles currently use small
+  synthetic JSON events, 20 events/request, at nominal 200 and 1,000 events/second
+  for 60 seconds. Decide expected event sizes, sparse/burst traffic, hot sessions,
+  and performance objectives before interpreting these as a supported workload.
+  Current rates are local measurement inputs, not customer capacity promises.
 
 ## Reversible defaults during autonomous work
 
