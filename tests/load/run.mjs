@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createIngestionServer, createRedpandaPublisher } from '../../apps/ingestion/dist/index.js';
 import { exerciseBrokerRecovery } from './broker-recovery.mjs';
+import { teardownIsolatedRun } from './teardown.mjs';
 import { finishRun } from './run-result.mjs';
 import { acquireRunLock } from './run-lock.mjs';
 import { cleanupResources } from './cleanup.mjs';
@@ -13,6 +14,7 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  pipeline: { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   recovery: { rate: 0, batch: 3, padding: 0, maxEvents: 2, maxBytes: 8388608 },
   baseline: { rate: 10, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   burst: { rate: 200, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
@@ -25,7 +27,7 @@ const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
 const releaseRunLock = await acquireRunLock(resolve(root, 'test-results/load.lock'));
-const compose = ['compose', '-f', 'tests/load/compose.yaml'];
+const compose = ['compose', '--profile', '*', '-f', 'tests/load/compose.yaml'];
 const dockerEnv = { ...process.env, SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092' };
 function docker(args, capture = false, allowFailure = false, signal) {
   return new Promise((resolveRun, reject) => {
@@ -73,7 +75,9 @@ try {
       'Same-host generator and broker; development baseline, not production sizing.',
       scenario === 'recovery'
         ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
-        : 'Capacity probes do not simulate SDK retries.',
+        : scenario === 'pipeline'
+          ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
+          : 'Capacity probes do not simulate SDK retries.',
     ],
   };
   // An interrupted process must not leave a successful-looking result.
@@ -81,7 +85,15 @@ try {
     resolve(directory, 'result.json'),
     JSON.stringify({ ...result, incomplete: true }, null, 2),
   );
-  await docker(['up', '-d', '--wait', '--wait-timeout', '120', 'redpanda']);
+  await docker([
+    'up',
+    '-d',
+    '--wait',
+    '--wait-timeout',
+    '120',
+    'redpanda',
+    ...(scenario === 'pipeline' ? ['clickhouse'] : []),
+  ]);
   await docker(['run', '--rm', 'init']);
   await writeFile(
     resolve(directory, 'broker-process.txt'),
@@ -124,7 +136,12 @@ try {
   );
   await rename(targetFile + '.tmp', targetFile);
   server = createIngestionServer({
-    resolveProjectKey: (key) => (key === 'load-test-key' ? 'load-project' : undefined),
+    resolveProjectKey: (key) =>
+      key === 'load-test-key'
+        ? 'load-project'
+        : scenario === 'pipeline' && key === 'pipeline-other-key'
+          ? 'load-other-project'
+          : undefined,
     publish: publisher.publish,
     ...(scenario === 'recovery' ? { publicationTimeoutMs: 250 } : {}),
     observeRequest: metrics.observeRequest,
@@ -157,16 +174,24 @@ try {
     });
     await writeFile(resolve(directory, 'recovery.json'), JSON.stringify(evidence, null, 2));
   }
-  const stages =
-    scenario === 'recovery'
-      ? []
-      : scenario === 'burst'
-        ? [
-            ['warmup', 10, '5s'],
-            ['burst', config.rate, process.env.DURATION ?? '10s'],
-            ['recovery', 10, '10s'],
-          ]
-        : [[scenario, config.rate, process.env.DURATION ?? '15s']];
+  if (scenario === 'pipeline') {
+    const { exerciseEventPipeline } = await import('./event-pipeline.mjs');
+    const evidence = await exerciseEventPipeline({
+      url: `http://127.0.0.1:${port}/v1/events`,
+      runId,
+      docker,
+    });
+    await writeFile(resolve(directory, 'pipeline.json'), JSON.stringify(evidence, null, 2));
+  }
+  const stages = ['recovery', 'pipeline'].includes(scenario)
+    ? []
+    : scenario === 'burst'
+      ? [
+          ['warmup', 10, '5s'],
+          ['burst', config.rate, process.env.DURATION ?? '10s'],
+          ['recovery', 10, '10s'],
+        ]
+      : [[scenario, config.rate, process.env.DURATION ?? '15s']];
   const failedStages = result.failedStages;
   for (const [name, rate, duration] of stages) {
     if (shutdown) throw new Error('Load test interrupted');
@@ -279,9 +304,15 @@ try {
             name: 'remove isolated infrastructure',
             timeoutMs: 30000,
             run: async (signal) => {
-              await docker(['down', '--volumes'], false, false, signal);
-              // Retain the lock if teardown failed: a new run must not reuse uncertain state.
-              await releaseRunLock();
+              await teardownIsolatedRun({
+                remove: () => docker(['down', '--volumes'], false, false, signal),
+                remaining: async () =>
+                  (await docker(['ps', '--all', '--quiet'], true, false, signal))
+                    .trim()
+                    .split('\n')
+                    .filter(Boolean),
+                release: releaseRunLock,
+              });
             },
           },
         ]),

@@ -10,7 +10,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor
   ./scripts/signaltrail-ops.mjs browser test|install
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
-  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery
+  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs install
@@ -75,7 +75,7 @@ try {
   else if (group === 'load' && action === 'check') pnpm('test:load:unit');
   else if (
     group === 'load' &&
-    ['baseline', 'burst', 'saturation', 'bytes', 'recovery'].includes(action)
+    ['baseline', 'burst', 'saturation', 'bytes', 'recovery', 'pipeline'].includes(action)
   )
     pnpm('test:load', action);
   else if (group === 'compose' && action === 'validate') {

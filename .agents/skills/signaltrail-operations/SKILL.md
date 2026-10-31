@@ -26,6 +26,7 @@ Preview an operation without side effects:
 | ------------------------------------ | --------------------------------------------------------------------- |
 | Contracts lint, units, types, build  | `./scripts/signaltrail-ops.mjs check contracts`                       |
 | Ingestion lint, units, types, build  | `./scripts/signaltrail-ops.mjs check ingestion`                       |
+| Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
 | SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
 | Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
 | Install pinned Chromium              | `./scripts/signaltrail-ops.mjs browser install`                       |
@@ -33,6 +34,7 @@ Preview an operation without side effects:
 | Development broker status            | `./scripts/signaltrail-ops.mjs broker status`                         |
 | Development broker public metrics    | `./scripts/signaltrail-ops.mjs broker metrics`                        |
 | Load-harness unit checks             | `./scripts/signaltrail-ops.mjs load check`                            |
+| Isolated event-to-ClickHouse probe   | `./scripts/signaltrail-ops.mjs load pipeline`                         |
 | Isolated broker outage and SDK retry | `./scripts/signaltrail-ops.mjs load recovery`                         |
 | Baseline / burst and recovery        | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
 | Count / byte budget saturation       | `./scripts/signaltrail-ops.mjs load saturation` / `load bytes`        |
@@ -73,12 +75,15 @@ handle them in their actual task scope rather than adding arbitrary passthrough.
 ## Load-test interpretation
 
 `tests/load/run.mjs` owns the isolated `signaltrail-load` Compose project, broker
-port 29092, broker metrics port 29644, and ingestion metrics port 9465. Run one
+port 29092, broker metrics port 29644, and ingestion metrics port 9465.
+`load pipeline` also starts isolated ClickHouse on port 38123. Run one
 load scenario at a time. The harness acquires `test-results/load.lock` before
 changing infrastructure; a second run must fail rather than tear down another
 run's broker. A lock left after a killed process or failed Docker teardown is
 intentional. Check its PID/creation time and the isolated Compose project before
 removing it; do not blindly delete locks or reuse uncertain broker state.
+Teardown enables all test profiles and verifies no project containers remain
+before releasing the lock. A successful Docker exit alone is insufficient.
 Its cleanup removes only its temporary project volumes;
 never substitute the normal application's Compose project or volume names.
 
@@ -97,6 +102,14 @@ records; downstream dedupe is still required. This scenario uses the SDK's Node
 memory fallback. Chromium tests separately cover native IndexedDB persistence,
 offline retry, multi-tab leases, beacons, and expiry; neither suite proves host
 or disk disaster recovery.
+
+`load pipeline` validates HTTP ingestion while ClickHouse is paused, processing
+through the exported worker library, confirmed ClickHouse writes, unique `FINAL`
+reads across repeated event IDs and separate projects, DLQ publication, and
+acknowledged Kafka offsets. Its Kafka adapter is currently part of the harness;
+a supervised production worker, retention, and query API remain separate work.
+The fixture preserves unusual client timestamps as strings. This is a small
+correctness probe, not a storage-throughput benchmark.
 
 The harness advertises temporary scrape targets in
 `test-results/load-targets.json`; Alloy collects them while they exist and they

@@ -25,8 +25,9 @@ Entries are questions, not approvals or completed work.
   oversized messages retain only source coordinates, byte count, and SHA-256.
   Choose production DLQ retention, access restrictions, and oversized-payload
   retrieval before enabling it. Raw dead-letter bytes can contain customer data
-  and must never be copied into general logs. The processor core is not yet a
-  running consumer or a ClickHouse storage implementation.
+  and must never be copied into general logs. The processor currently has a
+  library boundary and ClickHouse writer; a supervised production consumer and
+  production DLQ configuration are still pending.
 - **Alert delivery:** Grafana Cloud metrics are configured, but alert recipients,
   notification channels, and production availability objectives are undecided.
   Do not send notifications or create external integrations without instruction.
@@ -47,9 +48,20 @@ Entries are questions, not approvals or completed work.
 
 - **Downstream dedupe is still required:** the isolated recovery probe observed
   sends settling after the ingestion deadline, followed by SDK retries with the
-  original IDs. Ingestion intentionally permits these duplicates. Before exposing
-  analytics totals, implement and test dedupe by `(projectId, eventId)` downstream;
-  decide query-time consistency expectations before the first query API.
+  original IDs. Ingestion intentionally permits these duplicates. The initial
+  ClickHouse migration and isolated pipeline now exercise downstream uniqueness
+  by `(projectId, eventId)` using `FINAL`. The query API is still pending; every
+  analytics read must preserve that uniqueness rather than relying on background
+  merges. Confirm consistency and conflict semantics before exposing totals.
+- **Working ClickHouse design:** the first migration uses
+  `ReplacingMergeTree(received_at)` with `(project_id, event_id)` as the sorting
+  and replacement key. Unique reads use `FINAL`; background replacement alone
+  does not guarantee unique results. The latest receive timestamp wins. There
+  is no time partition, so retries crossing receive dates stay together. Client
+  timestamps remain strings so valid out-of-range client dates cannot poison
+  storage writes. Confirm conflict semantics, query cost, retention, and future
+  partitioning before production. Current synchronous per-event inserts are a
+  correctness baseline; batch storage writes before measuring sustained capacity.
 - **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
   A local reproduction traced it to KafkaJS 2.2.4's
   `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can

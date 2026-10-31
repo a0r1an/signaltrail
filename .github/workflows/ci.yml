@@ -116,6 +116,8 @@ jobs:
           DURATION: 5s
       - name: Verify SDK recovery after broker interruption
         run: ./scripts/signaltrail-ops.mjs load recovery
+      - name: Verify event processing, dedupe, and dead-letter commits
+        run: ./scripts/signaltrail-ops.mjs load pipeline
       - name: Upload load-test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

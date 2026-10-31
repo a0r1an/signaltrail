@@ -18,7 +18,7 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:load": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/ingestion build && pnpm --filter @signaltrail/browser-sdk build && node --experimental-strip-types tests/load/run.mjs",
+    "test:load": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/ingestion build && pnpm --filter @signaltrail/browser-sdk build && pnpm --filter @signaltrail/event-processor build && node --experimental-strip-types tests/load/run.mjs",
     "monitoring:up": "docker compose --env-file .env.monitoring -f infra/monitoring/compose.yaml up -d",
     "monitoring:down": "docker compose --env-file .env.monitoring -f infra/monitoring/compose.yaml down",
     "test:load:unit": "node --test tests/load/*.test.mjs"

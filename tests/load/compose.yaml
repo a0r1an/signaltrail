@@ -17,6 +17,13 @@ services:
       - ../../infra/redpanda/init-topics.sh:/init/init-topics.sh:ro
     environment:
       REDPANDA_BROKERS: redpanda:9092
+  clickhouse:
+    extends:
+      file: ../../compose.yaml
+      service: clickhouse
+    profiles: ['storage']
+    ports: !override
+      - '127.0.0.1:38123:8123'
   k6:
     image: grafana/k6:1.6.0
     profiles: ['tools']
@@ -27,3 +34,4 @@ services:
 
 volumes:
   redpanda_data:
+  clickhouse_data:
