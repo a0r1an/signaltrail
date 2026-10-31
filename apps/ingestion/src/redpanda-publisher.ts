@@ -1,5 +1,6 @@
 import { Kafka, logLevel } from 'kafkajs';
 import { createPublicationCapacity, type PublicationSnapshot } from './publication-capacity.ts';
+import { createProducerBatcher } from './producer-batcher.ts';
 import type { PublishedEvent } from './handler.ts';
 
 export interface RedpandaPublisherOptions {
@@ -50,6 +51,14 @@ export function createRedpandaPublisher(options: RedpandaPublisherOptions): Redp
     // Bound background retries; this does not provide application-level exactly-once delivery.
     retry: { retries: 2, initialRetryTime: 100, maxRetryTime: 1000 },
   });
+  const batcher = createProducerBatcher((messages) =>
+    producer.send({
+      topic,
+      acks: -1,
+      timeout: 3000,
+      messages,
+    }),
+  );
   let connected = false;
   let closed = false;
   let connection: Promise<void> | undefined;
@@ -81,20 +90,13 @@ export function createRedpandaPublisher(options: RedpandaPublisherOptions): Redp
       signal.throwIfAborted();
       const value = JSON.stringify(record);
       await capacity.run(value, signal, () => {
-        const send = producer.send({
-          topic,
-          acks: -1,
-          timeout: 3000,
-          messages: [
-            {
-              key: JSON.stringify([record.projectId, record.event.sessionId]),
-              value,
-              headers: {
-                'event-id': record.event.eventId,
-                'schema-version': String(record.event.schemaVersion),
-              },
-            },
-          ],
+        const send = batcher.enqueue({
+          key: JSON.stringify([record.projectId, record.event.sessionId]),
+          value,
+          headers: {
+            'event-id': record.event.eventId,
+            'schema-version': String(record.event.schemaVersion),
+          },
         });
         inFlight.add(send);
         void send.then(
