@@ -28,11 +28,15 @@ if (
   metricsPort === port
 )
   throw new RangeError('Metrics port must be valid and differ from the ingestion port');
+const maxConcurrentRequests = Number(process.env.SIGNALTRAIL_MAX_CONCURRENT_REQUESTS ?? 128);
 const metrics = createIngestionMetrics(publisher.snapshot, {
+  maxConcurrentRequests,
   maxEvents: Number(process.env.SIGNALTRAIL_MAX_OUTSTANDING_EVENTS ?? 1000),
   maxBytes: Number(process.env.SIGNALTRAIL_MAX_OUTSTANDING_BYTES ?? 8 * 1024 * 1024),
 });
 const server = createIngestionServer({
+  maxConcurrentRequests,
+  observeAdmission: metrics.observeAdmission,
   observeRequest: metrics.observeRequest,
   observeSdkHealth: metrics.observeSdkHealth,
   resolveProjectKey,

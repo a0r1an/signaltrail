@@ -14,6 +14,14 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'request-admission': {
+    rate: 0,
+    batch: 1,
+    padding: 0,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    maxConcurrentRequests: 1,
+  },
   'sustained-bytes': {
     rate: 10,
     batch: 20,
@@ -64,6 +72,7 @@ const scenarios = {
   bytes: { rate: 30, batch: 20, padding: 8000, maxEvents: 1000, maxBytes: 262144 },
 };
 const config = {
+  maxConcurrentRequests: 128,
   ...scenarios[scenario],
   ...(scenario.startsWith('sustained') ? { sessionCount: 100 } : {}),
 };
@@ -126,13 +135,15 @@ try {
     arch: process.arch,
     limitations: [
       'Same-host generator and broker; development baseline, not production sizing.',
-      scenario === 'recovery'
-        ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
-        : isSustained
-          ? 'Sustained local pipeline measurement; not production sizing or SDK retry simulation.'
-          : isPipeline
-            ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
-            : 'Capacity probes do not simulate SDK retries.',
+      scenario === 'request-admission'
+        ? 'Node SDK retry and one slow body; not browser execution or connection flooding.'
+        : scenario === 'recovery'
+          ? 'Recovery uses the Node SDK memory fallback; browser persistence is tested separately.'
+          : isSustained
+            ? 'Sustained local pipeline measurement; not production sizing or SDK retry simulation.'
+            : isPipeline
+              ? 'Pipeline is a small correctness probe with FINAL reads, not a production query API.'
+              : 'Capacity probes do not simulate SDK retries.',
     ],
   };
   // An interrupted process must not leave a successful-looking result.
@@ -176,6 +187,7 @@ try {
   });
   await publisher.connect();
   metrics = createIngestionMetrics(publisher.snapshot, {
+    maxConcurrentRequests: config.maxConcurrentRequests,
     maxEvents: config.maxEvents,
     maxBytes: config.maxBytes,
   });
@@ -204,6 +216,7 @@ try {
   );
   await rename(targetFile + '.tmp', targetFile);
   server = createIngestionServer({
+    maxConcurrentRequests: config.maxConcurrentRequests,
     resolveProjectKey: (key) =>
       key === 'load-test-key'
         ? 'load-project'
@@ -214,6 +227,7 @@ try {
     ...(['recovery', 'browser-pipeline'].includes(scenario) ? { publicationTimeoutMs: 250 } : {}),
     ...(scenario === 'browser-pipeline' ? { allowedOrigins: ['http://127.0.0.1:4179'] } : {}),
     observeRequest: metrics.observeRequest,
+    observeAdmission: metrics.observeAdmission,
   });
   // Temporary load-only listener: Docker's k6 reaches the host through its gateway.
   await new Promise((done, reject) => {
@@ -245,6 +259,18 @@ try {
       expectedPaddingBytes: config.padding,
     });
   }
+  if (scenario === 'request-admission') {
+    const { exerciseRequestAdmission } = await import('./request-admission.mjs');
+    const evidence = await exerciseRequestAdmission({
+      url: `http://127.0.0.1:${port}/v1/events`,
+      publisher,
+      runId,
+    });
+    await writeFile(
+      resolve(directory, 'request-admission.json'),
+      JSON.stringify(evidence, null, 2),
+    );
+  }
   if (scenario === 'recovery') {
     const evidence = await exerciseBrokerRecovery({
       url: `http://127.0.0.1:${port}/v1/events`,
@@ -265,7 +291,9 @@ try {
     });
     await writeFile(resolve(directory, 'pipeline.json'), JSON.stringify(evidence, null, 2));
   }
-  const stages = ['recovery', 'pipeline', 'browser-pipeline'].includes(scenario)
+  const stages = ['recovery', 'pipeline', 'browser-pipeline', 'request-admission'].includes(
+    scenario,
+  )
     ? []
     : scenario === 'burst'
       ? [

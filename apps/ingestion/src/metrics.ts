@@ -5,10 +5,26 @@ import type { PublicationSnapshot } from './publication-capacity.ts';
 
 export function createIngestionMetrics(
   snapshot: () => PublicationSnapshot,
-  limits: { maxEvents: number; maxBytes: number },
+  limits: { maxEvents: number; maxBytes: number; maxConcurrentRequests?: number },
 ) {
   const registry = new Registry();
   collectDefaultMetrics({ register: registry, prefix: 'signaltrail_' });
+  const activeRequests = new Gauge({
+    name: 'signaltrail_http_active_requests',
+    help: 'Requests admitted to body parsing, authentication, and publication',
+    registers: [registry],
+  });
+  const requestLimit = new Gauge({
+    name: 'signaltrail_http_admission_limit',
+    help: 'Concurrent ingestion request processing limit',
+    registers: [registry],
+  });
+  requestLimit.set(limits.maxConcurrentRequests ?? 128);
+  const admissionRefused = new Counter({
+    name: 'signaltrail_http_admission_refused_total',
+    help: 'Request-level refusals before body parsing',
+    registers: [registry],
+  });
   const fields = {
     outstanding_events: 'outstandingEvents',
     outstanding_bytes: 'outstandingBytes',
@@ -130,6 +146,10 @@ export function createIngestionMetrics(
   return {
     registry,
     server,
+    observeAdmission(active: number, refused: boolean) {
+      activeRequests.set(active);
+      if (refused) admissionRefused.inc();
+    },
     observeSdkHealth(report: SdkHealthReport) {
       sdkReports.inc({ storage_mode: report.queue.storageMode });
       for (const kind of SDK_HEALTH_COUNTERS) sdkCounters[kind]!.inc(report.counters[kind] ?? 0);

@@ -182,6 +182,21 @@ neither a production sizing estimate nor a browser/SDK retry simulation. Do not
 tune limits from one short run or confuse chunk-attempt latency with storage-only
 acknowledgement latency.
 
+## Request processing admission
+
+`load request-admission` owns one slow HTTP upload and configures one processing
+slot on the isolated ingestion listener. The incomplete body must occupy that
+slot without admitting broker work. A real Node SDK upload must receive a
+retryable 503, retain its original ID, and succeed after the slow upload finishes.
+The probe verifies request admission metrics and returns slots to zero. It uses
+Node memory fallback, not browser persistence or a connection-flood simulation.
+
+Normal ingestion defaults to 128 concurrent body/auth/publication operations,
+configured by `SIGNALTRAIL_MAX_CONCURRENT_REQUESTS`. Health/preflight handling
+remains available before that gate. `Retry-After` is exposed to allowed browser
+origins. This gate is separate from outstanding broker event/byte reservations;
+it does not claim to bound all TCP connections or whole-process RSS.
+
 ## Monitoring and secrets
 
 Monitoring configuration lives under `infra/monitoring/`. It reads ignored

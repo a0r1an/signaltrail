@@ -42,3 +42,30 @@ it('does not turn a successful response into a failure when diagnostics throw', 
     200,
   );
 });
+
+it('reports active request processing and refusals separately from broker work', async () => {
+  const metrics = createIngestionMetrics(
+    () => ({
+      outstandingEvents: 0,
+      outstandingBytes: 0,
+      peakEvents: 0,
+      peakBytes: 0,
+      refused: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      lateCompletions: 0,
+      durationSeconds: 0,
+    }),
+    { maxEvents: 1000, maxBytes: 8388608, maxConcurrentRequests: 2 },
+  );
+  try {
+    metrics.observeAdmission(2, true);
+    const text = await metrics.registry.metrics();
+    expect(text).toContain('signaltrail_http_active_requests 2');
+    expect(text).toContain('signaltrail_http_admission_limit 2');
+    expect(text).toContain('signaltrail_http_admission_refused_total 1');
+  } finally {
+    metrics.close();
+  }
+});

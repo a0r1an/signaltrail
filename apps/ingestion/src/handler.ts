@@ -12,8 +12,10 @@ export interface IngestionOptions {
   publish(record: PublishedEvent, signal: AbortSignal): Promise<void>;
   allowedOrigins?: readonly string[];
   maxRequestBytes?: number;
+  maxConcurrentRequests?: number;
   publicationTimeoutMs?: number;
   now?: () => number;
+  observeAdmission?: (active: number, refused: boolean) => void;
   observeRequest?: (status: number, seconds: number) => void;
 }
 class BodyTooLarge extends Error {}
@@ -59,6 +61,17 @@ async function readJson(request: Request, maxBytes: number): Promise<unknown> {
   return JSON.parse(text) as unknown;
 }
 export function createIngestionHandler(options: IngestionOptions) {
+  const maxConcurrentRequests = options.maxConcurrentRequests ?? 128;
+  if (!Number.isSafeInteger(maxConcurrentRequests) || maxConcurrentRequests < 1)
+    throw new RangeError('maxConcurrentRequests must be a positive safe integer');
+  let activeRequests = 0;
+  const observeAdmission = (refused: boolean) => {
+    try {
+      void Promise.resolve(options.observeAdmission?.(activeRequests, refused)).catch(() => {});
+    } catch {
+      /* Diagnostics cannot change request admission. */
+    }
+  };
   const publicationTimeout = options.publicationTimeoutMs ?? 5000;
   if (
     !Number.isSafeInteger(publicationTimeout) ||
@@ -75,7 +88,10 @@ export function createIngestionHandler(options: IngestionOptions) {
     const origin = request.headers.get('origin');
     const allowed = origin !== null && (origin === url.origin || allowedOrigins.has(origin));
     const headers = new Headers({ 'Cache-Control': 'no-store', Vary: 'Origin' });
-    if (allowed) headers.set('Access-Control-Allow-Origin', origin);
+    if (allowed) {
+      headers.set('Access-Control-Allow-Origin', origin);
+      headers.set('Access-Control-Expose-Headers', 'Retry-After');
+    }
     const json = (value: unknown, init?: ResponseInit) =>
       Response.json(value, {
         ...init,
@@ -112,83 +128,98 @@ export function createIngestionHandler(options: IngestionOptions) {
       !['identity', null].includes(request.headers.get('content-encoding'))
     )
       return json({ error: 'UNSUPPORTED_MEDIA_TYPE' }, { status: 415 });
-    let payload: unknown;
-    try {
-      payload = await readJson(
-        request,
-        path === '/v1/sdk-health' ? Math.min(maxBytes, 16 * 1024) : maxBytes,
-      );
-    } catch (error) {
+    if (activeRequests >= maxConcurrentRequests) {
+      observeAdmission(true);
       return json(
-        { error: error instanceof BodyTooLarge ? 'PAYLOAD_TOO_LARGE' : 'INVALID_JSON' },
-        { status: error instanceof BodyTooLarge ? 413 : 400 },
+        { error: 'SERVICE_UNAVAILABLE' },
+        { status: 503, headers: { 'Retry-After': '1' } },
       );
     }
-    const bodyKey =
-      typeof payload === 'object' &&
-      payload !== null &&
-      'projectKey' in payload &&
-      typeof payload.projectKey === 'string'
-        ? payload.projectKey
-        : undefined;
-    const header = request.headers.get('authorization');
-    const key = header === null ? (bodyKey ?? '') : (/^Bearer (\S+)$/i.exec(header)?.[1] ?? '');
-    if (!key || (header !== null && bodyKey !== undefined && bodyKey !== key))
-      return json({ error: 'UNAUTHORIZED' }, { status: 401 });
-    let projectId: string | undefined;
+    activeRequests++;
+    observeAdmission(false);
     try {
-      projectId = await options.resolveProjectKey(key);
-    } catch {
-      return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-    }
-    if (!projectId) return json({ error: 'UNAUTHORIZED' }, { status: 401 });
-    if (path === '/v1/sdk-health') {
-      const report = SdkHealthReportSchema.safeParse(payload);
-      if (!report.success) return json({ error: 'INVALID_HEALTH_REPORT' }, { status: 400 });
-      if (!options.observeSdkHealth) return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
+      let payload: unknown;
       try {
-        options.observeSdkHealth(report.data, projectId);
+        payload = await readJson(
+          request,
+          path === '/v1/sdk-health' ? Math.min(maxBytes, 16 * 1024) : maxBytes,
+        );
+      } catch (error) {
+        return json(
+          { error: error instanceof BodyTooLarge ? 'PAYLOAD_TOO_LARGE' : 'INVALID_JSON' },
+          { status: error instanceof BodyTooLarge ? 413 : 400 },
+        );
+      }
+      const bodyKey =
+        typeof payload === 'object' &&
+        payload !== null &&
+        'projectKey' in payload &&
+        typeof payload.projectKey === 'string'
+          ? payload.projectKey
+          : undefined;
+      const header = request.headers.get('authorization');
+      const key = header === null ? (bodyKey ?? '') : (/^Bearer (\S+)$/i.exec(header)?.[1] ?? '');
+      if (!key || (header !== null && bodyKey !== undefined && bodyKey !== key))
+        return json({ error: 'UNAUTHORIZED' }, { status: 401 });
+      let projectId: string | undefined;
+      try {
+        projectId = await options.resolveProjectKey(key);
       } catch {
         return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
       }
-      return new Response(null, { status: 204, headers });
-    }
-    const batch = AnalyticsBatchSchema.safeParse(payload);
-    if (!batch.success) return json({ error: 'INVALID_BATCH' }, { status: 400 });
-    const receivedAt = new Date((options.now ?? Date.now)()).toISOString();
-    const results = await Promise.all(
-      validateAnalyticsEvents(batch.data.events).map(async ({ index, result }) => {
-        if (!result.success) return { index, status: 'rejected', code: 'INVALID_EVENT' };
-        const controller = new AbortController();
-        let timer: ReturnType<typeof setTimeout> | undefined;
+      if (!projectId) return json({ error: 'UNAUTHORIZED' }, { status: 401 });
+      if (path === '/v1/sdk-health') {
+        const report = SdkHealthReportSchema.safeParse(payload);
+        if (!report.success) return json({ error: 'INVALID_HEALTH_REPORT' }, { status: 400 });
+        if (!options.observeSdkHealth)
+          return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
         try {
-          const deadline = new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => {
-              controller.abort();
-              reject(new Error('Publication deadline exceeded'));
-            }, publicationTimeout);
-          });
-          await Promise.race([
-            Promise.resolve().then(() =>
-              options.publish({ projectId, receivedAt, event: result.data }, controller.signal),
-            ),
-            deadline,
-          ]);
-          return { index, eventId: result.data.eventId, status: 'accepted' };
+          options.observeSdkHealth(report.data, projectId);
         } catch {
-          return {
-            index,
-            eventId: result.data.eventId,
-            status: 'retry',
-            code: 'PUBLICATION_UNCONFIRMED',
-            retryAfterMs: 1000,
-          };
-        } finally {
-          clearTimeout(timer);
+          return json({ error: 'SERVICE_UNAVAILABLE' }, { status: 503 });
         }
-      }),
-    );
-    return json({ results });
+        return new Response(null, { status: 204, headers });
+      }
+      const batch = AnalyticsBatchSchema.safeParse(payload);
+      if (!batch.success) return json({ error: 'INVALID_BATCH' }, { status: 400 });
+      const receivedAt = new Date((options.now ?? Date.now)()).toISOString();
+      const results = await Promise.all(
+        validateAnalyticsEvents(batch.data.events).map(async ({ index, result }) => {
+          if (!result.success) return { index, status: 'rejected', code: 'INVALID_EVENT' };
+          const controller = new AbortController();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const deadline = new Promise<never>((_resolve, reject) => {
+              timer = setTimeout(() => {
+                controller.abort();
+                reject(new Error('Publication deadline exceeded'));
+              }, publicationTimeout);
+            });
+            await Promise.race([
+              Promise.resolve().then(() =>
+                options.publish({ projectId, receivedAt, event: result.data }, controller.signal),
+              ),
+              deadline,
+            ]);
+            return { index, eventId: result.data.eventId, status: 'accepted' };
+          } catch {
+            return {
+              index,
+              eventId: result.data.eventId,
+              status: 'retry',
+              code: 'PUBLICATION_UNCONFIRMED',
+              retryAfterMs: 1000,
+            };
+          } finally {
+            clearTimeout(timer);
+          }
+        }),
+      );
+      return json({ results });
+    } finally {
+      activeRequests--;
+      observeAdmission(false);
+    }
   };
   return async (request: Request): Promise<Response> => {
     const start = performance.now();
