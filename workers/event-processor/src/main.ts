@@ -1,8 +1,10 @@
 import { createClickHouseWriter } from './clickhouse-writer.ts';
 import { parseProcessorEnvironment, ProcessorConfigurationError } from './environment.ts';
 import { createRedpandaEventConsumer } from './redpanda-consumer.ts';
+import { createProcessorMetrics } from './metrics.ts';
 
 let worker: ReturnType<typeof createRedpandaEventConsumer> | undefined;
+let metrics: ReturnType<typeof createProcessorMetrics> | undefined;
 let stopping: Promise<void> | undefined;
 function shutdown() {
   if (stopping) return stopping;
@@ -12,7 +14,13 @@ function shutdown() {
   }, 15000);
   deadline.unref();
   stopping = Promise.resolve()
-    .then(() => worker?.close())
+    .then(async () => {
+      try {
+        await worker?.close();
+      } finally {
+        await metrics?.close();
+      }
+    })
     .finally(() => clearTimeout(deadline));
   return stopping;
 }
@@ -31,6 +39,16 @@ try {
     writeEvent: createClickHouseWriter(options.clickhouse),
     onRetry: () => console.error('SignalTrail event processor retry scheduled'),
   });
+  if (options.metrics) {
+    const runningWorker = worker;
+    const endpoint = options.metrics;
+    const exporter = createProcessorMetrics(() => runningWorker.snapshot());
+    metrics = exporter;
+    await new Promise<void>((resolve, reject) => {
+      exporter.server.once('error', reject);
+      exporter.server.listen(endpoint.port, endpoint.host, resolve);
+    });
+  }
   await worker.start();
   if (!stopping) console.log('SignalTrail event processor started');
   await worker.finished;

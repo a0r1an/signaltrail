@@ -192,6 +192,9 @@ importers:
 
   workers/event-processor:
     dependencies:
+      '@prometheus-io/client':
+        specifier: ^0.16.1
+        version: 0.16.1
       '@signaltrail/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

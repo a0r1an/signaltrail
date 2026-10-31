@@ -110,7 +110,10 @@ acknowledged Kafka offsets. It also runs the worker entrypoint as an owned child
 pauses storage until a write fails, verifies an uncommitted source offset, kills
 that child, and restarts with the same consumer group. Recovery must produce one
 logical row and acknowledge the source offset before graceful shutdown. The
-replacement may wait for the old group session to expire. Production process
+replacement may wait for the old group session to expire. The probe also owns
+worker metrics port 9466 and checks retry/completion metrics through real HTTP.
+The worker endpoint is optional and loopback-only; it is not automatically
+added to the live Alloy configuration. Production process
 supervision, retention, and the query API remain separate work.
 The fixture preserves unusual client timestamps as strings. This is a small
 correctness probe, not a storage-throughput benchmark.

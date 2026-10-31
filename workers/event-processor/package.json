@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@signaltrail/contracts": "workspace:*",
-    "kafkajs": "^2.2.4"
+    "kafkajs": "^2.2.4",
+    "@prometheus-io/client": "^0.16.1"
   },
   "devDependencies": {
     "@signaltrail/typescript-config": "workspace:*",

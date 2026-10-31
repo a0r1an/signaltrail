@@ -16,7 +16,12 @@ export function parseProcessorEnvironment(
   const timeoutMs = Number(environment.SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS ?? 5000);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
     throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS');
+  const rawPort = environment.SIGNALTRAIL_PROCESSOR_METRICS_PORT;
+  const port = rawPort === undefined ? undefined : Number(rawPort);
+  if (port !== undefined && (!Number.isSafeInteger(port) || port < 1 || port > 65535))
+    throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_PROCESSOR_METRICS_PORT');
   return {
+    metrics: port === undefined ? undefined : { host: '127.0.0.1', port },
     consumer: {
       brokers: required('SIGNALTRAIL_REDPANDA_BROKERS')
         .split(',')

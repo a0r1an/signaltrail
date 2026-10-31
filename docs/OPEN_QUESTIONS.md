@@ -63,6 +63,13 @@ Entries are questions, not approvals or completed work.
   storage writes. Confirm conflict semantics, query cost, retention, and future
   partitioning before production. Current synchronous per-event inserts are a
   correctness baseline; batch storage writes before measuring sustained capacity.
+- **Worker monitoring:** the worker has an optional loopback-only metrics endpoint
+  (`SIGNALTRAIL_PROCESSOR_METRICS_PORT`), disabled by default. Its running gauge
+  means the consumer loop is active, not that storage is healthy or lag is zero.
+  Completion counters reset on process restart and are not unique-event totals.
+  The isolated pipeline verifies retry and completion metrics. Decide production
+  scrape networking, lag visibility, and alert thresholds before deployment; the
+  endpoint is not yet added to the live Alloy configuration.
 - **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
   A local reproduction traced it to KafkaJS 2.2.4's
   `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can

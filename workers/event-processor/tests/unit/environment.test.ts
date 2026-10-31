@@ -51,3 +51,19 @@ it.each(['', '0', '-1', '1.5', '30001', 'secret-invalid-timeout'])(
     }
   },
 );
+
+it('disables metrics by default and binds an explicitly enabled endpoint to loopback', () => {
+  expect(parseProcessorEnvironment(environment).metrics).toBeUndefined();
+  expect(
+    parseProcessorEnvironment({ ...environment, SIGNALTRAIL_PROCESSOR_METRICS_PORT: '9466' })
+      .metrics,
+  ).toEqual({ host: '127.0.0.1', port: 9466 });
+});
+it.each(['', '0', '-1', '65536', '1.5', 'invalid-secret-port'])(
+  'rejects invalid metrics ports without echoing their value',
+  (port) => {
+    expect(() =>
+      parseProcessorEnvironment({ ...environment, SIGNALTRAIL_PROCESSOR_METRICS_PORT: port }),
+    ).toThrow('Invalid SIGNALTRAIL_PROCESSOR_METRICS_PORT');
+  },
+);

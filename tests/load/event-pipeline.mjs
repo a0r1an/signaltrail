@@ -177,12 +177,27 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     assert.equal(letters[0].reason, 'INVALID_JSON');
     assert.equal(Buffer.from(letters[0].payloadBase64, 'base64').toString(), '{invalid-json');
     await worker.close();
-    workerProcess = startWorkerProcess({ groupId: runId, topic, deadLetterTopic });
+    workerProcess = startWorkerProcess({
+      groupId: runId,
+      topic,
+      deadLetterTopic,
+      metricsPort: 9466,
+    });
     await workerProcess.waitFor('SignalTrail event processor started');
     await docker(['pause', 'clickhouse']);
     storagePaused = true;
     await ingest('load-test-key', [{ ...event, eventId: 'pipeline-recovery', sequence: 2 }]);
     await workerProcess.waitFor('SignalTrail event processor retry scheduled');
+    const stalledMetrics = await fetch('http://127.0.0.1:9466/metrics', {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(stalledMetrics.status, 200);
+    const stalledBody = await stalledMetrics.text();
+    assert.match(stalledBody, /signaltrail_processor_running 1/);
+    assert.match(stalledBody, /signaltrail_processor_retries_total [1-9]/);
+    assert.match(stalledBody, /signaltrail_processor_stored_total 0/);
+    assert.ok(!stalledBody.includes('pipeline-recovery'));
+
     const highOffsets = await admin.fetchTopicOffsets(topic);
     const pendingOffsets = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
     assert.ok(
@@ -197,7 +212,12 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     assert.equal((await workerProcess.stop('SIGKILL')).signal, 'SIGKILL');
     await docker(['unpause', 'clickhouse']);
     storagePaused = false;
-    workerProcess = startWorkerProcess({ groupId: runId, topic, deadLetterTopic });
+    workerProcess = startWorkerProcess({
+      groupId: runId,
+      topic,
+      deadLetterTopic,
+      metricsPort: 9466,
+    });
     await workerProcess.waitFor('SignalTrail event processor started');
     const recoveryDeadline = Date.now() + 25000;
     let recoveredOffsets;
@@ -224,6 +244,15 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       ),
       1,
     );
+    const recoveredMetrics = await fetch('http://127.0.0.1:9466/metrics', {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(recoveredMetrics.status, 200);
+    assert.match(await recoveredMetrics.text(), /signaltrail_processor_stored_total 1/);
+    const unknownMetricsPath = await fetch('http://127.0.0.1:9466/events', {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(unknownMetricsPath.status, 404);
     assert.equal((await workerProcess.stop()).code, 0);
     return {
       passed: true,
@@ -233,6 +262,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
         retainedUntilStorageAcknowledgement: true,
         uniqueRecoveredRows: 1,
         gracefulExitCode: 0,
+        metricsVerified: true,
         beforeRestart: pendingOffsets,
         sourceHighOffsets: highOffsets,
         afterRestart: recoveredOffsets,
