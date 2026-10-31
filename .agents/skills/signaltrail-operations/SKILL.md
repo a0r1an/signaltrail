@@ -29,6 +29,7 @@ Preview an operation without side effects:
 | Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
 | SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
 | Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
+| Measure native IndexedDB queue cost  | `./scripts/signaltrail-ops.mjs browser benchmark`                     |
 | Measure minified SDK transfer sizes  | `./scripts/signaltrail-ops.mjs browser size`                          |
 | Install pinned Chromium              | `./scripts/signaltrail-ops.mjs browser install`                       |
 | Real-broker integration suite        | `./scripts/signaltrail-ops.mjs broker test`                           |
@@ -174,3 +175,17 @@ minified bytes, gzip level 9, Brotli quality 11, hashes, tool versions, and the
 largest source contributors in ignored `test-results/sdk-size/<run>/report.json`.
 It does not enforce a size budget or claim browser startup performance. Do not
 run it alongside checks that rebuild the same package output directories.
+
+## Native IndexedDB queue benchmark
+
+`browser benchmark` builds the public SDK browser bundle and launches owned
+headless Chromium against an ephemeral loopback fixture. It performs three
+sequential fill trials each at 100, 500, and 1,000 events with a 128-character
+property value. Every trial verifies native IndexedDB and exact FIFO reads.
+Artifacts in ignored `test-results/queue-benchmark/<run>/report.json` record
+per-enqueue percentiles, total fill/read times, browser/runtime versions, and
+machine details. Success is recorded only after owned resources close.
+
+These are local queue measurements without upload, concurrent tabs, CPU
+throttling, or replay recording. No performance threshold or production capacity
+is implied, and defaults are not changed. Do not overlap package builds.

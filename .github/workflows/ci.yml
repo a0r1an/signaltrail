@@ -76,6 +76,9 @@ jobs:
       - name: Measure browser SDK bundle sizes
         run: ./scripts/signaltrail-ops.mjs browser size
 
+      - name: Measure native IndexedDB queue performance
+        run: ./scripts/signaltrail-ops.mjs browser benchmark
+
       - name: Test browser SDK in Chromium
         run: pnpm --filter @signaltrail/browser-sdk test:browser
 
@@ -88,6 +91,7 @@ jobs:
             packages/browser-sdk/playwright-report/
             packages/browser-sdk/test-results/
             test-results/sdk-size/
+            test-results/queue-benchmark/
           retention-days: 7
           if-no-files-found: ignore
 
