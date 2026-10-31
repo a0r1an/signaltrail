@@ -144,9 +144,20 @@ are withdrawn afterward. During normal dashboard use choose
 
 Use `load sustained-smoke` for a five-second harness check, `load sustained` for
 60 seconds at 10 requests/second, and `load sustained-stress` for 60 seconds at
-50 requests/second. Each request contains 20 events. These fixed profiles ignore
+50 requests/second. Each request contains 20 events. Sustained profiles use a fixed pool of 100
+sessions selected by global iteration number, independent of virtual-user count;
+`config.sessionCount` records it. Earlier reports used VU-derived sessions and
+are not controlled partition-distribution comparisons. These fixed profiles ignore
 `DURATION`, run on isolated Redpanda/ClickHouse, and use the runnable worker on
 metrics port 9466. No normal development services are restarted.
+
+`load sustained-outage` runs 60 seconds at 200 events/second and pauses only the
+isolated ClickHouse for ten seconds after a 15-second delay. It requires observed
+source backlog while paused, an actual failed storage write/retry, continued
+successful ingestion outcomes, and full unique-row/offset reconciliation after
+resume. Cancellation and pause errors still trigger a resume attempt; cleanup
+preserves errors from both the interruption and resumption. Do not replace the
+isolated service with the development ClickHouse.
 
 The scenario samples exact source offsets, worker Prometheus metrics, and Compose
 container CPU/memory stats. It requires zero generator drops, malformed responses,

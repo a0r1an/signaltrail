@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolve } from 'node:path';
+import { runStorageInterruption } from './storage-interruption.mjs';
 import { startWorkerProcess } from './worker-process.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { summarizeWorkerSamples } from './pipeline-report.mjs';
@@ -36,7 +37,13 @@ function metric(text, series) {
   return value;
 }
 
-export async function openSustainedPipeline({ runId, directory, docker, interrupted }) {
+export async function openSustainedPipeline({
+  runId,
+  directory,
+  docker,
+  interrupted,
+  storageInterruption = false,
+}) {
   const kafka = new Kafka({
     brokers: ['127.0.0.1:29092'],
     clientId: runId + '-observer',
@@ -55,6 +62,9 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
     samplePending = false;
   const started = performance.now();
   let phase = 'ready';
+  const interruptionController = new AbortController();
+  const interruptionStates = [];
+  let interruption;
   let closing;
   const lag = async () => {
     // Read commits first so a concurrent commit cannot exceed an older high watermark.
@@ -79,6 +89,7 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
       at: new Date().toISOString(),
       elapsedSeconds: (performance.now() - started) / 1000,
       phase,
+      storagePaused: interruptionStates.at(-1)?.state === 'paused',
       source,
       worker: {
         rssBytes: rss,
@@ -119,6 +130,14 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
   const close = () => {
     if (closing) return closing;
     closing = cleanupResources([
+      {
+        name: 'finish storage interruption',
+        timeoutMs: 15000,
+        run: async () => {
+          interruptionController.abort();
+          await interruption;
+        },
+      },
       { name: 'stop sustained sampling', timeoutMs: 15000, run: stopSampling },
       {
         name: 'save sustained worker samples',
@@ -164,6 +183,21 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
     await worker.waitFor('SignalTrail event processor started');
     await sample();
     phase = 'traffic';
+    if (storageInterruption) {
+      interruption = runStorageInterruption({
+        signal: interruptionController.signal,
+        pause: () =>
+          docker(
+            ['pause', 'clickhouse'],
+            false,
+            false,
+            AbortSignal.any([interruptionController.signal, AbortSignal.timeout(5000)]),
+          ),
+        resume: () => docker(['unpause', 'clickhouse'], false, false, AbortSignal.timeout(5000)),
+        onState: (state) => interruptionStates.push({ state, at: new Date().toISOString() }),
+      });
+      void interruption.catch(() => {});
+    }
     interval = setInterval(() => {
       // Skip a tick while sampling is pending; never accumulate an unbounded work queue.
       if (samplePending) return;
@@ -182,6 +216,7 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
     return {
       close,
       async finish(summary) {
+        await interruption;
         await stopSampling();
         phase = 'drain';
         const stoppedTraffic = performance.now();
@@ -218,6 +253,7 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
             (max, entry) => (BigInt(entry.source.total) > BigInt(max) ? entry.source.total : max),
             '0',
           ),
+          storageInterruption: storageInterruption ? { states: interruptionStates } : null,
           traffic: {
             durationSeconds: summary.state.testRunDurationMs / 1000,
             iterations: summary.metrics.iterations.values.count,
@@ -242,6 +278,20 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
           'Storage latency must be observed',
         );
         assert.equal(final.worker.stored, Number(totals.brokerRecords));
+        if (storageInterruption) {
+          assert.deepEqual(
+            interruptionStates.map((entry) => entry.state),
+            ['paused', 'resumed'],
+          );
+          assert.ok(
+            samples.some((entry) => entry.storagePaused && BigInt(entry.source.total) > 0n),
+            'Source backlog must be observed during storage outage',
+          );
+          assert.ok(
+            report.workerSummary.storage.failedWrites > 0 && final.worker.retries > 0,
+            'Outage must exercise a real storage failure and retry',
+          );
+        }
         report.passed = true;
         await writeFile(resolve(directory, 'sustained.json'), JSON.stringify(report, null, 2));
         const exited = await worker.stop();

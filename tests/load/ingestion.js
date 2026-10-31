@@ -1,4 +1,5 @@
 import http from 'k6/http';
+import execution from 'k6/execution';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
 const accepted = new Counter('events_accepted');
@@ -7,6 +8,9 @@ const rejected = new Counter('events_rejected');
 const malformed = new Counter('responses_malformed');
 const batchSize = Number(__ENV.BATCH_SIZE || 20);
 const rate = Number(__ENV.RATE || 10);
+const sessionCount = __ENV.SESSION_COUNT ? Number(__ENV.SESSION_COUNT) : null;
+if (sessionCount !== null && (!Number.isSafeInteger(sessionCount) || sessionCount < 1))
+  throw new Error('SESSION_COUNT must be a positive safe integer');
 export const options = {
   scenarios: {
     traffic: {
@@ -27,14 +31,16 @@ export const options = {
   },
 };
 export default function () {
-  // Separate sessions distribute load; IDs remain unique across VUs and iterations.
+  // Sustained profiles use a fixed session pool, independent of active VU count.
+  const iteration = execution.scenario.iterationInTest;
+  const session = sessionCount ? iteration % sessionCount : __VU;
   const events = Array.from({ length: batchSize }, (_, i) => ({
     schemaVersion: 1,
     eventId: `${__ENV.RUN_ID}-${__VU}-${__ITER}-${i}`,
     eventName: 'load_event',
-    distinctId: `load-${__VU}`,
-    sessionId: `session-${__VU}`,
-    sequence: __ITER * batchSize + i,
+    distinctId: `load-${session}`,
+    sessionId: `session-${session}`,
+    sequence: (sessionCount ? iteration : __ITER) * batchSize + i,
     clientTimestamp: new Date().toISOString(),
     url: 'https://load.invalid',
     properties: { padding: 'x'.repeat(Number(__ENV.PADDING_BYTES || 0)) },

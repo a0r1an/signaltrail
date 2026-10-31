@@ -14,6 +14,15 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'sustained-outage': {
+    rate: 10,
+    batch: 20,
+    padding: 0,
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    duration: '60s',
+    storageInterruption: true,
+  },
   'sustained-smoke': {
     rate: 10,
     batch: 20,
@@ -46,10 +55,18 @@ const scenarios = {
   saturation: { rate: 100, batch: 20, padding: 0, maxEvents: 10, maxBytes: 8388608 },
   bytes: { rate: 30, batch: 20, padding: 8000, maxEvents: 1000, maxBytes: 262144 },
 };
-const config = scenarios[scenario];
+const config = {
+  ...scenarios[scenario],
+  ...(scenario.startsWith('sustained') ? { sessionCount: 100 } : {}),
+};
 if (!Object.hasOwn(scenarios, scenario)) throw new Error(`Unknown scenario: ${scenario}`);
 const isPipeline = ['pipeline', 'browser-pipeline'].includes(scenario);
-const isSustained = ['sustained-smoke', 'sustained', 'sustained-stress'].includes(scenario);
+const isSustained = [
+  'sustained-smoke',
+  'sustained',
+  'sustained-stress',
+  'sustained-outage',
+].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
@@ -215,6 +232,7 @@ try {
       directory,
       docker,
       interrupted: () => shutdown,
+      storageInterruption: config.storageInterruption ?? false,
     });
   }
   if (scenario === 'recovery') {
@@ -266,7 +284,16 @@ try {
         '-e',
         `PADDING_BYTES=${config.padding}`,
         ...(isSustained
-          ? ['-e', 'PREALLOCATED_VUS=20', '-e', 'MAX_VUS=100', '-e', 'STRICT_ACCEPTANCE=true']
+          ? [
+              '-e',
+              'PREALLOCATED_VUS=20',
+              '-e',
+              'MAX_VUS=100',
+              '-e',
+              'STRICT_ACCEPTANCE=true',
+              '-e',
+              `SESSION_COUNT=${config.sessionCount}`,
+            ]
           : []),
         'k6',
         'run',
@@ -334,7 +361,7 @@ try {
         writeFile(resolve(directory, 'result.json'), JSON.stringify(completed, null, 2)),
       cleanup: () =>
         cleanupResources([
-          { name: 'close sustained pipeline', timeoutMs: 45000, run: () => sustained?.close() },
+          { name: 'close sustained pipeline', timeoutMs: 90000, run: () => sustained?.close() },
           { name: 'finish metric sampling', run: () => sampling },
           {
             name: 'save samples',
