@@ -68,11 +68,10 @@ export function createClickHouseWriter(options: ClickHouseWriterOptions) {
     typeof options.password !== 'string'
   )
     throw new TypeError('Invalid ClickHouse credentials');
-  try {
-    new Headers({ 'X-ClickHouse-User': options.username, 'X-ClickHouse-Key': options.password });
-  } catch {
+  if (options.username.includes(':') || /[\r\n]/.test(options.username + options.password))
     throw new TypeError('Invalid ClickHouse credentials');
-  }
+  const authorization =
+    'Basic ' + Buffer.from(options.username + ':' + options.password).toString('base64');
   endpoint.searchParams.set('query', `INSERT INTO ${database}.${table} FORMAT JSONEachRow`);
   endpoint.searchParams.set('wait_end_of_query', '1');
   endpoint.searchParams.set('async_insert', '0');
@@ -109,8 +108,7 @@ export function createClickHouseWriter(options: ClickHouseWriterOptions) {
           const response = await send(endpoint.href, {
             method: 'POST',
             headers: {
-              'X-ClickHouse-User': options.username,
-              'X-ClickHouse-Key': options.password,
+              Authorization: authorization,
               'Content-Type': 'application/x-ndjson',
             },
             body,

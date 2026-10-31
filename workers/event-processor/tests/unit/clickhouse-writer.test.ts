@@ -195,3 +195,22 @@ it.each([202, 204])('does not infer a durable ClickHouse insert from HTTP %i', a
   });
   await expect(write(record)).rejects.toThrow('ClickHouse insert was not acknowledged');
 });
+
+it('preserves credential whitespace through HTTP authentication without putting it in the URL', async () => {
+  let authorization: string | null = null;
+  let target = '';
+  const password = ' password-with-spaces ';
+  const write = createClickHouseWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password,
+    fetch: async (url, init) => {
+      target = String(url);
+      authorization = new Headers(init?.headers).get('Authorization');
+      return new Response(null);
+    },
+  });
+  await write(record);
+  expect(authorization).toBe('Basic ' + Buffer.from('writer:' + password).toString('base64'));
+  expect(target).not.toContain('password-with-spaces');
+});
