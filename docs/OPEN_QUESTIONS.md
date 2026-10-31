@@ -25,9 +25,10 @@ Entries are questions, not approvals or completed work.
   oversized messages retain only source coordinates, byte count, and SHA-256.
   Choose production DLQ retention, access restrictions, and oversized-payload
   retrieval before enabling it. Raw dead-letter bytes can contain customer data
-  and must never be copied into general logs. The processor currently has a
-  library boundary and ClickHouse writer; a supervised production consumer and
-  production DLQ configuration are still pending.
+  and must never be copied into general logs. The processor now has a
+  runnable consumer with bounded retries and shutdown. The isolated pipeline
+  verifies process kill/restart recovery with the same consumer group. Production
+  process supervision, credentials, and DLQ configuration are still pending.
 - **Alert delivery:** Grafana Cloud metrics are configured, but alert recipients,
   notification channels, and production availability objectives are undecided.
   Do not send notifications or create external integrations without instruction.

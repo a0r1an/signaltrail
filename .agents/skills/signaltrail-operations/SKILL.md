@@ -106,8 +106,12 @@ or disk disaster recovery.
 `load pipeline` validates HTTP ingestion while ClickHouse is paused, processing
 through the exported worker library, confirmed ClickHouse writes, unique `FINAL`
 reads across repeated event IDs and separate projects, DLQ publication, and
-acknowledged Kafka offsets. Its Kafka adapter is currently part of the harness;
-a supervised production worker, retention, and query API remain separate work.
+acknowledged Kafka offsets. It also runs the worker entrypoint as an owned child,
+pauses storage until a write fails, verifies an uncommitted source offset, kills
+that child, and restarts with the same consumer group. Recovery must produce one
+logical row and acknowledge the source offset before graceful shutdown. The
+replacement may wait for the old group session to expire. Production process
+supervision, retention, and the query API remain separate work.
 The fixture preserves unusual client timestamps as strings. This is a small
 correctness probe, not a storage-throughput benchmark.
 

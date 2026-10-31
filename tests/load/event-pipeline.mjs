@@ -7,6 +7,7 @@ import {
   createClickHouseWriter,
 } from '../../workers/event-processor/dist/index.js';
 import { cleanupResources } from './cleanup.mjs';
+import { startWorkerProcess } from './worker-process.mjs';
 const { Kafka, logLevel } = createRequire(
   new URL('../../apps/ingestion/package.json', import.meta.url),
 )('kafkajs');
@@ -36,6 +37,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
   const admin = kafka.admin();
   const producer = kafka.producer({ allowAutoTopicCreation: false });
   let worker;
+  let workerProcess;
   const dlqConsumer = kafka.consumer({
     groupId: runId + '-dlq',
     sessionTimeout: 6000,
@@ -174,8 +176,67 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     await waitFor(() => letters.length === 1, 'Acknowledged dead-letter record was missing');
     assert.equal(letters[0].reason, 'INVALID_JSON');
     assert.equal(Buffer.from(letters[0].payloadBase64, 'base64').toString(), '{invalid-json');
+    await worker.close();
+    workerProcess = startWorkerProcess({ groupId: runId, topic, deadLetterTopic });
+    await workerProcess.waitFor('SignalTrail event processor started');
+    await docker(['pause', 'clickhouse']);
+    storagePaused = true;
+    await ingest('load-test-key', [{ ...event, eventId: 'pipeline-recovery', sequence: 2 }]);
+    await workerProcess.waitFor('SignalTrail event processor retry scheduled');
+    const highOffsets = await admin.fetchTopicOffsets(topic);
+    const pendingOffsets = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
+    assert.ok(
+      highOffsets.some(({ partition, offset }) => {
+        const committed =
+          pendingOffsets[0].partitions.find((entry) => entry.partition === partition)?.offset ??
+          '-1';
+        return BigInt(committed) < BigInt(offset);
+      }),
+      'Failed storage write must leave an uncommitted source record',
+    );
+    assert.equal((await workerProcess.stop('SIGKILL')).signal, 'SIGKILL');
+    await docker(['unpause', 'clickhouse']);
+    storagePaused = false;
+    workerProcess = startWorkerProcess({ groupId: runId, topic, deadLetterTopic });
+    await workerProcess.waitFor('SignalTrail event processor started');
+    const recoveryDeadline = Date.now() + 25000;
+    let recoveredOffsets;
+    let recovered = false;
+    while (Date.now() < recoveryDeadline) {
+      const current = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
+      recovered = highOffsets.every(
+        ({ partition, offset }) =>
+          BigInt(offset) === 0n ||
+          current[0].partitions.find((entry) => entry.partition === partition)?.offset === offset,
+      );
+      if (recovered) {
+        recoveredOffsets = current;
+        break;
+      }
+      await delay(100);
+    }
+    assert.ok(recovered, 'Replacement worker did not acknowledge the retained source record');
+    assert.equal(
+      Number(
+        await query(
+          "SELECT count() FROM signaltrail.analytics_events FINAL WHERE project_id = 'load-project' AND event_id = 'pipeline-recovery'",
+        ),
+      ),
+      1,
+    );
+    assert.equal((await workerProcess.stop()).code, 0);
     return {
       passed: true,
+      processRecovery: {
+        abruptTermination: 'SIGKILL',
+        sameConsumerGroup: true,
+        retainedUntilStorageAcknowledgement: true,
+        uniqueRecoveredRows: 1,
+        gracefulExitCode: 0,
+        beforeRestart: pendingOffsets,
+        sourceHighOffsets: highOffsets,
+        afterRestart: recoveredOffsets,
+      },
       ingestedWhileStoragePaused: 4,
       outcomes,
       rows,
@@ -202,6 +263,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
           run: (signal) =>
             storagePaused ? docker(['unpause', 'clickhouse'], false, false, signal) : undefined,
         },
+        { name: 'stop owned worker process', timeoutMs: 25000, run: () => workerProcess?.stop() },
         { name: 'stop pipeline consumer', run: () => worker?.close() },
         { name: 'stop dead-letter observer', run: () => dlqConsumer.disconnect() },
         { name: 'stop pipeline producer', run: () => producer.disconnect() },
