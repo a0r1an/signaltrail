@@ -58,6 +58,13 @@ Entries are questions, not approvals or completed work.
   Choose the dashboard session provider, membership persistence, and same-origin
   cookie/origin policy before wiring an actual application route; fixture-only
   authorization is not a production fallback.
+  Event summaries and bounded keyset paging are now available in the private
+  reader. Paging is not a snapshot under concurrent writes or later retries;
+  decide stable export/snapshot semantics before offering complete exports.
+  Provisional cursor/list URL caps are 8/16 KiB and must fit production proxy
+  limits. Summary response bounds can reject unusually long stored identifiers
+  even when ingestion accepted them; align supported read/ingest sizes before
+  exposing the explorer to customers.
 
 ## Reversible defaults during autonomous work
 

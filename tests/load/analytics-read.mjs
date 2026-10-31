@@ -129,6 +129,24 @@ export async function exerciseAnalyticsReads({ directory }) {
     ['newest', 'event-z', 'event-a'],
   );
   assert.equal(allSummaries.hasMore, false);
+  const paged = [];
+  let cursor;
+  for (let page = 0; page < 5; page++) {
+    const result = await reader.listReceivedEvents({
+      ...window,
+      projectId: 'listing',
+      limit: 1,
+      ...(cursor ? { cursor } : {}),
+    });
+    paged.push(...result.events.map((event) => event.eventId));
+    if (!result.hasMore) {
+      assert.equal(result.nextCursor, undefined);
+      break;
+    }
+    assert.equal(typeof result.nextCursor, 'string');
+    cursor = result.nextCursor;
+  }
+  assert.deepEqual(paged, ['newest', 'event-z', 'event-a']);
   assert.deepEqual(await reader.listReceivedEvents({ ...window, projectId: 'missing' }), {
     events: [],
     hasMore: false,
@@ -180,6 +198,7 @@ export async function exerciseAnalyticsReads({ directory }) {
     exactProjectBytes: true,
     authorizedQueryBoundary: true,
     boundedEventListing: true,
+    keysetPagingAcrossTimestampTies: true,
     limitations: [
       'Server-side read library only; no query HTTP endpoint or membership authentication is deployed.',
       'Counts use latest received time, not client event time.',

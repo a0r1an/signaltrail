@@ -87,7 +87,16 @@ same authorized project, UTC window, `FINAL` uniqueness, deadlines, and query
 resource settings as counts. It returns newest-first summaries ordered by
 receive timestamp and event ID, with a default of 50 and a maximum of 100 rows.
 One extra row determines `hasMore`; there is no unbounded offset or arbitrary SQL.
-Pagination beyond the first page is a separate slice.
+When more rows exist, `nextCursor` contains an opaque, bounded position for the
+next request. Pass it as `cursor` with the same project and time window.
+Paging uses `(received_at, event_id)` comparisons, including timestamp ties;
+it never uses an offset. Cursors are unsigned positions, not authorization tokens.
+Every page still requires project membership. Malformed and out-of-window
+positions fail before storage. No cursor is returned on the final page.
+
+This is not a database snapshot: concurrent arrivals and later retries can move
+rows relative to a cursor or receive-time window. Do not promise complete,
+unchanging multi-page exports. A snapshot/export policy remains separate work.
 
 Summaries contain only event ID, name, session ID, exact decimal sequence, and
 receive timestamp. They exclude URL, identity, properties, and context payloads.
@@ -98,5 +107,7 @@ do not change event-ingestion validation.
 
 Supply `listReceivedEvents: reader.listReceivedEvents` to the query handler to
 enable `GET /v1/analytics/events` with the count route's parameters and an optional
-`limit`. Without that dependency the route returns 404. The same membership,
+`limit` and `cursor`. Count URLs remain capped at 4 KiB; list URLs permit 16 KiB
+to accommodate an at-most-8-KiB cursor. Production proxy URL limits must be
+aligned before exposing this route. Without that dependency the route returns 404. The same membership,
 no-cache, admission, and cancellation policies apply to both operations.

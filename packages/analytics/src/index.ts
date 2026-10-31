@@ -25,6 +25,7 @@ export interface EventSummary {
 }
 export interface EventListWindow extends ReceivedEventWindow {
   limit?: number;
+  cursor?: string;
 }
 function timestamp(value: string) {
   if (
@@ -126,6 +127,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     decode: (body: string) => T,
     query?: string,
     limit?: number,
+    cursor?: EventCursor,
   ): Promise<T> {
     if (signal?.aborted) throw new Error('Analytics query was not confirmed');
     if (
@@ -142,6 +144,10 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     const target = new URL(endpoint);
     if (query) target.searchParams.set('query', query);
     if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
+    if (cursor) {
+      target.searchParams.set('param_before', cursor.receivedAt);
+      target.searchParams.set('param_before_id_hex', Buffer.from(cursor.eventId).toString('hex'));
+    }
     // HTTP String parameters use ClickHouse's escaped format. Hex binds exact
     // project bytes, including literal backslashes and control characters.
     target.searchParams.set('param_project_hex', Buffer.from(window.projectId).toString('hex'));
@@ -194,11 +200,21 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     async listReceivedEvents(
       window: EventListWindow,
       signal?: AbortSignal,
-    ): Promise<{ events: EventSummary[]; hasMore: boolean }> {
+    ): Promise<{ events: EventSummary[]; hasMore: boolean; nextCursor?: string }> {
       const limit = window.limit ?? 50;
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
         throw new RangeError('Event list limit must be between 1 and 100');
-      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
+      const cursor = window.cursor === undefined ? undefined : decodeEventCursor(window.cursor);
+      if (cursor) {
+        const position = timestamp(cursor.receivedAt);
+        if (position < timestamp(window.from) || position >= timestamp(window.to))
+          throw new RangeError('Event cursor is outside the requested window');
+        cursor.receivedAt = new Date(position).toISOString();
+      }
+      const cursorFilter = cursor
+        ? " AND (received_at, event_id) < (parseDateTime64BestEffort({before:String}, 3, 'UTC'), unhex({before_id_hex:String}))"
+        : '';
+      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
       return execute(
         window,
         signal,
@@ -220,6 +236,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
                 (key) =>
                   typeof row[key] === 'string' &&
                   /\S/.test(row[key]!) &&
+                  Buffer.from(row[key]!).toString('utf8') === row[key] &&
                   Buffer.byteLength(row[key]!) <= 4096,
               ) ||
               typeof row.sequence !== 'string' ||
@@ -234,19 +251,26 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
               throw new Error('Invalid event row');
             ids.add(row.eventId!);
           }
-          const events = rows
-            .slice(0, limit)
-            .map((row) => ({
-              eventId: row.eventId!,
-              eventName: row.eventName!,
-              sessionId: row.sessionId!,
-              sequence: row.sequence!,
-              receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
-            }));
-          return { events, hasMore: rows.length > limit };
+          const events = rows.slice(0, limit).map((row) => ({
+            eventId: row.eventId!,
+            eventName: row.eventName!,
+            sessionId: row.sessionId!,
+            sequence: row.sequence!,
+            receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
+          }));
+          const hasMore = rows.length > limit;
+          const last = events.at(-1);
+          const nextCursor =
+            hasMore && last
+              ? encodeEventCursor({ receivedAt: last.receivedAt, eventId: last.eventId })
+              : undefined;
+          if (nextCursor && nextCursor.length > 8192)
+            throw new Error('Event cursor exceeded its bound');
+          return { events, hasMore, ...(nextCursor ? { nextCursor } : {}) };
         },
         query,
         limit + 1,
+        cursor,
       );
     },
     countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
@@ -267,3 +291,4 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     },
   };
 }
+import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';

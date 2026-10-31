@@ -253,3 +253,19 @@ it.each(['0', '101', '1.5', '', '1&limit=2'])(
     expect(list).not.toHaveBeenCalled();
   },
 );
+
+it('forwards a listing cursor only after membership authorization', async () => {
+  const list = vi.fn(async () => ({ events: [], hasMore: false }));
+  const handler = createAnalyticsQueryHandler({
+    resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'canonical' }),
+    countReceivedEvents: async () => ({ count: '0' }),
+    listReceivedEvents: list,
+  });
+  expect(
+    (await handler(new Request(url.replace('/count?', '/events?') + '&cursor=position'))).status,
+  ).toBe(200);
+  expect(list).toHaveBeenCalledWith(
+    expect.objectContaining({ projectId: 'canonical', cursor: 'position' }),
+    expect.any(AbortSignal),
+  );
+});

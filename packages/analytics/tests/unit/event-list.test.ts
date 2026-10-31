@@ -55,6 +55,7 @@ it.each([
   JSON.stringify({ ...row, sequence: 1 }),
   JSON.stringify({ ...row, sequence: '18446744073709551616' }),
   JSON.stringify({ ...row, eventName: '' }),
+  JSON.stringify({ ...row, eventId: '\ud800' }),
   JSON.stringify({ ...row, receivedAtMs: 'NaN' }),
   JSON.stringify(row) + '\n' + JSON.stringify(row),
   JSON.stringify(row) + '\nprivate SQL failure',
@@ -69,4 +70,53 @@ it.each([
   await expect(reader.listReceivedEvents(window)).rejects.toThrow(
     'Analytics query was not confirmed',
   );
+});
+
+it('uses the last returned row as a keyset cursor without exposing the extra row', async () => {
+  const rows = [row, { ...row, eventId: 'event-a' }];
+  const send = vi.fn<typeof fetch>(
+    async () => new Response(rows.map((value) => JSON.stringify(value)).join('\n')),
+  );
+  const reader = createAnalyticsReader({
+    endpoint: 'http://clickhouse:8123',
+    username: 'reader',
+    password: 'fixture',
+    fetch: send,
+  });
+  const first = await reader.listReceivedEvents({ ...window, limit: 1 });
+  expect(first.events.map((event) => event.eventId)).toEqual(['event-z']);
+  expect(first.hasMore).toBe(true);
+  expect(first.nextCursor).toEqual(expect.any(String));
+  await reader.listReceivedEvents({ ...window, limit: 1, cursor: first.nextCursor! });
+  const target = new URL(String(send.mock.calls[1]?.[0]));
+  expect(target.searchParams.get('query')).toContain('(received_at, event_id) <');
+  expect(target.searchParams.get('param_before')).toBe('2026-10-01T00:00:00.000Z');
+  expect(Buffer.from(target.searchParams.get('param_before_id_hex')!, 'hex').toString()).toBe(
+    'event-z',
+  );
+});
+
+it.each([
+  '',
+  'not+base64',
+  'x'.repeat(8193),
+  ...[
+    null,
+    { receivedAt: 'invalid', eventId: 'a' },
+    { receivedAt: '2026-09-01T00:00:00Z', eventId: 'a' },
+    { receivedAt: '2026-10-02T00:00:00Z', eventId: 'a' },
+    { receivedAt: window.from, eventId: '' },
+    { receivedAt: window.from, eventId: 'x'.repeat(4097) },
+    { receivedAt: window.from, eventId: 'a', sql: 'private' },
+  ].map((value) => Buffer.from(JSON.stringify(value)).toString('base64url')),
+])('rejects malformed or out-of-window cursors before storage', async (cursor) => {
+  const send = vi.fn(async () => new Response(''));
+  const reader = createAnalyticsReader({
+    endpoint: 'http://clickhouse:8123',
+    username: 'reader',
+    password: 'fixture',
+    fetch: send,
+  });
+  await expect(reader.listReceivedEvents({ ...window, cursor })).rejects.toThrow();
+  expect(send).not.toHaveBeenCalled();
 });

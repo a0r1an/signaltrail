@@ -18,7 +18,7 @@ export interface AnalyticsQueryOptions {
   listReceivedEvents?(
     window: EventListWindow,
     signal?: AbortSignal,
-  ): Promise<{ events: EventSummary[]; hasMore: boolean }>;
+  ): Promise<{ events: EventSummary[]; hasMore: boolean; nextCursor?: string }>;
   timeoutMs?: number;
   maxConcurrentRequests?: number;
 }
@@ -42,9 +42,10 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
     throw new RangeError('Invalid query admission configuration');
   let active = 0;
   return async (request: Request): Promise<Response> => {
-    if (request.url.length > 4096) return json({ error: 'URI_TOO_LONG' }, 414);
+    if (request.url.length > 16384) return json({ error: 'URI_TOO_LONG' }, 414);
     const url = new URL(request.url);
     const listing = url.pathname === '/v1/analytics/events' && !!options.listReceivedEvents;
+    if (!listing && request.url.length > 4096) return json({ error: 'URI_TOO_LONG' }, 414);
     if (!listing && url.pathname !== '/v1/analytics/count')
       return json({ error: 'NOT_FOUND' }, 404);
     if (request.method !== 'GET') {
@@ -53,10 +54,11 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
       return response;
     }
     const parameters = ['projectId', 'from', 'to'];
-    const allowed = listing ? [...parameters, 'limit'] : parameters;
+    const allowed = listing ? [...parameters, 'limit', 'cursor'] : parameters;
     if (
       [...url.searchParams.keys()].some((key) => !allowed.includes(key)) ||
       url.searchParams.getAll('limit').length > 1 ||
+      url.searchParams.getAll('cursor').length > 1 ||
       parameters.some(
         (key) =>
           url.searchParams.getAll(key).length !== 1 || !/\S/.test(url.searchParams.get(key) ?? ''),
@@ -89,6 +91,9 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
                   from: url.searchParams.get('from') ?? '',
                   to: url.searchParams.get('to') ?? '',
                   ...(rawLimit === null ? {} : { limit: Number(rawLimit) }),
+                  ...(url.searchParams.has('cursor')
+                    ? { cursor: url.searchParams.get('cursor')! }
+                    : {}),
                 },
                 controller.signal,
               ),

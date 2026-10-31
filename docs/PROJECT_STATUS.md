@@ -24,7 +24,7 @@ commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
 Autonomous development resumed on October 31. Latest verified application commit:
-`1c15314` (reader, query boundary, and storage cancellation). Work is committed locally; no push, deployment, or remote CI verification
+`775c4db` (bounded event explorer). Work is committed locally; no push, deployment, or remote CI verification
 has been performed in this continuation. Implementation and checks are
 agent-performed and do not establish independent learner mastery. Dated sections
 below preserve historical evidence; their pending-work statements apply to those
@@ -87,8 +87,10 @@ dates rather than this checkpoint.
   validation, and `FINAL` execution. Optional list routing shares membership
   authorization and admission; raw event payloads are excluded. First-page reads
   passed the real ClickHouse probe, including ties, cross-project isolation,
-  replacement before time filtering, empty results, and cleanup. Cursor paging
-  is the next independent slice.
+  replacement before time filtering, empty results, and cleanup. Bounded keyset
+  cursors now continue across timestamp ties without growing offsets. Final pages
+  omit the cursor; malformed/out-of-window cursors fail before storage. Paging
+  under concurrent writes is not a snapshot or a complete export guarantee.
 - **Server-side analytics read foundation:** `@signaltrail/analytics` counts unique
   events using a fixed parameterized `FINAL` query scoped to a trusted project ID.
   Required UTC receive-time windows are half-open and capped at 31 days. Client
@@ -185,21 +187,21 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                                     |
-| ---------------------------------------------- | ----------------------------: | ---------------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                   |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                        |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                         |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                       |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                              |
-| Analytics reader and query boundary unit tests |                            58 | Includes bounded list results, malformed rows, and list authorization/limit checks |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                      |
+| Suite                                          | Latest observed passing count | Evidence scope                                                                  |
+| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                     |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                      |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                    |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                           |
+| Analytics reader and query boundary unit tests |                            71 | Includes bounded lists, cursor validation, malformed Unicode, and authorization |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                   |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 58 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 71 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
@@ -209,6 +211,8 @@ claim that the entire workspace or remote CI ran at final HEAD.
   container/volume cleanup. Full-repository Prettier checking also passed.
   Bounded list ordering and filtering passed the expanded real-storage probe in
   `test-results/load/2026-10-31T18-57-29.203Z-analytics-read/` with final cleanup.
+  Multi-page keyset traversal across ties passed with final cleanup in
+  `test-results/load/2026-10-31T19-01-31.767Z-analytics-read/`.
   CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
@@ -244,7 +248,7 @@ The full native browser/crash-recovery pipeline passed after producer coalescing
 The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
-Next, add bounded cursor paging to the event explorer. Integrate a
+Next, add exact event-name filtering to counts and paged summaries. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by
 fixture tests; public ingestion keys must never authorize reads. Longer endurance
