@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor
-  ./scripts/signaltrail-ops.mjs browser test|install
+  ./scripts/signaltrail-ops.mjs browser test|install|size
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
@@ -57,7 +57,11 @@ try {
       pnpm('--filter', packages[action], script);
   } else if (group === 'browser' && action === 'test')
     pnpm('--filter', '@signaltrail/browser-sdk', 'test:browser');
-  else if (group === 'browser' && action === 'install')
+  else if (group === 'browser' && action === 'size') {
+    pnpm('--filter', '@signaltrail/contracts', 'build');
+    pnpm('--filter', '@signaltrail/browser-sdk', 'build');
+    tasks.push({ command: 'node', args: ['tests/benchmarks/browser-sdk-size.mjs'] });
+  } else if (group === 'browser' && action === 'install')
     pnpm('--filter', '@signaltrail/browser-sdk', 'exec', 'playwright', 'install', 'chromium');
   else if (group === 'broker' && action === 'test')
     pnpm('--filter', '@signaltrail/ingestion', 'test:integration');

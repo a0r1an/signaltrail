@@ -74,7 +74,10 @@ Entries are questions, not approvals or completed work.
   plus its source map. This is a development artifact, not a measured production
   transfer size. Measure minified gzip/Brotli size and startup cost before setting
   a public SDK size budget or deciding whether validation dependencies need to
-  change. No dependency replacement is assumed.
+  change. The initial standalone minified bundle measured 479,294 bytes
+  (100,956 gzip; 83,690 Brotli) for all public exports and nearly the same for
+  the delivery-only import. The report identifies validation modules and locale
+  code as major contributors. No dependency replacement is assumed.
 - **Kafka timeout warning:** local KafkaJS runs emit a `TimeoutNegativeWarning`.
   A local reproduction traced it to KafkaJS 2.2.4's
   `RequestQueue.scheduleCheckPendingRequests`: an empty, unthrottled queue can

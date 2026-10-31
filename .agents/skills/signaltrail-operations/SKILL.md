@@ -29,6 +29,7 @@ Preview an operation without side effects:
 | Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
 | SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
 | Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
+| Measure minified SDK transfer sizes  | `./scripts/signaltrail-ops.mjs browser size`                          |
 | Install pinned Chromium              | `./scripts/signaltrail-ops.mjs browser install`                       |
 | Real-broker integration suite        | `./scripts/signaltrail-ops.mjs broker test`                           |
 | Development broker status            | `./scripts/signaltrail-ops.mjs broker status`                         |
@@ -164,3 +165,12 @@ Idle histograms can yield no percentile values even while scraping is healthy.
 Redpanda `dev-container` mode also enables fsync bypass independently of topic
 write caching; check the effective broker command before claiming disk durability.
 Do not restart the user's development broker as part of load-test cleanup.
+
+## Browser SDK size measurement
+
+`browser size` builds contracts and the SDK, then uses the pinned tsup toolchain's
+esbuild to bundle all public exports and the delivery-only entry. It records
+minified bytes, gzip level 9, Brotli quality 11, hashes, tool versions, and the
+largest source contributors in ignored `test-results/sdk-size/<run>/report.json`.
+It does not enforce a size budget or claim browser startup performance. Do not
+run it alongside checks that rebuild the same package output directories.
