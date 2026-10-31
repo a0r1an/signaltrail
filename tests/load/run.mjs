@@ -276,7 +276,7 @@ try {
       true,
       true,
     );
-    await writeFile(resolve(directory, `${name}.json`), output);
+    await writeFile(resolve(directory, `${isSustained ? 'k6-' : ''}${name}.json`), output);
     const summary = JSON.parse(output);
     if (
       Object.values(summary.metrics).some(

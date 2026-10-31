@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { startWorkerProcess } from './worker-process.mjs';
 import { cleanupResources } from './cleanup.mjs';
+import { summarizeWorkerSamples } from './pipeline-report.mjs';
 import { measureSourceLag, verifyPipelineTotals } from './pipeline-measurements.mjs';
 
 const { Kafka, logLevel } = createRequire(
@@ -217,6 +218,12 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
             (max, entry) => (BigInt(entry.source.total) > BigInt(max) ? entry.source.total : max),
             '0',
           ),
+          traffic: {
+            durationSeconds: summary.state.testRunDurationMs / 1000,
+            iterations: summary.metrics.iterations.values.count,
+            httpDurationMs: summary.metrics.http_req_duration.values,
+          },
+          workerSummary: summarizeWorkerSamples(samples),
           maxWorkerRssBytes: Math.max(...samples.map((entry) => entry.worker.rssBytes)),
           first: samples[0],
           final,
@@ -230,6 +237,10 @@ export async function openSustainedPipeline({ runId, directory, docker, interrup
         };
         await writeFile(resolve(directory, 'sustained.json'), JSON.stringify(report, null, 2));
         verifyPipelineTotals(totals);
+        assert.ok(
+          report.workerSummary.storage?.confirmedWrites > 0,
+          'Storage latency must be observed',
+        );
         assert.equal(final.worker.stored, Number(totals.brokerRecords));
         report.passed = true;
         await writeFile(resolve(directory, 'sustained.json'), JSON.stringify(report, null, 2));
