@@ -102,3 +102,70 @@ it('does not let diagnostics turn a committed success into another processing at
   await handle({ topic: 'analytics', partition: 0, offset: '3', value: null }, async () => {});
   expect(processMessage).toHaveBeenCalledTimes(1);
 });
+
+it('keeps heartbeating while a bounded storage attempt is still pending', async () => {
+  vi.useFakeTimers();
+  let complete!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  const heartbeat = vi.fn(async () => {});
+  try {
+    const handle = createRetryingHandler({
+      signal: new AbortController().signal,
+      processMessage: async () => {
+        await pending;
+        return { status: 'stored' };
+      },
+    });
+    const processing = handle(
+      { topic: 'analytics', partition: 0, offset: '3', value: null },
+      heartbeat,
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(heartbeat.mock.calls.length).toBeGreaterThanOrEqual(4);
+    complete();
+    await processing;
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    complete();
+    vi.useRealTimers();
+  }
+});
+
+it('surfaces lost broker ownership without claiming a successful processing outcome', async () => {
+  vi.useFakeTimers();
+  let complete!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  const onProcessed = vi.fn();
+  const failure = new Error('broker session expired');
+  const processMessage = vi.fn(async () => {
+    await pending;
+    return { status: 'stored' as const };
+  });
+  try {
+    const handle = createRetryingHandler({
+      signal: new AbortController().signal,
+      processMessage,
+      onProcessed,
+    });
+    const processing = handle(
+      { topic: 'analytics', partition: 0, offset: '3', value: null },
+      async () => {
+        throw failure;
+      },
+    );
+    const rejected = expect(processing).rejects.toBe(failure);
+    await vi.advanceTimersByTimeAsync(1000);
+    complete();
+    await rejected;
+    expect(onProcessed).not.toHaveBeenCalled();
+    expect(processMessage).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    complete();
+    vi.useRealTimers();
+  }
+});

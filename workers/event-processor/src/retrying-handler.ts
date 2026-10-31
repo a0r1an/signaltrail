@@ -30,11 +30,37 @@ function sleep(ms: number, signal: AbortSignal): Promise<boolean> {
 export function createRetryingHandler(options: RetryOptions) {
   options = { ...options };
   return async (message: BrokerMessage, heartbeat: () => Promise<void>) => {
+    async function attempt() {
+      const pulses = new AbortController();
+      let heartbeatFailed = false;
+      let heartbeatFailure: unknown;
+      const pulsing = (async () => {
+        while (await sleep(1000, pulses.signal)) {
+          if (options.signal.aborted) return;
+          try {
+            await heartbeat();
+          } catch (error) {
+            heartbeatFailed = true;
+            heartbeatFailure = error;
+            return;
+          }
+        }
+      })();
+      let result: Awaited<ReturnType<ProcessMessage>>;
+      try {
+        result = await options.processMessage(message);
+      } finally {
+        pulses.abort();
+        await pulsing;
+      }
+      if (heartbeatFailed) throw heartbeatFailure;
+      return result;
+    }
     let retryMs = 1000;
     while (!options.signal.aborted) {
       let result: Awaited<ReturnType<ProcessMessage>>;
       try {
-        result = await options.processMessage(message);
+        result = await attempt();
       } catch {
         if (options.signal.aborted) return;
         observe(() => options.onRetry?.());
