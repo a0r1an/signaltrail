@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-22
+Last updated: 2026-10-30
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -12,7 +12,154 @@ Next.js dashboard and demo store on Vercel; TypeScript browser SDK; Node.js
 ingestion/query APIs; PostgreSQL metadata; ClickHouse analytics; Redpanda event
 transport; Valkey caching/rate limits; Amazon S3 replay object storage
 (replacing the originally planned MinIO); Docker local stack.
-Load and peak-traffic testing follow working ingestion and processing.
+Short isolated load and recovery tests now exercise ingestion and processing.
+Sustained capacity, production sizing, and disaster recovery remain unverified.
+
+## Current checkpoint — 2026-10-30
+
+The analytics path now works through the low-level browser SDK, HTTP ingestion,
+Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
+outage recovery, worker crash/restart, downstream deduplication, and dead-letter
+commits have local integration evidence. This is not a deployed product or a
+verified production availability guarantee.
+
+Work is stopped at the user's request. Final application commit: `2556e72`.
+All application work is committed locally; no push, deployment, or remote CI
+verification was performed during the autonomous continuation. Implementation and
+checks were agent-performed; they do not establish new independent learner mastery.
+The dated sections
+below preserve historical observations; statements such as “not implemented” in
+those sections describe that date, not this checkpoint.
+
+### Completed since the October 22 checkpoint
+
+- **Ingestion admission and recovery:** publisher work is bounded by outstanding
+  event count and serialized bytes, including sends still pending after an HTTP
+  deadline. Defaults are 1,000 events and 8 MiB, pending workload measurements.
+  Saturation returns retry outcomes. Acceptance still requires Redpanda's
+  acknowledgement; ingestion does not consult ClickHouse or deduplicate events.
+  Isolated broker interruption tests verify stable SDK IDs, retained events,
+  late acknowledgements, exhausted publication retries, and recovery.
+- **SDK health and monitoring:** opt-in sampled health reports, ingestion and
+  broker metrics, Grafana Alloy configuration, and a service-health dashboard
+  exist. Grafana Cloud ingestion/broker scrape visibility was demonstrated in
+  the October 23 session. Worker metrics are optional and loopback-only; live
+  Alloy scraping of the worker and alert delivery are not configured.
+- **Runnable analytics worker:** shared validated broker records carry trusted
+  project identity. The worker validates each record, sends malformed data to a
+  dead-letter topic, writes valid events to ClickHouse, then commits source
+  offsets only after the required acknowledgements. It keeps heartbeats alive,
+  retries with bounded backoff, has startup/shutdown deadlines, and stops further
+  sink writes for shutdown or stale partition batches. Storage failures retain
+  work for replay rather than silently dropping schema-valid events.
+- **Bounded storage batches:** partition chunks contain at most 100 records or
+  1 MiB of source payload; serialized ClickHouse inserts have a 4 MiB cap.
+  A single oversized source record uses the bounded dead-letter path. Real
+  integration tests stored 205 events in inserts of 100, 100, and 5. A gzip
+  record batch expanded into 20 events and was split into chunks of 16 and 4,
+  each below 1 MiB. Limits are provisional, not production capacity claims.
+- **Downstream uniqueness:** the initial ClickHouse migration uses
+  `ReplacingMergeTree(received_at)` ordered by `(project_id, event_id)`.
+  Tests use `FINAL` for unique reads across retries and isolated projects.
+  They verify recovery after both a pre-storage crash and a stored insert whose
+  acknowledgement never reached the worker. Background merges alone do not
+  guarantee unique reads. No analytics query API is implemented.
+- **Native browser recovery:** a real Chromium SDK page queues offline in
+  IndexedDB, closes, reopens during a broker outage, retains the original ID on
+  retry, and drains into one logical ClickHouse row after recovery. This covers
+  one browser context, not browser-process restart, eviction, or host loss.
+- **SDK performance and storage lifecycle:** atomic bulk IndexedDB reads reduce
+  queue scan overhead; initialization has a five-second bound, blocked opens
+  fall back to memory, and connections cooperate with future database upgrades.
+  Queue defaults remain unchanged. Standalone bundle measurements and native
+  queue benchmarks have standard runner commands and CI artifact steps.
+  Tree-shakable Zod imports reduced the recorded pinned-bundler gzip measurement
+  from about 101 kB to 37 kB. Local queue measurements and limitations are in
+  [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md); neither establishes a public SDK budget.
+- **Operations and CI:** `scripts/signaltrail-ops.mjs` and the repository-local
+  `signaltrail-operations` skill standardize checks, browser/broker tests,
+  isolated load scenarios, and monitoring operations. Load runs lock their
+  isolated infrastructure, bound cleanup, and record success only after teardown.
+  CI is configured for browser tests, measurements, real-broker integration,
+  saturation, SDK recovery, and the browser-to-storage pipeline. Configuration
+  is committed; successful remote execution of these latest changes is unverified.
+
+### Remaining product and production work
+
+- Public SDK `init`/`track`/`identify`, visitor/session identity lifecycle, and
+  runtime validation/error reporting for JavaScript capture callers. Existing
+  low-level delivery APIs accept complete events; do not present them as a
+  finished drop-in analytics SDK.
+- Production project-key resolution, metadata persistence and authorization;
+  ingestion currently uses the development resolver and refuses production mode.
+- Analytics query APIs and dashboard data integration with consistent unique
+  reads; ClickHouse retention and conflict/query-cost decisions.
+- Session replay capture, replay worker/object integration, and playback. S3 and
+  restricted human development access are established; that is not an implemented
+  replay pipeline or unattended worker identity.
+- Off-server analytics archives, archive-lag ingestion gating, database backups,
+  replacement-host restoration, and measured four-hour RTO/best-effort one-hour
+  RPO. These remain planned, not demonstrated by local process recovery tests.
+- VPS selection, production credentials and supervision, sustained/endurance load
+  tests, consumer-lag visibility, alert routing, and production capacity sizing.
+  See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) before making unresolved decisions.
+
+## Latest verification evidence — 2026-10-30
+
+Counts below are the latest observed results from separate package runs, not a
+claim that the entire workspace or remote CI ran at final HEAD.
+
+| Suite                      | Latest observed passing count | Evidence scope                                                   |
+| -------------------------- | ----------------------------: | ---------------------------------------------------------------- |
+| Contracts                  |                            72 | Prior autonomous package checks; unchanged by final worker fixes |
+| Ingestion                  |                            46 | Prior autonomous package checks; unchanged by final worker fixes |
+| Browser SDK unit tests     |                           252 | Includes IndexedDB lifecycle/fallback work                       |
+| Chromium browser tests     |                            13 | Includes native database upgrade cooperation                     |
+| Event processor unit tests |                           101 | Final `check processor` passed at `2556e72` source state         |
+| Load harness unit tests    |                            12 | Cleanup, locking, and result finalization                        |
+
+- The final processor checks passed lint, tests, typecheck, and JavaScript/type
+  declaration builds. Formatting and `git diff --check` passed for changed files.
+- Native full-pipeline recovery passed in
+  `test-results/load/2026-10-31T02-53-21.091Z-browser-pipeline/`.
+- The latest isolated pipeline passed in
+  `test-results/load/2026-10-31T03-01-11.073Z-pipeline/`, including count/byte
+  chunking, real HTTP worker metrics, and both crash/replay windows. Its result
+  was finalized after isolated containers and volumes were removed.
+- These UTC artifact names fall on October 30 in the project's local timezone.
+  Local artifacts are ignored by Git; committed probe assertions are the durable
+  regression coverage. The final stale-batch ownership guard was added afterward
+  and verified by an intended failing unit test followed by the 101-test package
+  check; the full pipeline was not rerun after that guard.
+- Short local load tests and benchmarks do not establish production throughput,
+  VPS sizing, browser eviction resilience, or host/disk disaster recovery.
+- Strict TypeScript settings remain enabled. Branch protection and remote CI for
+  the latest commits remain unverified. No production deployment was performed.
+
+## Exact next step
+
+At the next session, propose scope and ask for approval before starting new
+implementation. The autonomous work period ended at the user's request. Do not
+repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
+ClickHouse consumption, batch inserts, or the existing recovery probes.
+
+Recommended next scope: build repeatable sustained end-to-end load measurements
+for the batched worker, recording source lag, storage latency, retries, chunk
+sizes, CPU, and memory before tuning limits or concurrency. Keep this isolated
+from the user's development services and distinguish overload/recovery correctness
+from throughput and production sizing. Compressed fetches are decoded by KafkaJS
+before chunking; the application byte cap is not a whole-process memory bound.
+
+Then agree on the next product slice: public SDK capture/identity semantics or
+analytics query/dashboard integration. Resolve the corresponding open decisions
+before implementation. Production authentication, off-server archives and lag
+rejection, backups/restore drills, and replay remain separate required milestones.
+S3 is selected; do not restart the provider comparison. Inspect remote CI only
+after an authorized push. No Senior workspace documentation was edited.
+
+## Historical session record
+
+The dated notes below retain the evidence and coaching context from each session.
 
 ## Previously documented completed setup
 
@@ -401,7 +548,7 @@ source and generated exports, without running application checks.
 - At close, index.ts is modified and both response source/test files are untracked.
   No commit or push performed by the coach. Senior workspace documents not edited.
 
-## Important decisions and current limits
+## Decisions and limits recorded before October 20 (historical)
 
 - Only schema version `1` is supported (`z.literal(1)`).
 - `eventId` must be a string containing a non-whitespace character. Its value is
@@ -564,48 +711,6 @@ and verified the changes directly. Documentation was updated at the user's reque
   broker request; evaluate this after establishing a measured baseline.
 - Downstream deduplication, ClickHouse processing, archive-lag admission control,
   production project resolution, and recovery guarantees remain unimplemented.
-
-## Test and build status
-
-- Agent-run under Node 24: **330 unit tests passed** — 235 browser SDK, 57 contracts,
-  and 38 ingestion tests. **Four real Redpanda integration tests** and **nine
-  Chromium browser tests** passed.
-- Contracts, ingestion, and browser SDK JavaScript/declaration builds passed.
-  Relevant package lint/typechecks, repository formatting, shell syntax, Compose
-  configuration, and `git diff --check` passed. Whole-workspace lint/typecheck
-  passed earlier in the session, before the final publisher additions; ingestion
-  lint/typecheck was rerun for those additions.
-- Browser checks exercise actual IndexedDB and HTTP integration. They do not prove
-  persistence under browser eviction or host failure. Broker checks do not yet
-  establish behavior during mid-publication connection loss.
-- CI jobs are configured; a remote CI run for today's final changes was not
-  independently verified. No deployment or load test was performed.
-- Strict TypeScript settings include `strict`, `noUncheckedIndexedAccess`, and
-  `exactOptionalPropertyTypes`. Branch-protection enforcement remains unverified.
-
-## Exact next step
-
-Next session: propose the day's scope and resolve necessary design questions,
-then wait for approval before implementation. Do not repeat completed SDK delivery,
-HTTP ingestion, browser harness, or Redpanda topic setup.
-
-1. Agree on bounded publisher admission by outstanding event count and serialized
-   bytes, including how saturation maps to existing retry outcomes. Write tests
-   proving concurrent requests cannot exceed capacity and timed-out sends retain
-   their reservation until the underlying operation settles.
-2. Add broker-interruption and recovery tests using isolated infrastructure or
-   controlled network faults; preserve the user's running development broker.
-   Verify deadlines, no false acceptance, retained original event IDs, and shutdown.
-3. Measure throughput and queue growth before tuning producer batching/concurrency.
-   Follow with downstream event-ID deduplication and ClickHouse consumption as a
-   separately approved slice; preserve the minimal ingestion responsibility.
-4. Inspect remote CI after the user pushes. Production authentication, monitoring,
-   archive-lag gating, and a timed restore exercise remain later milestones.
-
-Plan the recovery bucket and PostgreSQL/ClickHouse backup and event-archive
-strategy separately. S3 is selected; do not restart the provider comparison.
-Production RTO/RPO targets remain unverified. No documentation outside this
-SignalTrail status file was updated.
 
 ## Preparation continuity
 

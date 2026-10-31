@@ -135,8 +135,9 @@ Entries are questions, not approvals or completed work.
   ClickHouse after broker recovery with the original ID and one logical row.
   This covers one browser context, not browser-process restart, eviction, or
   host/disk disaster recovery.
-- The project status document predates the October 23 monitoring and telemetry
-  work. Inspect committed code and test evidence before repeating listed tasks.
+- The project status document now includes the October 30 checkpoint and
+  distinguishes current verification from dated session history. Inspect the
+  current checkout and recorded evidence before repeating completed tasks.
 
 New unknowns discovered during work should include the impact, current default,
 and the point at which an answer becomes necessary.
