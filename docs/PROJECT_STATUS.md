@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -15,7 +15,7 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-10-30
+## Current checkpoint — 2026-10-31
 
 The analytics path now works through the low-level browser SDK, HTTP ingestion,
 Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
@@ -23,13 +23,48 @@ outage recovery, worker crash/restart, downstream deduplication, and dead-letter
 commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
-Work is stopped at the user's request. Final application commit: `2556e72`.
-All application work is committed locally; no push, deployment, or remote CI
-verification was performed during the autonomous continuation. Implementation and
-checks were agent-performed; they do not establish new independent learner mastery.
-The dated sections
-below preserve historical observations; statements such as “not implemented” in
-those sections describe that date, not this checkpoint.
+Autonomous development resumed on October 31. Latest verified application commit:
+`3d1e504`. Work is committed locally; no push, deployment, or remote CI verification
+has been performed in this continuation. Implementation and checks are
+agent-performed and do not establish independent learner mastery. Dated sections
+below preserve historical evidence; their pending-work statements apply to those
+dates rather than this checkpoint.
+
+### October 31 — sustained measurement and producer improvement
+
+- Added fixed sustained profiles and a short CI smoke profile using the runnable
+  worker. The harness samples exact source lag, worker CPU/memory and latency,
+  and isolated-container resources. It reconciles k6 outcomes with broker offsets,
+  unique `FINAL` rows, and dead letters after traffic stops, then verifies cleanup.
+- Baseline at nominal 200 events/s for 60 seconds passed: 12,020 accepted events,
+  12,020 unique rows, no retries or drops, and zero remaining lag/dead letters.
+- The initial 1,000-events/s profile failed its offered-load target: 43 retries
+  and 38 generator drops. All 59,197 accepted events still reached unique rows.
+  Publisher admission reached its 1,000-event cap while worker lag stayed small.
+- Coalesced same-turn admitted publications into producer requests bounded by
+  100 records and an approximate 256 KiB grouping budget. Each event remains a
+  separate broker record with its trusted tenant/session key and original ID.
+  No linger timer or larger admission/concurrency limit was introduced. A larger
+  individual admitted record travels alone. Tests preserve acknowledgement,
+  cancellation reservations, shutdown drain, and tenant metadata.
+- The same 1,000-events/s profile passed after coalescing: 60,020 accepted events
+  became 60,020 unique rows, with no retries, drops, remaining lag, or dead letters.
+  Peak admitted work fell to 80; observed HTTP p95 fell from about 914 ms to 8.21 ms.
+  This is one local comparison, not production sizing or a maximum capacity claim.
+- Added standard worker process metrics and separate ClickHouse acknowledgement
+  latency, keeping diagnostics unable to alter delivery. Real broker interruption
+  and exhausted-retry recovery passed after producer coalescing.
+- A 60-second, 200-events/s storage-outage profile passed: ClickHouse was paused
+  for ten seconds while all 12,000 events remained accepted. Source backlog
+  peaked at 1,980, the worker recorded a real failed write/retry, and all events
+  reached unique rows with zero final lag or dead letters after resume.
+- The initial load generator tied sessions to active VUs, confounding partition
+  mix across latency changes. Sustained profiles now use a fixed 100-session
+  pool, independent of VU scheduling; fresh workload verification is in progress.
+- Detailed measurements, artifact paths, report limitations, and unchanged limits
+  are in [the performance report](performance/2026-10-31-analytics-pipeline.md).
+  The initial baseline's raw k6 summary was overwritten by a filename collision;
+  later runs preserve generator and pipeline reports separately.
 
 ### Completed since the October 22 checkpoint
 
@@ -104,7 +139,7 @@ those sections describe that date, not this checkpoint.
   tests, consumer-lag visibility, alert routing, and production capacity sizing.
   See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) before making unresolved decisions.
 
-## Latest verification evidence — 2026-10-30
+## Latest verification evidence — 2026-10-31
 
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
@@ -112,11 +147,11 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Suite                      | Latest observed passing count | Evidence scope                                                   |
 | -------------------------- | ----------------------------: | ---------------------------------------------------------------- |
 | Contracts                  |                            72 | Prior autonomous package checks; unchanged by final worker fixes |
-| Ingestion                  |                            46 | Prior autonomous package checks; unchanged by final worker fixes |
+| Ingestion                  |                            55 | October 31 coalescing and cancellation checks                    |
 | Browser SDK unit tests     |                           252 | Includes IndexedDB lifecycle/fallback work                       |
 | Chromium browser tests     |                            13 | Includes native database upgrade cooperation                     |
-| Event processor unit tests |                           101 | Final `check processor` passed at `2556e72` source state         |
-| Load harness unit tests    |                            12 | Cleanup, locking, and result finalization                        |
+| Event processor unit tests |                           105 | October 31 process and storage-latency metrics checks            |
+| Load harness unit tests    |                            25 | Includes measurements, reports, and safe storage interruption    |
 
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
@@ -126,11 +161,15 @@ claim that the entire workspace or remote CI ran at final HEAD.
   `test-results/load/2026-10-31T03-01-11.073Z-pipeline/`, including count/byte
   chunking, real HTTP worker metrics, and both crash/replay windows. Its result
   was finalized after isolated containers and volumes were removed.
-- These UTC artifact names fall on October 30 in the project's local timezone.
-  Local artifacts are ignored by Git; committed probe assertions are the durable
-  regression coverage. The final stale-batch ownership guard was added afterward
-  and verified by an intended failing unit test followed by the 101-test package
-  check; the full pipeline was not rerun after that guard.
+- The October 31 full native-browser pipeline passed after the stale-batch guard,
+  resource/latency instrumentation, and producer coalescing:
+  `test-results/load/2026-10-31T15-35-08.189Z-browser-pipeline/`.
+  This includes offline IndexedDB retention, broker retry, both worker crash
+  windows, dedupe, compressed/count chunking, and final resource cleanup.
+- The October 30 UTC artifact names above fall on October 30 in the project's
+  local timezone. Local artifacts are ignored by Git; committed probe assertions
+  are the durable regression coverage. October 31 load evidence and limitations
+  are recorded in the linked performance report.
 - Short local load tests and benchmarks do not establish production throughput,
   VPS sizing, browser eviction resilience, or host/disk disaster recovery.
 - Strict TypeScript settings remain enabled. Branch protection and remote CI for
@@ -144,9 +183,11 @@ decisions in `OPEN_QUESTIONS.md` and continue independent work. Do not
 repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
 ClickHouse consumption, batch inserts, or the existing recovery probes.
 
-Recommended next scope: build repeatable sustained end-to-end load measurements
-for the batched worker, recording source lag, storage latency, retries, chunk
-sizes, CPU, and memory before tuning limits or concurrency. Keep this isolated
+The full native browser/crash-recovery pipeline passed after producer coalescing.
+Finish fresh verification of fixed-session sustained profiles, then extend
+payload diversity and endurance. A short sustained ClickHouse outage is already
+verified; do not repeat it as if no failure-under-load coverage exists. The basic sustained measurement
+harness and one measured producer improvement are complete. Keep this isolated
 from the user's development services and distinguish overload/recovery correctness
 from throughput and production sizing. Compressed fetches are decoded by KafkaJS
 before chunking; the application byte cap is not a whole-process memory bound.
