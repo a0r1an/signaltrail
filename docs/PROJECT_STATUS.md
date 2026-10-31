@@ -138,8 +138,9 @@ claim that the entire workspace or remote CI ran at final HEAD.
 
 ## Exact next step
 
-At the next session, propose scope and ask for approval before starting new
-implementation. The autonomous work period ended at the user's request. Do not
+On a request to continue, resume autonomously under `AGENTS.md`; daily scope
+approval and teaching checkpoints are no longer required. Record unanswered
+decisions in `OPEN_QUESTIONS.md` and continue independent work. Do not
 repeat publisher admission, SDK delivery setup, broker-outage recovery, initial
 ClickHouse consumption, batch inserts, or the existing recovery probes.
 
@@ -150,9 +151,10 @@ from the user's development services and distinguish overload/recovery correctne
 from throughput and production sizing. Compressed fetches are decoded by KafkaJS
 before chunking; the application byte cap is not a whole-process memory bound.
 
-Then agree on the next product slice: public SDK capture/identity semantics or
-analytics query/dashboard integration. Resolve the corresponding open decisions
-before implementation. Production authentication, off-server archives and lag
+Then progress toward the next product slice: public SDK capture/identity semantics
+or analytics query/dashboard integration. Record unresolved decisions and use
+reversible defaults where appropriate; defer work that requires an irreversible
+commitment until it is authorized. Production authentication, off-server archives and lag
 rejection, backups/restore drills, and replay remain separate required milestones.
 S3 is selected; do not restart the provider comparison. Inspect remote CI only
 after an authorized push. No Senior workspace documentation was edited.
