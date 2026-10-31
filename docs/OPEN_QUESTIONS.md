@@ -20,6 +20,13 @@ Entries are questions, not approvals or completed work.
   JavaScript callers are not implemented. Decide those semantics before presenting
   the SDK as a drop-in analytics integration. Keep the low-level APIs stable during
   infrastructure verification.
+- **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
+  Invalid messages within the cap retain original bytes as base64 in DLQ records;
+  oversized messages retain only source coordinates, byte count, and SHA-256.
+  Choose production DLQ retention, access restrictions, and oversized-payload
+  retrieval before enabling it. Raw dead-letter bytes can contain customer data
+  and must never be copied into general logs. The processor core is not yet a
+  running consumer or a ClickHouse storage implementation.
 - **Alert delivery:** Grafana Cloud metrics are configured, but alert recipients,
   notification channels, and production availability objectives are undecided.
   Do not send notifications or create external integrations without instruction.

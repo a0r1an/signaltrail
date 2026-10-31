@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
-  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk
+  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor
   ./scripts/signaltrail-ops.mjs browser test|install
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery
@@ -42,6 +42,7 @@ const packages = {
   contracts: '@signaltrail/contracts',
   ingestion: '@signaltrail/ingestion',
   sdk: '@signaltrail/browser-sdk',
+  processor: '@signaltrail/event-processor',
 };
 function invalid() {
   throw new Error(`Unknown operation.\n${help}`);
