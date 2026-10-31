@@ -32,6 +32,8 @@ Preview an operation without side effects:
 | Real-broker integration suite        | `./scripts/signaltrail-ops.mjs broker test`                           |
 | Development broker status            | `./scripts/signaltrail-ops.mjs broker status`                         |
 | Development broker public metrics    | `./scripts/signaltrail-ops.mjs broker metrics`                        |
+| Load-harness unit checks             | `./scripts/signaltrail-ops.mjs load check`                            |
+| Isolated broker outage and SDK retry | `./scripts/signaltrail-ops.mjs load recovery`                         |
 | Baseline / burst and recovery        | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
 | Count / byte budget saturation       | `./scripts/signaltrail-ops.mjs load saturation` / `load bytes`        |
 | Validate Compose files               | `./scripts/signaltrail-ops.mjs compose validate`                      |
@@ -52,11 +54,15 @@ has previously appended guidance to `AGENTS.md` as an unsolicited side effect.
 Use the runner instead of recreating shell strings with absolute Node paths,
 pipes, environment assignments, or ad hoc Docker commands. Keep approved command
 prefixes stable. A skill supplies instructions; it does not grant sandbox access.
-Reuse existing approvals and current user authorization. If execution is denied
+Reuse existing approvals and current user authorization. Keep edits and unrelated
+commands separate from approved runner invocations: a compound command may not
+match the saved rule. When Docker or listeners require escalation, invoke the
+same runner command with the execution tool's escalation option; a saved prefix
+does not make a sandboxed invocation gain Docker access automatically. If execution is denied
 by the sandbox, retry the same operation through the tool's escalation mechanism.
 When requesting a reusable prefix, scope it to the operation, for example:
 
-- `['./scripts/signaltrail-ops.mjs', 'load']` for the four allowlisted scenarios.
+- `['./scripts/signaltrail-ops.mjs', 'load']` for the allowlisted load scenarios and harness checks.
 - `['./scripts/signaltrail-ops.mjs', 'browser', 'test']` for browser checks.
 - `['./scripts/signaltrail-ops.mjs', 'monitoring', 'delivery']` for filtered metrics.
 
@@ -68,14 +74,29 @@ handle them in their actual task scope rather than adding arbitrary passthrough.
 
 `tests/load/run.mjs` owns the isolated `signaltrail-load` Compose project, broker
 port 29092, broker metrics port 29644, and ingestion metrics port 9465. Run one
-load scenario at a time. Its cleanup removes only its temporary project volumes;
+load scenario at a time. The harness acquires `test-results/load.lock` before
+changing infrastructure; a second run must fail rather than tear down another
+run's broker. A lock left after a killed process or failed Docker teardown is
+intentional. Check its PID/creation time and the isolated Compose project before
+removing it; do not blindly delete locks or reuse uncertain broker state.
+Its cleanup removes only its temporary project volumes;
 never substitute the normal application's Compose project or volume names.
 
 Results go to ignored `test-results/load/<run>/`. Inspect `result.json`, k6 stage
 summaries, and samples. HTTP 200 is insufficient: inspect per-event accepted,
 retry, and rejected outcomes, and k6 dropped iterations. Keep failed runs as
-failed evidence. Short local runs verify overload handling, not production VPS
-capacity, endurance, broker interruption, or complete SDK retry behavior.
+failed evidence. Final success is written only after cleanup; an `incomplete`
+result with `passed: false` is not a successful run. Short local k6 scenarios
+verify overload handling, not production VPS capacity or endurance.
+
+`load recovery` pauses only the isolated broker twice: first to exercise HTTP
+publication deadlines and late acknowledgement, then long enough to exhaust
+Kafka publication retries. It verifies SDK retention, stable event IDs, capacity
+refusals, recovery, and actual broker records. It deliberately permits duplicate
+records; downstream dedupe is still required. This scenario uses the SDK's Node
+memory fallback. Chromium tests separately cover native IndexedDB persistence,
+offline retry, multi-tab leases, beacons, and expiry; neither suite proves host
+or disk disaster recovery.
 
 The harness advertises temporary scrape targets in
 `test-results/load-targets.json`; Alloy collects them while they exist and they

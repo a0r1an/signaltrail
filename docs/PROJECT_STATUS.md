@@ -2,6 +2,8 @@
 
 Last updated: 2026-10-22
 
+Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+
 ## Goal and architecture
 
 Build a product analytics and privacy-conscious session-replay platform while
