@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { ConsumerRunConfig, EachMessagePayload } from 'kafkajs';
+import type { ConsumerRunConfig, EachMessagePayload, EachBatchPayload } from 'kafkajs';
 import { createRedpandaEventConsumer } from '../../src/redpanda-consumer.ts';
 import { record } from '../fixtures.ts';
 
@@ -274,5 +274,134 @@ it('isolates asynchronous diagnostic rejections after retry and committed comple
   } finally {
     await worker.close();
     vi.useRealTimers();
+  }
+});
+
+it('uses bounded partition batches and keeps all offsets pending until the batch insert acknowledges', async () => {
+  let acknowledge!: () => void;
+  const writeEvents = vi.fn<(records: readonly unknown[]) => Promise<void>>(
+    () =>
+      new Promise((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-batch-test',
+    writeEvent: async () => {},
+    writeEvents,
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    expect(config.eachBatch).toBeTypeOf('function');
+    expect(config.eachBatchAutoResolve).toBe(false);
+    const input = payload();
+    const batch = {
+      batch: {
+        topic: input.topic,
+        partition: input.partition,
+        messages: [input.message, { ...input.message, offset: '4' }],
+      },
+      heartbeat: input.heartbeat,
+      isRunning: () => true,
+      isStale: () => false,
+      resolveOffset: vi.fn(),
+    } as unknown as EachBatchPayload;
+    const pending = config.eachBatch!(batch);
+    await vi.waitFor(() => expect(writeEvents).toHaveBeenCalledTimes(1));
+    expect(writeEvents.mock.calls[0]![0]).toHaveLength(2);
+    expect(clients.consumer.commitOffsets).not.toHaveBeenCalled();
+    acknowledge();
+    await pending;
+    expect(clients.consumer.commitOffsets).toHaveBeenCalledWith([
+      { topic: 'analytics', partition: 0, offset: '5' },
+    ]);
+    expect(worker.snapshot().stored).toBe(2);
+  } finally {
+    await worker.close();
+  }
+});
+
+it('does not commit a batch whose ownership expires while storage is pending', async () => {
+  let stale = false;
+  let acknowledge!: () => void;
+  const writeEvents = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-stale-test',
+    writeEvent: async () => {},
+    writeEvents,
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    const input = payload();
+    const batch = {
+      batch: { topic: input.topic, partition: input.partition, messages: [input.message] },
+      heartbeat: input.heartbeat,
+      isRunning: () => true,
+      isStale: () => stale,
+      resolveOffset: vi.fn(),
+    } as unknown as EachBatchPayload;
+    const pending = config.eachBatch!(batch);
+    await vi.waitFor(() => expect(writeEvents).toHaveBeenCalledTimes(1));
+    stale = true;
+    acknowledge();
+    await pending;
+    expect(clients.consumer.commitOffsets).not.toHaveBeenCalled();
+    expect(batch.resolveOffset).not.toHaveBeenCalled();
+    expect(worker.snapshot().stored).toBe(0);
+  } finally {
+    await worker.close();
+  }
+});
+
+it('splits fetched partitions into chunks of at most 100 events', async () => {
+  const writeEvents = vi.fn<(records: readonly unknown[]) => Promise<void>>(async () => {});
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-chunk-test',
+    writeEvent: async () => {},
+    writeEvents,
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    const input = payload();
+    await config.eachBatch!({
+      batch: {
+        topic: input.topic,
+        partition: input.partition,
+        messages: Array.from({ length: 205 }, (_, index) => ({
+          ...input.message,
+          offset: String(index),
+        })),
+      },
+      heartbeat: input.heartbeat,
+      isRunning: () => true,
+      isStale: () => false,
+      resolveOffset: vi.fn(),
+    } as unknown as EachBatchPayload);
+    expect(writeEvents.mock.calls.map(([records]) => records.length)).toEqual([100, 100, 5]);
+    expect(
+      clients.consumer.commitOffsets.mock.calls.map(
+        ([offsets]) => (offsets as { offset: string }[])[0]!.offset,
+      ),
+    ).toEqual(['100', '200', '205']);
+    expect(worker.snapshot().stored).toBe(205);
+  } finally {
+    await worker.close();
   }
 });

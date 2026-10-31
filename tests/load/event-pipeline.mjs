@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   createRedpandaEventConsumer,
   createClickHouseWriter,
+  createClickHouseBatchWriter,
 } from '../../workers/event-processor/dist/index.js';
 import { cleanupResources } from './cleanup.mjs';
 import { startWorkerProcess } from './worker-process.mjs';
@@ -107,6 +108,11 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       deadLetterTopic,
       groupId: runId,
       writeEvent: createClickHouseWriter({
+        endpoint: 'http://127.0.0.1:38123',
+        username: 'signaltrail',
+        password: 'signaltrail_local',
+      }),
+      writeEvents: createClickHouseBatchWriter({
         endpoint: 'http://127.0.0.1:38123',
         username: 'signaltrail',
         password: 'signaltrail_local',
@@ -265,6 +271,10 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
     });
     assert.equal(unknownMetricsPath.status, 404);
     assert.equal((await workerProcess.stop()).code, 0);
+    await ingest('load-test-key', [
+      { ...event, eventId: 'pipeline-lost-ack', sequence: 3 },
+      { ...event, eventId: 'pipeline-lost-ack', sequence: 3 },
+    ]);
     responseGate = await openInsertResponseGate();
     workerProcess = startWorkerProcess({
       groupId: runId,
@@ -274,8 +284,8 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       timeoutMs: 30000,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
-    await ingest('load-test-key', [{ ...event, eventId: 'pipeline-lost-ack', sequence: 3 }]);
     await responseGate.waitForStored();
+    assert.deepEqual(responseGate.rowCounts, [2], 'Retained source records must share one insert');
     assert.equal(
       Number(
         await query(
@@ -319,7 +329,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       signal: AbortSignal.timeout(2000),
     });
     assert.equal(replayMetrics.status, 200);
-    assert.match(await replayMetrics.text(), /signaltrail_processor_stored_total 1/);
+    assert.match(await replayMetrics.text(), /signaltrail_processor_stored_total 2/);
     let browserPipeline;
     if (browser) {
       const { exerciseBrowserPipeline } = await import('./browser-pipeline.mjs');
@@ -330,6 +340,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
     return {
       browserPipeline,
       lostStorageAcknowledgement: {
+        recordsPerInsert: 2,
         storedBeforeCrash: true,
         uncommittedBeforeCrash: lostAckPending,
         sourceHighOffsets: lostAckHigh,

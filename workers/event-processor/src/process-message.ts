@@ -30,7 +30,7 @@ export interface ProcessorOptions {
   /** Kafka stores the next offset, represented as a string to avoid precision loss. */
   commit(next: SourceCursor): Promise<void>;
 }
-function captureSource(message: BrokerMessage): SourceCursor {
+export function captureSource(message: BrokerMessage): SourceCursor {
   const { topic, partition, offset } = message;
   if (
     typeof topic !== 'string' ||

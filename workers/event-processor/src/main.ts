@@ -1,4 +1,4 @@
-import { createClickHouseWriter } from './clickhouse-writer.ts';
+import { createClickHouseWriter, createClickHouseBatchWriter } from './clickhouse-writer.ts';
 import { parseProcessorEnvironment, ProcessorConfigurationError } from './environment.ts';
 import { createRedpandaEventConsumer } from './redpanda-consumer.ts';
 import { createProcessorMetrics } from './metrics.ts';
@@ -38,6 +38,7 @@ try {
   worker = createRedpandaEventConsumer({
     ...options.consumer,
     writeEvent: createClickHouseWriter(options.clickhouse),
+    writeEvents: createClickHouseBatchWriter(options.clickhouse),
     onRetry: () => console.error('SignalTrail event processor retry scheduled'),
     onAttempt: (outcome, seconds) => metrics?.observeAttempt(outcome, seconds),
   });

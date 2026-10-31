@@ -61,8 +61,14 @@ Entries are questions, not approvals or completed work.
   is no time partition, so retries crossing receive dates stay together. Client
   timestamps remain strings so valid out-of-range client dates cannot poison
   storage writes. Confirm conflict semantics, query cost, retention, and future
-  partitioning before production. Current synchronous per-event inserts are a
-  correctness baseline; batch storage writes before measuring sustained capacity.
+  partitioning before production. The worker now groups fetched partition records
+  into synchronous inserts bounded at 100 records or 1 MiB of source data, with
+  a 4 MiB serialized insert cap. A single oversized source record goes through
+  the existing bounded dead-letter path. Offsets advance only after all required
+  storage and dead-letter acknowledgements; a failed chunk may replay in full.
+  These are provisional operational limits, not measured production throughput.
+  Measure sustained capacity before changing them. Mixed-chunk attempt metrics
+  use the stored outcome; completion counters still count individual records.
 - **Worker monitoring:** the worker has an optional loopback-only metrics endpoint
   (`SIGNALTRAIL_PROCESSOR_METRICS_PORT`), disabled by default. Its running gauge
   means the consumer loop is active, not that storage is healthy or lag is zero.

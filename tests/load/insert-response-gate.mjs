@@ -11,6 +11,7 @@ export async function openInsertResponseGate() {
     rejectStored = reject;
   });
   void stored.catch(() => {});
+  const rowCounts = [];
   const pending = new Set();
   const controller = new AbortController();
   const server = createServer((request, response) => {
@@ -25,6 +26,7 @@ export async function openInsertResponseGate() {
         if (bytes > 1024 * 1024) throw new Error('Insert gate request exceeded test bound');
         chunks.push(chunk);
       }
+      rowCounts.push(Buffer.concat(chunks).toString('utf8').trim().split('\n').length);
       const upstream = new URL('http://127.0.0.1:38123');
       upstream.search = new URL(request.url, 'http://localhost').search;
       const acknowledged = await fetch(upstream, {
@@ -62,6 +64,7 @@ export async function openInsertResponseGate() {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Insert response gate did not bind');
   return {
+    rowCounts,
     endpoint: `http://127.0.0.1:${address.port}`,
     async waitForStored() {
       let timer;

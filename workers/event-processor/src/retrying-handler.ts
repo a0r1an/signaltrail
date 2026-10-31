@@ -1,9 +1,9 @@
-import type { BrokerMessage, createEventProcessor } from './process-message.ts';
+import type { createEventProcessor } from './process-message.ts';
 
 type ProcessMessage = ReturnType<typeof createEventProcessor>;
 type Outcome = Awaited<ReturnType<ProcessMessage>>['status'];
-interface RetryOptions {
-  processMessage: ProcessMessage;
+interface RetryOptions<Input> {
+  processMessage: (message: Input) => ReturnType<ProcessMessage>;
   signal: AbortSignal;
   onProcessed?(outcome: Outcome): void;
   onRetry?(): void;
@@ -28,9 +28,9 @@ function sleep(ms: number, signal: AbortSignal): Promise<boolean> {
     signal.addEventListener('abort', finish, { once: true });
   });
 }
-export function createRetryingHandler(options: RetryOptions) {
+export function createRetryingHandler<Input>(options: RetryOptions<Input>) {
   options = { ...options };
-  return async (message: BrokerMessage, heartbeat: () => Promise<void>) => {
+  return async (message: Input, heartbeat: () => Promise<void>) => {
     async function attempt() {
       const started = performance.now();
       let outcome: Outcome | 'failed' = 'failed';

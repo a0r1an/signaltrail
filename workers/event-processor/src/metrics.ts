@@ -36,7 +36,7 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
   }
   const attemptDuration = new Histogram({
     name: 'signaltrail_processor_attempt_duration_seconds',
-    help: 'Processing attempt duration including sink acknowledgement and source-offset commit',
+    help: 'Chunk processing attempt duration including sink acknowledgement and source-offset commit; mixed chunks use stored outcome',
     labelNames: ['outcome'],
     buckets: [0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 30],
     registers: [registry],

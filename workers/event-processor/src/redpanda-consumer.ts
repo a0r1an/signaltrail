@@ -1,5 +1,6 @@
-import { Kafka, logLevel } from 'kafkajs';
+import { Kafka, logLevel, type EachBatchPayload } from 'kafkajs';
 import { createEventProcessor, type ProcessorOptions } from './process-message.ts';
+import { createBatchProcessor, type BatchProcessorOptions } from './process-batch.ts';
 import { createRetryingHandler } from './retrying-handler.ts';
 
 export interface RedpandaEventConsumerOptions {
@@ -8,6 +9,7 @@ export interface RedpandaEventConsumerOptions {
   deadLetterTopic: string;
   groupId: string;
   writeEvent: ProcessorOptions['writeEvent'];
+  writeEvents?: BatchProcessorOptions['writeEvents'];
   onProcessed?(kind: 'stored' | 'dead_lettered'): void;
   onRetry?(): void;
   onAttempt?(outcome: 'stored' | 'dead_lettered' | 'failed', seconds: number): void;
@@ -85,24 +87,21 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
     controller.abort();
     rejectFinished(payload.error);
   });
+  const writeDeadLetter: ProcessorOptions['writeDeadLetter'] = async (letter) => {
+    await producer.send({
+      topic: options.deadLetterTopic,
+      acks: -1,
+      messages: [
+        {
+          key: JSON.stringify([letter.source.topic, letter.source.partition, letter.source.offset]),
+          value: JSON.stringify(letter),
+        },
+      ],
+    });
+  };
   const processMessage = createEventProcessor({
     writeEvent: options.writeEvent,
-    writeDeadLetter: async (letter) => {
-      await producer.send({
-        topic: options.deadLetterTopic,
-        acks: -1,
-        messages: [
-          {
-            key: JSON.stringify([
-              letter.source.topic,
-              letter.source.partition,
-              letter.source.offset,
-            ]),
-            value: JSON.stringify(letter),
-          },
-        ],
-      });
-    },
+    writeDeadLetter,
     commit: (cursor) => consumer.commitOffsets([cursor]),
   });
   const handle = createRetryingHandler({
@@ -119,6 +118,75 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
       return options.onRetry?.();
     },
   });
+  const eachBatch = async (payload: EachBatchPayload) => {
+    const { batch, isRunning, isStale, resolveOffset } = payload;
+    const ownsBatch = () => !controller.signal.aborted && isRunning() && !isStale();
+    const heartbeat = async () => {
+      if (!ownsBatch()) throw new Error('Partition batch is no longer owned');
+      await payload.heartbeat();
+      if (!ownsBatch()) throw new Error('Partition batch is no longer owned');
+    };
+    for (let start = 0; start < batch.messages.length;) {
+      if (!ownsBatch()) return;
+      let end = start;
+      let bytes = 0;
+      while (end < batch.messages.length && end - start < 100) {
+        const size = batch.messages[end]!.value?.byteLength ?? 0;
+        if (end > start && bytes + size > 1024 * 1024) break;
+        bytes += size;
+        end++;
+      }
+      const messages = batch.messages.slice(start, end).map((message) => ({
+        topic: batch.topic,
+        partition: batch.partition,
+        offset: message.offset,
+        value: message.value,
+      }));
+      let outcomes: ('stored' | 'dead_lettered')[] = [];
+      const process = createBatchProcessor({
+        writeEvents: options.writeEvents!,
+        writeDeadLetter,
+        commit: async (cursor) => {
+          await heartbeat();
+          await consumer.commitOffsets([cursor]);
+        },
+      });
+      const handleBatch = createRetryingHandler({
+        signal: controller.signal,
+        processMessage: async (input: typeof messages) => {
+          outcomes = await process(input);
+          return {
+            status: outcomes.every((kind) => kind === 'dead_lettered')
+              ? ('dead_lettered' as const)
+              : ('stored' as const),
+          };
+        },
+        onRetry: () => {
+          state.retries++;
+          return options.onRetry?.();
+        },
+        onAttempt: (outcome, seconds) => options.onAttempt?.(outcome, seconds),
+      });
+      try {
+        await handleBatch(messages, heartbeat);
+      } catch (error) {
+        if (!ownsBatch()) return;
+        throw error;
+      }
+      if (!ownsBatch()) return;
+      resolveOffset(messages[messages.length - 1]!.offset);
+      for (const kind of outcomes) {
+        if (kind === 'stored') state.stored++;
+        else state.deadLettered++;
+        try {
+          void Promise.resolve(options.onProcessed?.(kind)).catch(() => {});
+        } catch {
+          /* Diagnostics cannot change commits. */
+        }
+      }
+      start = end;
+    }
+  };
   return {
     snapshot: () => ({ ...state }),
     finished,
@@ -146,8 +214,20 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
         await consumer.run({
           autoCommit: false,
           partitionsConsumedConcurrently: 3,
-          eachMessage: ({ topic, partition, message, heartbeat }) =>
-            handle({ topic, partition, offset: message.offset, value: message.value }, heartbeat),
+          ...(options.writeEvents
+            ? { eachBatchAutoResolve: false, eachBatch }
+            : {
+                eachMessage: ({
+                  topic,
+                  partition,
+                  message,
+                  heartbeat,
+                }: import('kafkajs').EachMessagePayload) =>
+                  handle(
+                    { topic, partition, offset: message.offset, value: message.value },
+                    heartbeat,
+                  ),
+              }),
         });
         ensureOpen();
         state.running = true;
