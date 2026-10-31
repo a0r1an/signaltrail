@@ -1,0 +1,196 @@
+import { Kafka, logLevel } from 'kafkajs';
+import { createEventProcessor, type ProcessorOptions } from './process-message.ts';
+import { createRetryingHandler } from './retrying-handler.ts';
+
+export interface RedpandaEventConsumerOptions {
+  brokers: readonly string[];
+  topic: string;
+  deadLetterTopic: string;
+  groupId: string;
+  writeEvent: ProcessorOptions['writeEvent'];
+  onProcessed?(kind: 'stored' | 'dead_lettered'): void;
+  onRetry?(): void;
+}
+export function createRedpandaEventConsumer(options: RedpandaEventConsumerOptions) {
+  options = { ...options, brokers: [...options.brokers] };
+  if (
+    !options.brokers.length ||
+    options.brokers.some((broker) => typeof broker !== 'string' || !/^\S+:\d+$/.test(broker))
+  )
+    throw new TypeError('Invalid processor brokers');
+  for (const topic of [options.topic, options.deadLetterTopic])
+    if (
+      typeof topic !== 'string' ||
+      !/^[a-zA-Z0-9._-]{1,249}$/.test(topic) ||
+      ['.', '..'].includes(topic)
+    )
+      throw new TypeError('Invalid processor topic');
+  if (options.topic === options.deadLetterTopic)
+    throw new TypeError('Source and dead-letter topics must differ');
+  if (
+    typeof options.groupId !== 'string' ||
+    !options.groupId.trim() ||
+    options.groupId.length > 255
+  )
+    throw new TypeError('Invalid processor group ID');
+  const kafka = new Kafka({
+    brokers: [...options.brokers],
+    clientId: 'signaltrail-event-processor',
+    logLevel: logLevel.ERROR,
+    connectionTimeout: 1000,
+    requestTimeout: 3000,
+    retry: { retries: 2, initialRetryTime: 100, maxRetryTime: 1000 },
+  });
+  const producer = kafka.producer({
+    allowAutoTopicCreation: false,
+    idempotent: true,
+    maxInFlightRequests: 1,
+    retry: { retries: 2, initialRetryTime: 100, maxRetryTime: 1000 },
+  });
+  const consumer = kafka.consumer({
+    groupId: options.groupId,
+    allowAutoTopicCreation: false,
+    sessionTimeout: 30000,
+    heartbeatInterval: 3000,
+    maxBytesPerPartition: 1024 * 1024,
+    maxBytes: 2 * 1024 * 1024,
+    retry: {
+      retries: 2,
+      initialRetryTime: 100,
+      maxRetryTime: 1000,
+      restartOnFailure: async () => false,
+    },
+  });
+  const controller = new AbortController();
+  let closed = false;
+  let starting: Promise<void> | undefined;
+  let closing: Promise<void> | undefined;
+  const ensureOpen = () => {
+    if (closed) throw new Error('Consumer is closed');
+  };
+  const state = { running: false, stored: 0, deadLettered: 0, retries: 0 };
+  let resolveFinished!: () => void;
+  let rejectFinished!: (error: unknown) => void;
+  const finished = new Promise<void>((resolve, reject) => {
+    resolveFinished = resolve;
+    rejectFinished = reject;
+  });
+  // Callers may finish startup before attaching their supervisor.
+  void finished.catch(() => {});
+  consumer.on(consumer.events.CRASH, ({ payload }) => {
+    if (closed) return;
+    closed = true;
+    state.running = false;
+    controller.abort();
+    rejectFinished(payload.error);
+  });
+  const processMessage = createEventProcessor({
+    writeEvent: options.writeEvent,
+    writeDeadLetter: async (letter) => {
+      await producer.send({
+        topic: options.deadLetterTopic,
+        acks: -1,
+        messages: [
+          {
+            key: JSON.stringify([
+              letter.source.topic,
+              letter.source.partition,
+              letter.source.offset,
+            ]),
+            value: JSON.stringify(letter),
+          },
+        ],
+      });
+    },
+    commit: (cursor) => consumer.commitOffsets([cursor]),
+  });
+  const handle = createRetryingHandler({
+    processMessage,
+    signal: controller.signal,
+    onProcessed: (kind) => {
+      if (kind === 'stored') state.stored++;
+      else state.deadLettered++;
+      options.onProcessed?.(kind);
+    },
+    onRetry: () => {
+      state.retries++;
+      options.onRetry?.();
+    },
+  });
+  return {
+    snapshot: () => ({ ...state }),
+    finished,
+    start() {
+      if (closed) return Promise.reject(new Error('Consumer is closed'));
+      if (state.running) return Promise.resolve();
+      if (starting) return starting;
+      starting = (async () => {
+        const admin = kafka.admin();
+        try {
+          await admin.connect();
+          const topics = await admin.listTopics();
+          if (![options.topic, options.deadLetterTopic].every((topic) => topics.includes(topic)))
+            throw new Error('Required processor topics are missing');
+        } finally {
+          await admin.disconnect();
+        }
+        ensureOpen();
+        await producer.connect();
+        ensureOpen();
+        await consumer.connect();
+        ensureOpen();
+        await consumer.subscribe({ topic: options.topic, fromBeginning: true });
+        ensureOpen();
+        await consumer.run({
+          autoCommit: false,
+          partitionsConsumedConcurrently: 3,
+          eachMessage: ({ topic, partition, message, heartbeat }) =>
+            handle({ topic, partition, offset: message.offset, value: message.value }, heartbeat),
+        });
+        ensureOpen();
+        state.running = true;
+      })()
+        .catch(async (error: unknown) => {
+          if (!closed) {
+            closed = true;
+            controller.abort();
+            rejectFinished(error);
+          }
+          await Promise.allSettled([consumer.disconnect(), producer.disconnect()]);
+          throw error;
+        })
+        .finally(() => {
+          starting = undefined;
+        });
+      return starting;
+    },
+    close() {
+      if (closing) return closing;
+      closed = true;
+      controller.abort();
+      state.running = false;
+      closing = (async () => {
+        await starting?.catch(() => {});
+        const errors: unknown[] = [];
+        for (const stop of [
+          () => consumer.stop(),
+          () => consumer.disconnect(),
+          () => producer.disconnect(),
+        ]) {
+          try {
+            await stop();
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+        if (errors.length) {
+          const failure = new AggregateError(errors, 'Consumer cleanup failed');
+          rejectFinished(failure);
+          throw failure;
+        }
+        resolveFinished();
+      })();
+      return closing;
+    },
+  };
+}

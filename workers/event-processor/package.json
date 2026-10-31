@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@signaltrail/contracts": "workspace:*"
+    "@signaltrail/contracts": "workspace:*",
+    "kafkajs": "^2.2.4"
   },
   "devDependencies": {
     "@signaltrail/typescript-config": "workspace:*",

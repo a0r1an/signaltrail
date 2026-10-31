@@ -195,6 +195,9 @@ importers:
       '@signaltrail/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
     devDependencies:
       '@signaltrail/typescript-config':
         specifier: workspace:*

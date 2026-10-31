@@ -1,0 +1,244 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import type { ConsumerRunConfig, EachMessagePayload } from 'kafkajs';
+import { createRedpandaEventConsumer } from '../../src/redpanda-consumer.ts';
+import { record } from '../fixtures.ts';
+
+const clients = vi.hoisted(() => ({
+  producer: { connect: vi.fn(), disconnect: vi.fn(), send: vi.fn() },
+  consumer: {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    subscribe: vi.fn(),
+    run: vi.fn(),
+    stop: vi.fn(),
+    commitOffsets: vi.fn(),
+    on: vi.fn(),
+    events: { CRASH: 'consumer.crash' },
+  },
+  admin: { connect: vi.fn(), disconnect: vi.fn(), listTopics: vi.fn() },
+}));
+vi.mock('kafkajs', () => ({
+  logLevel: { ERROR: 1 },
+  Kafka: class {
+    producer() {
+      return clients.producer;
+    }
+    consumer() {
+      return clients.consumer;
+    }
+    admin() {
+      return clients.admin;
+    }
+  },
+}));
+beforeEach(() => {
+  vi.clearAllMocks();
+  clients.admin.listTopics.mockResolvedValue(['analytics', 'analytics.dlq']);
+});
+const payload = (): EachMessagePayload => ({
+  topic: 'analytics',
+  partition: 0,
+  message: {
+    key: null,
+    value: Buffer.from(JSON.stringify(record)),
+    offset: '3',
+    timestamp: '0',
+    attributes: 0,
+    headers: {},
+  },
+  heartbeat: async () => {},
+  pause: () => () => {},
+});
+
+it('disables automatic commits and confirms storage before committing through the Kafka client', async () => {
+  let acknowledge!: () => void;
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: () =>
+      new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      }),
+  });
+  try {
+    await worker.start();
+    expect(clients.consumer.run).toHaveBeenCalledTimes(1);
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    expect(config.autoCommit).toBe(false);
+    const processing = config.eachMessage!(payload());
+    expect(clients.consumer.commitOffsets).not.toHaveBeenCalled();
+    acknowledge();
+    await processing;
+    expect(clients.consumer.commitOffsets).toHaveBeenCalledWith([
+      { topic: 'analytics', partition: 0, offset: '4' },
+    ]);
+    expect(worker.snapshot()).toMatchObject({ stored: 1 });
+  } finally {
+    await worker.close();
+  }
+});
+
+it('waits for the DLQ producer acknowledgement before committing a poison message', async () => {
+  let acknowledge!: () => void;
+  clients.producer.send.mockReturnValueOnce(
+    new Promise((resolve) => {
+      acknowledge = () => resolve([]);
+    }),
+  );
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {
+      throw new Error('Invalid event stored');
+    },
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    const input = payload();
+    input.message.value = Buffer.from('broken');
+    const processing = config.eachMessage!(input);
+    expect(clients.consumer.commitOffsets).not.toHaveBeenCalled();
+    expect(clients.producer.send).toHaveBeenCalledWith(
+      expect.objectContaining({ topic: 'analytics.dlq', acks: -1 }),
+    );
+    acknowledge();
+    await processing;
+    expect(clients.consumer.commitOffsets).toHaveBeenCalledWith([
+      { topic: 'analytics', partition: 0, offset: '4' },
+    ]);
+    expect(worker.snapshot()).toMatchObject({ deadLettered: 1 });
+  } finally {
+    await worker.close();
+  }
+});
+
+it('refuses startup when the dead-letter topic is missing rather than creating it implicitly', async () => {
+  clients.admin.listTopics.mockResolvedValueOnce(['analytics']);
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {},
+  });
+  try {
+    await expect(worker.start()).rejects.toThrow('Required processor topics are missing');
+    expect(clients.consumer.run).not.toHaveBeenCalled();
+  } finally {
+    await worker.close();
+  }
+});
+
+it.each([
+  { deadLetterTopic: 'analytics' },
+  { deadLetterTopic: 'invalid topic' },
+  { brokers: [] },
+  { brokers: ['not-a-broker'] },
+  { groupId: '   ' },
+])('rejects unsafe processor configuration before connecting: %j', (invalid) => {
+  expect(() =>
+    createRedpandaEventConsumer({
+      brokers: ['127.0.0.1:29092'],
+      topic: 'analytics',
+      deadLetterTopic: 'analytics.dlq',
+      groupId: 'processor-test',
+      writeEvent: async () => {},
+      ...invalid,
+    }),
+  ).toThrow();
+  expect(clients.consumer.connect).not.toHaveBeenCalled();
+});
+
+it('coalesces concurrent lifecycle calls and cannot restart after close', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {},
+  });
+  try {
+    await Promise.all([worker.start(), worker.start()]);
+    expect(clients.producer.connect).toHaveBeenCalledTimes(1);
+    expect(clients.consumer.run).toHaveBeenCalledTimes(1);
+    await Promise.all([worker.close(), worker.close()]);
+    expect(clients.consumer.stop).toHaveBeenCalledTimes(1);
+    expect(clients.producer.disconnect).toHaveBeenCalledTimes(1);
+    await expect(worker.start()).rejects.toThrow('Consumer is closed');
+  } finally {
+    await worker.close();
+  }
+});
+
+it('does not begin consuming if shutdown was requested during subscription', async () => {
+  let release!: () => void;
+  let subscribing!: () => void;
+  const begun = new Promise<void>((resolve) => {
+    subscribing = resolve;
+  });
+  clients.consumer.subscribe.mockImplementationOnce(async () => {
+    subscribing();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  });
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {},
+  });
+  const starting = expect(worker.start()).rejects.toThrow('Consumer is closed');
+  await begun;
+  const closing = worker.close();
+  release();
+  await starting;
+  await closing;
+  expect(clients.consumer.run).not.toHaveBeenCalled();
+});
+
+it('attempts every disconnect even when stopping the consumer fails', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {},
+  });
+  await worker.start();
+  clients.consumer.stop.mockRejectedValueOnce(new Error('Stop failed'));
+  await expect(worker.close()).rejects.toThrow();
+  expect(clients.consumer.disconnect).toHaveBeenCalled();
+  expect(clients.producer.disconnect).toHaveBeenCalled();
+});
+
+it('signals a runtime consumer crash to its supervisor and marks itself not running', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent: async () => {},
+  });
+  try {
+    await worker.start();
+    expect(clients.consumer.on).toHaveBeenCalledWith('consumer.crash', expect.any(Function));
+    const listener = clients.consumer.on.mock.calls.find(
+      (call) => call[0] === 'consumer.crash',
+    )![1] as (event: { payload: { error: Error } }) => void;
+    const failure = new Error('Broker unavailable');
+    const finished = expect(worker.finished).rejects.toBe(failure);
+    listener({ payload: { error: failure } });
+    await finished;
+    expect(worker.snapshot().running).toBe(false);
+    await expect(worker.start()).rejects.toThrow('Consumer is closed');
+  } finally {
+    await worker.close();
+  }
+});

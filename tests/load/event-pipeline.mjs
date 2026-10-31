@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
-  createEventProcessor,
+  createRedpandaEventConsumer,
   createClickHouseWriter,
 } from '../../workers/event-processor/dist/index.js';
 import { cleanupResources } from './cleanup.mjs';
@@ -35,11 +35,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
   });
   const admin = kafka.admin();
   const producer = kafka.producer({ allowAutoTopicCreation: false });
-  const consumer = kafka.consumer({
-    groupId: runId,
-    sessionTimeout: 6000,
-    heartbeatInterval: 1000,
-  });
+  let worker;
   const dlqConsumer = kafka.consumer({
     groupId: runId + '-dlq',
     sessionTimeout: 6000,
@@ -47,7 +43,6 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
   });
   const deadLetterTopic = 'signaltrail.analytics.dlq.v1';
   const outcomes = [];
-  const committed = new Map();
   const letters = [];
   let storagePaused = false;
   let processingError;
@@ -86,54 +81,21 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       ],
     });
     await producer.connect();
-    await consumer.connect();
-    await consumer.subscribe({ topic, fromBeginning: true });
-    const processMessage = createEventProcessor({
+    worker = createRedpandaEventConsumer({
+      brokers: ['127.0.0.1:29092'],
+      topic,
+      deadLetterTopic,
+      groupId: runId,
       writeEvent: createClickHouseWriter({
         endpoint: 'http://127.0.0.1:38123',
         username: 'signaltrail',
         password: 'signaltrail_local',
       }),
-      writeDeadLetter: async (letter) => {
-        await producer.send({
-          topic: deadLetterTopic,
-          acks: -1,
-          messages: [
-            {
-              key: JSON.stringify([
-                letter.source.topic,
-                letter.source.partition,
-                letter.source.offset,
-              ]),
-              value: JSON.stringify(letter),
-            },
-          ],
-        });
-      },
-      commit: async (cursor) => {
-        await consumer.commitOffsets([cursor]);
-        committed.set(cursor.partition, cursor.offset);
-      },
+      onProcessed: (status) => outcomes.push({ status }),
     });
-    const startConsumer = () =>
-      consumer.run({
-        autoCommit: false,
-        eachMessage: async ({ topic, partition, message }) => {
-          try {
-            outcomes.push(
-              await processMessage({
-                topic,
-                partition,
-                offset: message.offset,
-                value: message.value,
-              }),
-            );
-          } catch (error) {
-            processingError = error;
-            throw error;
-          }
-        },
-      });
+    void worker.finished.catch((error) => {
+      processingError = error;
+    });
     const event = {
       schemaVersion: 1,
       eventId: 'pipeline-repeated',
@@ -168,7 +130,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     assert.equal(outcomes.length, 0);
     await docker(['unpause', 'clickhouse']);
     storagePaused = false;
-    await startConsumer();
+    await worker.start();
     await producer.send({ topic, acks: -1, messages: [{ value: '{invalid-json' }] });
     await waitFor(
       () => outcomes.length === 5,
@@ -194,11 +156,13 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     );
     assert.ok(rows.every((row) => row.client_timestamp === event.clientTimestamp));
     const offsets = await admin.fetchOffsets({ groupId: runId, topics: [topic] });
-    for (const [partition, offset] of committed)
-      assert.equal(
-        offsets[0].partitions.find((entry) => entry.partition === partition)?.offset,
-        offset,
-      );
+    for (const { partition, offset } of await admin.fetchTopicOffsets(topic)) {
+      if (BigInt(offset) > 0n)
+        assert.equal(
+          offsets[0].partitions.find((entry) => entry.partition === partition)?.offset,
+          offset,
+        );
+    }
     await dlqConsumer.connect();
     await dlqConsumer.subscribe({ topic: deadLetterTopic, fromBeginning: true });
     await dlqConsumer.run({
@@ -215,7 +179,11 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       ingestedWhileStoragePaused: 4,
       outcomes,
       rows,
-      committed: Object.fromEntries(committed),
+      committed: Object.fromEntries(
+        offsets[0].partitions
+          .filter((entry) => entry.offset !== '-1')
+          .map((entry) => [entry.partition, entry.offset]),
+      ),
       deadLetters: letters.length,
       limitations: [
         'Small isolated correctness probe, not throughput or production sizing.',
@@ -234,7 +202,7 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
           run: (signal) =>
             storagePaused ? docker(['unpause', 'clickhouse'], false, false, signal) : undefined,
         },
-        { name: 'stop pipeline consumer', run: () => consumer.disconnect() },
+        { name: 'stop pipeline consumer', run: () => worker?.close() },
         { name: 'stop dead-letter observer', run: () => dlqConsumer.disconnect() },
         { name: 'stop pipeline producer', run: () => producer.disconnect() },
         { name: 'stop pipeline admin', run: () => admin.disconnect() },
