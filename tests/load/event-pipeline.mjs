@@ -48,6 +48,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
   });
   const deadLetterTopic = 'signaltrail.analytics.dlq.v1';
   const outcomes = [];
+  const insertSizes = [];
   const letters = [];
   let storagePaused = false;
   let processingError;
@@ -112,11 +113,14 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
         username: 'signaltrail',
         password: 'signaltrail_local',
       }),
-      writeEvents: createClickHouseBatchWriter({
-        endpoint: 'http://127.0.0.1:38123',
-        username: 'signaltrail',
-        password: 'signaltrail_local',
-      }),
+      writeEvents: async (records) => {
+        await createClickHouseBatchWriter({
+          endpoint: 'http://127.0.0.1:38123',
+          username: 'signaltrail',
+          password: 'signaltrail_local',
+        })(records);
+        insertSizes.push(records.length);
+      },
       onProcessed: (status) => outcomes.push({ status }),
     });
     void worker.finished.catch((error) => {
@@ -200,6 +204,46 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
     await waitFor(() => letters.length === 1, 'Acknowledged dead-letter record was missing');
     assert.equal(letters[0].reason, 'INVALID_JSON');
     assert.equal(Buffer.from(letters[0].payloadBase64, 'base64').toString(), '{invalid-json');
+    const firstBulkInsert = insertSizes.length;
+    const bulkStarted = performance.now();
+    await producer.send({
+      topic,
+      acks: -1,
+      messages: Array.from({ length: 205 }, (_, index) => ({
+        partition: 0,
+        value: JSON.stringify({
+          projectId: 'load-project',
+          receivedAt: new Date().toISOString(),
+          event: { ...event, eventId: `pipeline-bulk-${index}`, sequence: index },
+        }),
+      })),
+    });
+    await waitFor(
+      () => outcomes.length === 210,
+      'Processor did not complete the bounded bulk probe',
+    );
+    await waitForCommitted(await admin.fetchTopicOffsets(topic));
+    const bulkInsertSizes = insertSizes.slice(firstBulkInsert);
+    assert.equal(
+      bulkInsertSizes.reduce((total, count) => total + count, 0),
+      205,
+    );
+    assert.ok(bulkInsertSizes.every((count) => count > 0 && count <= 100));
+    assert.ok(bulkInsertSizes.length < 205, 'Bulk records must share storage requests');
+    assert.equal(
+      Number(
+        await query(
+          "SELECT count() FROM signaltrail.analytics_events FINAL WHERE startsWith(event_id, 'pipeline-bulk-')",
+        ),
+      ),
+      205,
+    );
+    const boundedBulk = {
+      events: 205,
+      recordsPerInsert: bulkInsertSizes,
+      elapsedSeconds: (performance.now() - bulkStarted) / 1000,
+      limitation: 'Small local correctness sample, not sustained throughput or production sizing.',
+    };
     await worker.close();
     workerProcess = startWorkerProcess({
       groupId: runId,
@@ -339,6 +383,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
     assert.equal((await workerProcess.stop()).code, 0);
     return {
       browserPipeline,
+      boundedBulk,
       lostStorageAcknowledgement: {
         recordsPerInsert: 2,
         storedBeforeCrash: true,
