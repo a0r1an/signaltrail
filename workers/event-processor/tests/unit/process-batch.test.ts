@@ -154,3 +154,31 @@ it('rejects a multi-record chunk above the source byte cap before writing either
   expect(writeDeadLetter).not.toHaveBeenCalled();
   expect(commit).not.toHaveBeenCalled();
 });
+
+it('stops between sink writes on shutdown without committing a partial chunk', async () => {
+  const controller = new AbortController();
+  const writeDeadLetter = vi.fn(async () => {
+    controller.abort();
+  });
+  const writeEvents = vi.fn(async () => {});
+  const commit = vi.fn(async () => {});
+  const process = createBatchProcessor({
+    signal: controller.signal,
+    writeDeadLetter,
+    writeEvents,
+    commit,
+  });
+  await expect(
+    process(
+      [0, 1].map((index) => ({
+        topic: 'events',
+        partition: 0,
+        offset: String(index),
+        value: Buffer.from('broken'),
+      })),
+    ),
+  ).rejects.toThrow();
+  expect(writeDeadLetter).toHaveBeenCalledTimes(1);
+  expect(writeEvents).not.toHaveBeenCalled();
+  expect(commit).not.toHaveBeenCalled();
+});

@@ -373,7 +373,11 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       signal: AbortSignal.timeout(2000),
     });
     assert.equal(replayMetrics.status, 200);
-    assert.match(await replayMetrics.text(), /signaltrail_processor_stored_total 2/);
+    const replayBody = await replayMetrics.text();
+    assert.match(replayBody, /signaltrail_processor_stored_total 2/);
+    assert.match(replayBody, /signaltrail_processor_chunk_records_count 1/);
+    assert.match(replayBody, /signaltrail_processor_chunk_records_sum 2/);
+    assert.match(replayBody, /signaltrail_processor_chunk_source_bytes_count 1/);
     let browserPipeline;
     if (browser) {
       const { exerciseBrowserPipeline } = await import('./browser-pipeline.mjs');

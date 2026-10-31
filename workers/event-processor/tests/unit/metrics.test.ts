@@ -63,3 +63,23 @@ it('exports attempt latency histograms with only the fixed outcome labels', asyn
     await metrics.close();
   }
 });
+
+it('measures chunk records and source bytes without project or event labels', async () => {
+  const metrics = createProcessorMetrics(() => ({
+    running: true,
+    stored: 0,
+    deadLettered: 0,
+    retries: 0,
+  }));
+  try {
+    metrics.observeChunk(100, 8192);
+    metrics.observeChunk(5, 512);
+    const text = await metrics.registry.metrics();
+    expect(text).toContain('signaltrail_processor_chunk_records_count 2');
+    expect(text).toContain('signaltrail_processor_chunk_records_sum 105');
+    expect(text).toContain('signaltrail_processor_chunk_source_bytes_sum 8704');
+    expect(text).toContain('signaltrail_processor_chunk_records_bucket{le="100"} 2');
+  } finally {
+    await metrics.close();
+  }
+});

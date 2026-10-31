@@ -10,6 +10,7 @@ export interface RedpandaEventConsumerOptions {
   groupId: string;
   writeEvent: ProcessorOptions['writeEvent'];
   writeEvents?: BatchProcessorOptions['writeEvents'];
+  onChunk?(records: number, sourceBytes: number): void;
   onProcessed?(kind: 'stored' | 'dead_lettered'): void;
   onRetry?(): void;
   onAttempt?(outcome: 'stored' | 'dead_lettered' | 'failed', seconds: number): void;
@@ -142,8 +143,14 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
         offset: message.offset,
         value: message.value,
       }));
+      try {
+        void Promise.resolve(options.onChunk?.(messages.length, bytes)).catch(() => {});
+      } catch {
+        /* Diagnostics cannot change processing. */
+      }
       let outcomes: ('stored' | 'dead_lettered')[] = [];
       const process = createBatchProcessor({
+        signal: controller.signal,
         writeEvents: options.writeEvents!,
         writeDeadLetter,
         commit: async (cursor) => {

@@ -367,12 +367,16 @@ it('does not commit a batch whose ownership expires while storage is pending', a
 });
 
 it('splits fetched partitions into chunks of at most 100 events', async () => {
+  const onChunk = vi.fn<(count: number, bytes: number) => Promise<void>>(async () => {
+    throw new Error('diagnostics rejected');
+  });
   const writeEvents = vi.fn<(records: readonly unknown[]) => Promise<void>>(async () => {});
   const worker = createRedpandaEventConsumer({
     brokers: ['127.0.0.1:29092'],
     topic: 'analytics',
     deadLetterTopic: 'analytics.dlq',
     groupId: 'processor-chunk-test',
+    onChunk,
     writeEvent: async () => {},
     writeEvents,
   });
@@ -401,6 +405,7 @@ it('splits fetched partitions into chunks of at most 100 events', async () => {
       ),
     ).toEqual(['100', '200', '205']);
     expect(worker.snapshot().stored).toBe(205);
+    expect(onChunk.mock.calls.map(([count]) => count)).toEqual([100, 100, 5]);
   } finally {
     await worker.close();
   }

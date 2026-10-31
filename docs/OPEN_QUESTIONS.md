@@ -69,6 +69,11 @@ Entries are questions, not approvals or completed work.
   These are provisional operational limits, not measured production throughput.
   Measure sustained capacity before changing them. Mixed-chunk attempt metrics
   use the stored outcome; completion counters still count individual records.
+  Chunk-size histograms count selected source chunks once, before retries, and
+  include invalid records. They do not count unique events or completed inserts.
+  Non-transient storage failures currently retry the entire chunk rather than
+  discarding schema-valid events. Decide operator repair/quarantine procedures
+  before production; do not infer that every storage error is a poison event.
 - **Worker monitoring:** the worker has an optional loopback-only metrics endpoint
   (`SIGNALTRAIL_PROCESSOR_METRICS_PORT`), disabled by default. Its running gauge
   means the consumer loop is active, not that storage is healthy or lag is zero.

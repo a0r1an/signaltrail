@@ -34,6 +34,18 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
       },
     });
   }
+  const chunkRecords = new Histogram({
+    name: 'signaltrail_processor_chunk_records',
+    help: 'Source records in each selected chunk, observed once before retries; not completed events',
+    buckets: [1, 5, 10, 25, 50, 100],
+    registers: [registry],
+  });
+  const chunkBytes = new Histogram({
+    name: 'signaltrail_processor_chunk_source_bytes',
+    help: 'Source payload bytes in each selected chunk before validation, including poison records',
+    buckets: [1024, 4096, 16384, 65536, 262144, 524288, 1048576],
+    registers: [registry],
+  });
   const attemptDuration = new Histogram({
     name: 'signaltrail_processor_attempt_duration_seconds',
     help: 'Chunk processing attempt duration including sink acknowledgement and source-offset commit; mixed chunks use stored outcome',
@@ -65,6 +77,10 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
   return {
     registry,
     server,
+    observeChunk(records: number, bytes: number) {
+      chunkRecords.observe(records);
+      chunkBytes.observe(bytes);
+    },
     observeAttempt(outcome: 'stored' | 'dead_lettered' | 'failed', seconds: number) {
       attemptDuration.observe({ outcome }, seconds);
     },

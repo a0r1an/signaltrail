@@ -39,6 +39,7 @@ try {
     ...options.consumer,
     writeEvent: createClickHouseWriter(options.clickhouse),
     writeEvents: createClickHouseBatchWriter(options.clickhouse),
+    onChunk: (records, bytes) => metrics?.observeChunk(records, bytes),
     onRetry: () => console.error('SignalTrail event processor retry scheduled'),
     onAttempt: (outcome, seconds) => metrics?.observeAttempt(outcome, seconds),
   });
