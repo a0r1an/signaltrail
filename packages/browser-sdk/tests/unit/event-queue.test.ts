@@ -86,29 +86,32 @@ describe('event queue', () => {
     }
   });
 
-  it('preserves the ID when durable presence cannot be confirmed and both backlogs contain the event', async () => {
-    const config = projectConfig('project-A');
-    const queue = await openEventQueue(config);
-    let reopened: EventQueue | undefined;
-    try {
-      await queue.enqueue(validEvent);
-      const failure = vi.spyOn(IDBObjectStore.prototype, 'openCursor').mockImplementation(() => {
-        throw new DOMException('Cannot confirm existing event', 'UnknownError');
-      });
-      expect(await queue.enqueue(validEvent)).toEqual({
-        status: 'storage_error',
-        fallback: { status: 'queued' },
-      });
-      failure.mockRestore();
-      expect(await readEvents(queue)).toEqual([validEvent]);
-      reopened = await openEventQueue(config);
-      expect(await readEvents(reopened)).toEqual([validEvent]);
-      expect(queue.storageMode).toBe('memory');
-    } finally {
-      queue.close();
-      reopened?.close();
-    }
-  });
+  it.each(['getAll', 'getAllKeys'] as const)(
+    'preserves the ID when %s cannot confirm durable presence and both backlogs contain the event',
+    async (method) => {
+      const config = projectConfig('project-A');
+      const queue = await openEventQueue(config);
+      let reopened: EventQueue | undefined;
+      try {
+        await queue.enqueue(validEvent);
+        const failure = vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(() => {
+          throw new DOMException('Cannot confirm existing event', 'UnknownError');
+        });
+        expect(await queue.enqueue(validEvent)).toEqual({
+          status: 'storage_error',
+          fallback: { status: 'queued' },
+        });
+        failure.mockRestore();
+        expect(await readEvents(queue)).toEqual([validEvent]);
+        reopened = await openEventQueue(config);
+        expect(await readEvents(reopened)).toEqual([validEvent]);
+        expect(queue.storageMode).toBe('memory');
+      } finally {
+        queue.close();
+        reopened?.close();
+      }
+    },
+  );
 
   it('does not reopen a closed persistent queue in memory', async () => {
     const queue = await openEventQueue(projectConfig('project-A'));

@@ -83,17 +83,25 @@ async function readUnexpired(
   maxAgeMs: number,
 ): Promise<AnalyticsEvent[]> {
   const events: AnalyticsEvent[] = [];
-  let cursor = await transaction.objectStore('events').openCursor();
-  while (cursor) {
-    if (isExpired(cursor.value, time, maxAgeMs)) {
-      await cursor.delete();
+  const store = transaction.objectStore('events');
+  // Both reads use primary-key order in the same serialized read/write transaction.
+  // Bulk reads avoid one IndexedDB cursor continuation for every retained event.
+  // Attach observers before either request can throw and abort its sibling.
+  const [stored, keys] = await Promise.all([
+    Promise.resolve().then(() => store.getAll()),
+    Promise.resolve().then(() => store.getAllKeys()),
+  ]);
+  for (let index = 0; index < stored.length; index++) {
+    const event = stored[index]!;
+    const key = keys[index]!;
+    if (isExpired(event, time, maxAgeMs)) {
+      await store.delete(key);
       recordExpiration(transaction);
-      await transaction.objectStore('claims').delete(cursor.primaryKey);
-      await transaction.objectStore('retries').delete(cursor.primaryKey);
+      await transaction.objectStore('claims').delete(key);
+      await transaction.objectStore('retries').delete(key);
     } else {
-      events.push(cursor.value);
+      events.push(event);
     }
-    cursor = await cursor.continue();
   }
   return events;
 }
