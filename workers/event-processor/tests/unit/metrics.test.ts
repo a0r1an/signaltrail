@@ -25,3 +25,41 @@ it('exports process-local completions and retries without customer labels', asyn
     await metrics.close();
   }
 });
+
+it('exports attempt latency histograms with only the fixed outcome labels', async () => {
+  const metrics = createProcessorMetrics(() => ({
+    running: true,
+    stored: 1,
+    deadLettered: 0,
+    retries: 1,
+  }));
+  try {
+    metrics.observeAttempt('stored', 0.5);
+    metrics.observeAttempt('failed', 0.25);
+    const values = await metrics.registry.getMetricsAsJSON();
+    const histogram = values.find(
+      (metric) => metric.name === 'signaltrail_processor_attempt_duration_seconds',
+    );
+    expect(histogram?.values).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metricName: 'signaltrail_processor_attempt_duration_seconds_count',
+          value: 1,
+          labels: { outcome: 'stored' },
+        }),
+        expect.objectContaining({
+          metricName: 'signaltrail_processor_attempt_duration_seconds_sum',
+          value: 0.5,
+          labels: { outcome: 'stored' },
+        }),
+        expect.objectContaining({
+          metricName: 'signaltrail_processor_attempt_duration_seconds_sum',
+          value: 0.25,
+          labels: { outcome: 'failed' },
+        }),
+      ]),
+    );
+  } finally {
+    await metrics.close();
+  }
+});

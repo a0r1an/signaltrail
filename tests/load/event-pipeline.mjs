@@ -196,6 +196,10 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
     assert.match(stalledBody, /signaltrail_processor_running 1/);
     assert.match(stalledBody, /signaltrail_processor_retries_total [1-9]/);
     assert.match(stalledBody, /signaltrail_processor_stored_total 0/);
+    assert.match(
+      stalledBody,
+      /signaltrail_processor_attempt_duration_seconds_count\{outcome="failed"\} [1-9]/,
+    );
     assert.ok(!stalledBody.includes('pipeline-recovery'));
 
     const highOffsets = await admin.fetchTopicOffsets(topic);
@@ -248,7 +252,12 @@ export async function exerciseEventPipeline({ url, runId, docker }) {
       signal: AbortSignal.timeout(2000),
     });
     assert.equal(recoveredMetrics.status, 200);
-    assert.match(await recoveredMetrics.text(), /signaltrail_processor_stored_total 1/);
+    const recoveredBody = await recoveredMetrics.text();
+    assert.match(recoveredBody, /signaltrail_processor_stored_total 1/);
+    assert.match(
+      recoveredBody,
+      /signaltrail_processor_attempt_duration_seconds_count\{outcome="stored"\} 1/,
+    );
     const unknownMetricsPath = await fetch('http://127.0.0.1:9466/events', {
       signal: AbortSignal.timeout(2000),
     });

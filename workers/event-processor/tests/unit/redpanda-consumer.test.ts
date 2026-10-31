@@ -242,3 +242,37 @@ it('signals a runtime consumer crash to its supervisor and marks itself not runn
     await worker.close();
   }
 });
+
+it('isolates asynchronous diagnostic rejections after retry and committed completion', async () => {
+  vi.useFakeTimers();
+  const writeEvent = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('storage unavailable'))
+    .mockResolvedValue(undefined);
+  const worker = createRedpandaEventConsumer({
+    brokers: ['127.0.0.1:29092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'processor-test',
+    writeEvent,
+    onRetry: async () => {
+      throw new Error('retry diagnostics rejected');
+    },
+    onProcessed: async () => {
+      throw new Error('completion diagnostics rejected');
+    },
+  });
+  try {
+    await worker.start();
+    const config = clients.consumer.run.mock.calls[0]![0] as ConsumerRunConfig;
+    const processing = config.eachMessage!(payload());
+    await vi.advanceTimersByTimeAsync(1000);
+    await processing;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(worker.snapshot()).toMatchObject({ stored: 1, retries: 1 });
+    expect(clients.consumer.commitOffsets).toHaveBeenCalledTimes(1);
+  } finally {
+    await worker.close();
+    vi.useRealTimers();
+  }
+});

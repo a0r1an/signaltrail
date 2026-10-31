@@ -1,4 +1,4 @@
-import { Counter, Gauge, Registry } from '@prometheus-io/client';
+import { Counter, Gauge, Histogram, Registry } from '@prometheus-io/client';
 import { createServer } from 'node:http';
 
 interface ProcessorSnapshot {
@@ -34,6 +34,13 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
       },
     });
   }
+  const attemptDuration = new Histogram({
+    name: 'signaltrail_processor_attempt_duration_seconds',
+    help: 'Processing attempt duration including sink acknowledgement and source-offset commit',
+    labelNames: ['outcome'],
+    buckets: [0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 30],
+    registers: [registry],
+  });
   const server = createServer((request, response) => {
     if (request.method !== 'GET' || request.url !== '/metrics') {
       response.writeHead(404).end();
@@ -58,13 +65,17 @@ export function createProcessorMetrics(snapshot: () => ProcessorSnapshot) {
   return {
     registry,
     server,
+    observeAttempt(outcome: 'stored' | 'dead_lettered' | 'failed', seconds: number) {
+      attemptDuration.observe({ outcome }, seconds);
+    },
     close() {
       if (closing) return closing;
       closing = new Promise<void>((resolve, reject) => {
         server.closeAllConnections();
         server.close((error) => {
           registry.clear();
-          if (error && (!('code' in error) || error.code !== 'ERR_SERVER_NOT_RUNNING')) reject(error);
+          if (error && (!('code' in error) || error.code !== 'ERR_SERVER_NOT_RUNNING'))
+            reject(error);
           else resolve();
         });
       });

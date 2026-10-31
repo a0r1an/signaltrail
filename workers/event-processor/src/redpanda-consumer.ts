@@ -10,6 +10,7 @@ export interface RedpandaEventConsumerOptions {
   writeEvent: ProcessorOptions['writeEvent'];
   onProcessed?(kind: 'stored' | 'dead_lettered'): void;
   onRetry?(): void;
+  onAttempt?(outcome: 'stored' | 'dead_lettered' | 'failed', seconds: number): void;
 }
 export function createRedpandaEventConsumer(options: RedpandaEventConsumerOptions) {
   options = { ...options, brokers: [...options.brokers] };
@@ -107,14 +108,15 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
   const handle = createRetryingHandler({
     processMessage,
     signal: controller.signal,
+    onAttempt: (outcome, seconds) => options.onAttempt?.(outcome, seconds),
     onProcessed: (kind) => {
       if (kind === 'stored') state.stored++;
       else state.deadLettered++;
-      options.onProcessed?.(kind);
+      return options.onProcessed?.(kind);
     },
     onRetry: () => {
       state.retries++;
-      options.onRetry?.();
+      return options.onRetry?.();
     },
   });
   return {

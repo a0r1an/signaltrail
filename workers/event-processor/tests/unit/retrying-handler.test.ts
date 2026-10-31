@@ -169,3 +169,40 @@ it('surfaces lost broker ownership without claiming a successful processing outc
     vi.useRealTimers();
   }
 });
+
+it('reports bounded attempt outcomes and elapsed time without letting diagnostics trigger retries', async () => {
+  vi.useFakeTimers();
+  let clock = 1000;
+  const monotonic = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  const observed: unknown[] = [];
+  const processMessage = vi.fn(async () => {
+    clock += 250;
+    if (processMessage.mock.calls.length === 1) throw new Error('storage failed');
+    return { status: 'stored' as const };
+  });
+  try {
+    const handle = createRetryingHandler({
+      signal: new AbortController().signal,
+      processMessage,
+      onAttempt: (outcome, seconds) => {
+        observed.push([outcome, seconds]);
+        throw new Error('diagnostics failed');
+      },
+    });
+    const processing = handle(
+      { topic: 'analytics', partition: 0, offset: '3', value: null },
+      async () => {},
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await processing;
+    expect(observed).toEqual([
+      ['failed', 0.25],
+      ['stored', 0.25],
+    ]);
+    expect(processMessage).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    monotonic.mockRestore();
+    vi.useRealTimers();
+  }
+});

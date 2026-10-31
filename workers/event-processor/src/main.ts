@@ -39,6 +39,7 @@ try {
     ...options.consumer,
     writeEvent: createClickHouseWriter(options.clickhouse),
     onRetry: () => console.error('SignalTrail event processor retry scheduled'),
+    onAttempt: (outcome, seconds) => metrics?.observeAttempt(outcome, seconds),
   });
   if (options.metrics) {
     const runningWorker = worker;
