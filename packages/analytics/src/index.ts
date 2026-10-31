@@ -110,7 +110,8 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
   // HTTP GET enforces readonly; explicitly changing that setting is rejected.
   endpoint.searchParams.set('wait_end_of_query', '1');
   return {
-    async countReceivedEvents(window: ReceivedEventWindow) {
+    async countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
+      if (signal?.aborted) throw new Error('Analytics query was not confirmed');
       if (
         typeof window.projectId !== 'string' ||
         !/\S/.test(window.projectId) ||
@@ -133,13 +134,17 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       const deadline = new Promise<never>((_resolve, reject) => {
         rejectDeadline = reject;
       });
-      const timer = setTimeout(() => {
+      const cancel = () => {
         controller.abort();
         rejectDeadline(new Error('Analytics query was not confirmed'));
-      }, timeoutMs);
+      };
+      const timer = setTimeout(cancel, timeoutMs);
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
       try {
         return await Promise.race([
           (async () => {
+            controller.signal.throwIfAborted();
             const response = await send(target.href, {
               method: 'GET',
               headers: { Authorization: authorization },
@@ -175,6 +180,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         throw new Error('Analytics query was not confirmed');
       } finally {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
       }
     },
   };

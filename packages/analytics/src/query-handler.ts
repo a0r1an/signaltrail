@@ -11,7 +11,10 @@ export interface AnalyticsQueryOptions {
     requestedProjectId: string,
     signal: AbortSignal,
   ): Promise<ProjectAccess>;
-  countReceivedEvents(window: ReceivedEventWindow): Promise<{ count: string }>;
+  countReceivedEvents(
+    window: ReceivedEventWindow,
+    signal?: AbortSignal,
+  ): Promise<{ count: string }>;
   timeoutMs?: number;
   maxConcurrentRequests?: number;
 }
@@ -68,11 +71,14 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
         if (access.status !== 'authorized') return json({ error: 'FORBIDDEN' }, 403);
         try {
           return json(
-            await options.countReceivedEvents({
-              projectId: access.projectId,
-              from: url.searchParams.get('from') ?? '',
-              to: url.searchParams.get('to') ?? '',
-            }),
+            await options.countReceivedEvents(
+              {
+                projectId: access.projectId,
+                from: url.searchParams.get('from') ?? '',
+                to: url.searchParams.get('to') ?? '',
+              },
+              controller.signal,
+            ),
             200,
           );
         } catch (error) {

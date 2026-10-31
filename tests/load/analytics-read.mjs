@@ -113,9 +113,9 @@ export async function exerciseAnalyticsReads({ directory }) {
         return { status: 'unauthenticated' };
       return projectId === 'a' ? { status: 'authorized', projectId: 'a' } : { status: 'forbidden' };
     },
-    countReceivedEvents: async (window) => {
+    countReceivedEvents: async (window, signal) => {
       reads++;
-      return reader.countReceivedEvents(window);
+      return reader.countReceivedEvents(window, signal);
     },
   });
   const query = new URL('https://fixture.invalid/v1/analytics/count');

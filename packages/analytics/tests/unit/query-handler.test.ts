@@ -38,11 +38,14 @@ it('reads only the resolver-authorized canonical project and prevents shared cac
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ count: '9007199254740993' });
   expect(resolve).toHaveBeenCalledWith(request, 'requested', expect.any(AbortSignal));
-  expect(count).toHaveBeenCalledWith({
-    projectId: 'canonical',
-    from: '2026-10-01T00:00:00Z',
-    to: '2026-10-02T00:00:00Z',
-  });
+  expect(count).toHaveBeenCalledWith(
+    {
+      projectId: 'canonical',
+      from: '2026-10-01T00:00:00Z',
+      to: '2026-10-02T00:00:00Z',
+    },
+    expect.any(AbortSignal),
+  );
   expect(response.headers.get('Cache-Control')).toBe('no-store');
   expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
 });
@@ -165,3 +168,38 @@ it('maps invalid authorized windows to 400 without querying ClickHouse', async (
   expect(await response.json()).toEqual({ error: 'INVALID_WINDOW' });
   expect(send).not.toHaveBeenCalled();
 });
+
+it.each(['deadline', 'disconnect'] as const)(
+  'propagates %s cancellation into an already-started reader',
+  async (reason) => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    try {
+      const reader = createAnalyticsReader({
+        endpoint: 'http://clickhouse:8123',
+        username: 'reader',
+        password: 'test',
+        fetch: async (_url, init) => {
+          signal = init?.signal ?? undefined;
+          return new Promise<Response>(() => {});
+        },
+      });
+      const handler = createAnalyticsQueryHandler({
+        timeoutMs: 25,
+        resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'a' }),
+        countReceivedEvents: reader.countReceivedEvents,
+      });
+      const cancellation = new AbortController();
+      const waiting = handler(new Request(url, { signal: cancellation.signal }));
+      await vi.advanceTimersByTimeAsync(0);
+      if (reason === 'disconnect') cancellation.abort();
+      else await vi.advanceTimersByTimeAsync(26);
+      expect((await waiting).status).toBe(503);
+      expect(signal?.aborted).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);

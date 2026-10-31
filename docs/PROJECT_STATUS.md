@@ -24,7 +24,7 @@ commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
 Autonomous development resumed on October 31. Latest verified application commit:
-`31e489b` (reader foundation). Work is committed locally; no push, deployment, or remote CI verification
+`1083b89` (reader and query boundary). Work is committed locally; no push, deployment, or remote CI verification
 has been performed in this continuation. Implementation and checks are
 agent-performed and do not establish independent learner mastery. Dated sections
 below preserve historical evidence; their pending-work statements apply to those
@@ -96,6 +96,9 @@ dates rather than this checkpoint.
   resolver, application route, listener, or production identity provider is
   installed. The real-storage probe also exercises fixture-authorized and denied
   requests. Hanging dependencies retain their admission slot until settlement.
+  Query deadlines and caller disconnects propagate to the reader's fetch/body
+  operation; pre-cancelled reads never start storage work. The independent reader
+  deadline remains in place even if a custom fetch ignores cancellation.
 - **Ingestion admission and recovery:** publisher work is bounded by outstanding
   event count and serialized bytes, including sends still pending after an HTTP
   deadline. Defaults are 1,000 events and 8 MiB, pending workload measurements.
@@ -172,21 +175,21 @@ dates rather than this checkpoint.
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                                |
-| ---------------------------------------------- | ----------------------------: | ----------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes              |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                   |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                    |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                  |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                         |
-| Analytics reader and query boundary unit tests |                            32 | Input bounds, exact counts, authorization denial, cancellation, and deadlines |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                 |
+| Suite                                          | Latest observed passing count | Evidence scope                                                                        |
+| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes                      |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                           |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                            |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                          |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                                 |
+| Analytics reader and query boundary unit tests |                            37 | Input bounds, exact counts, authorization denial, storage cancellation, and deadlines |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                         |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 32 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 37 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
@@ -225,8 +228,8 @@ ClickHouse consumption, batch inserts, or the existing recovery probes.
 The full native browser/crash-recovery pipeline passed after producer coalescing.
 The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
-authorization. Next, propagate query cancellation into the underlying storage
-read, then integrate a session/membership resolver and dashboard route once the
+authorization. Query cancellation now reaches the underlying storage read.
+Next, integrate a session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by
 fixture tests; public ingestion keys must never authorize reads. Longer endurance
 and connection/proxy admission can follow the established performance harness. Fixed-session higher-rate,

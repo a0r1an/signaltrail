@@ -69,8 +69,10 @@ The provisional defaults admit 32 requests per handler and bound each response
 wait to ten seconds. A timed-out or disconnected request aborts the resolver's
 signal; late authorization cannot begin a storage read. Admission stays reserved
 until the underlying work settles, including dependencies that ignore abort.
-The supplied reader has its own storage deadline; an already-started read is not
-cancelled by the handler's signal. Deploy one shared handler instance per service,
+The handler passes cancellation to the storage operation as its second argument.
+The supplied reader aborts fetch/body work on cancellation and retains its own
+independent deadline, including for custom fetch implementations that ignore abort.
+Custom storage wrappers must forward the signal. Deploy one shared handler instance per service,
 not one per request. These are instance limits, not proxy or distributed quotas.
 
 The isolated probe uses a fixture-only membership resolver to verify denied

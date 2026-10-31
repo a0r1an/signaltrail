@@ -6,6 +6,63 @@ const window = {
   to: '2026-10-02T00:00:00.000Z',
 };
 
+it('does not start a storage request when its caller already cancelled', async () => {
+  const send = vi.fn(async () => new Response('{"count":"1"}'));
+  const reader = createAnalyticsReader({
+    endpoint: 'http://clickhouse:8123',
+    username: 'reader',
+    password: 'test',
+    fetch: send,
+  });
+  const cancellation = new AbortController();
+  cancellation.abort();
+  await expect(reader.countReceivedEvents(window, cancellation.signal)).rejects.toThrow(
+    'Analytics query was not confirmed',
+  );
+  expect(send).not.toHaveBeenCalled();
+});
+
+it.each(['fetch', 'body'] as const)(
+  'cancels a pending %s when the caller disconnects',
+  async (mode) => {
+    vi.useFakeTimers();
+    const cancellation = new AbortController();
+    let signal: AbortSignal | undefined;
+    let bodyCancelled = false;
+    try {
+      const reader = createAnalyticsReader({
+        endpoint: 'http://clickhouse:8123',
+        username: 'reader',
+        password: 'test',
+        fetch: async (_url, init) => {
+          signal = init?.signal ?? undefined;
+          return mode === 'fetch'
+            ? new Promise<Response>(() => {})
+            : new Response(
+                new ReadableStream({
+                  cancel() {
+                    bodyCancelled = true;
+                  },
+                }),
+              );
+        },
+      });
+      const waiting = expect(
+        reader.countReceivedEvents(window, cancellation.signal),
+      ).rejects.toThrow('Analytics query was not confirmed');
+      await vi.advanceTimersByTimeAsync(0);
+      cancellation.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(signal?.aborted).toBe(true);
+      await waiting;
+      if (mode === 'body') expect(bodyCancelled).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
 it('returns exact unique-event counts without converting UInt64 values to Number', async () => {
   const send = vi.fn(async () => new Response('{"count":"9007199254740993"}\n'));
   const reader = createAnalyticsReader({
