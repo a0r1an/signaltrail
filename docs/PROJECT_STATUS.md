@@ -24,7 +24,7 @@ commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
 Autonomous development resumed on October 31. Latest verified application commit:
-`1083b89` (reader and query boundary). Work is committed locally; no push, deployment, or remote CI verification
+`1c15314` (reader, query boundary, and storage cancellation). Work is committed locally; no push, deployment, or remote CI verification
 has been performed in this continuation. Implementation and checks are
 agent-performed and do not establish independent learner mastery. Dated sections
 below preserve historical evidence; their pending-work statements apply to those
@@ -129,7 +129,8 @@ dates rather than this checkpoint.
   Tests use `FINAL` for unique reads across retries and isolated projects.
   They verify recovery after both a pre-storage crash and a stored insert whose
   acknowledgement never reached the worker. Background merges alone do not
-  guarantee unique reads. No analytics query API is implemented.
+  guarantee unique reads. The query handler is library-only; no application
+  endpoint or production membership resolver is installed.
 - **Native browser recovery:** a real Chromium SDK page queues offline in
   IndexedDB, closes, reopens during a broker outage, retains the original ID on
   retry, and drains into one logical ClickHouse row after recovery. This covers
@@ -194,6 +195,9 @@ claim that the entire workspace or remote CI ran at final HEAD.
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
   `test-results/load/2026-10-31T16-19-27.614Z-analytics-read/`.
+  The final probe passed again at clean application commit `1c15314` in
+  `test-results/load/2026-10-31T16-23-05.164Z-analytics-read/`, including final
+  container/volume cleanup. Full-repository Prettier checking also passed.
   CI now includes this probe; remote execution remains unverified.
 - The final processor checks passed lint, tests, typecheck, and JavaScript/type
   declaration builds. Formatting and `git diff --check` passed for changed files.
