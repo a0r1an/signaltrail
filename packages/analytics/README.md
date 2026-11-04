@@ -118,3 +118,10 @@ It is an exact match, including case, whitespace, and literal backslashes. Names
 must contain a non-whitespace character, have valid UTF-8 representation, and
 fit 4 KiB. The filter binds bytes as a parameter and applies to the latest
 replacement row. An older version with a different name is not resurrected.
+
+They also accept an optional `sessionId` with the same exact UTF-8 and 4 KiB
+validation. It can be combined with `eventName` and cursor paging; filters are
+ANDed and must be kept unchanged between pages. Session IDs are scoped to the
+authorized project, not globally unique identities. Replacement selection occurs
+before session filtering as well. Session-filtered results retain receive-time
+ordering; this is not a client sequence-ordered session timeline.

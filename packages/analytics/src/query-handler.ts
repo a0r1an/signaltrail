@@ -55,8 +55,8 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
     }
     const parameters = ['projectId', 'from', 'to'];
     const allowed = listing
-      ? [...parameters, 'eventName', 'limit', 'cursor']
-      : [...parameters, 'eventName'];
+      ? [...parameters, 'eventName', 'sessionId', 'limit', 'cursor']
+      : [...parameters, 'eventName', 'sessionId'];
     if (
       [...url.searchParams.keys()].some((key) => !allowed.includes(key)) ||
       allowed.some((key) => url.searchParams.getAll(key).length > 1) ||
@@ -80,9 +80,14 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
         controller.signal.throwIfAborted();
         if (access.status === 'unauthenticated') return json({ error: 'UNAUTHENTICATED' }, 401);
         if (access.status !== 'authorized') return json({ error: 'FORBIDDEN' }, 403);
-        const filter = url.searchParams.has('eventName')
-          ? { eventName: url.searchParams.get('eventName')! }
-          : {};
+        const filter = {
+          ...(url.searchParams.has('eventName')
+            ? { eventName: url.searchParams.get('eventName')! }
+            : {}),
+          ...(url.searchParams.has('sessionId')
+            ? { sessionId: url.searchParams.get('sessionId')! }
+            : {}),
+        };
         try {
           if (listing) {
             const rawLimit = url.searchParams.get('limit');

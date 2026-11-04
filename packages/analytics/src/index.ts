@@ -16,6 +16,7 @@ export interface ReceivedEventWindow {
   from: string;
   to: string;
   eventName?: string;
+  sessionId?: string;
 }
 export interface EventSummary {
   eventId: string;
@@ -144,22 +145,26 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       throw new RangeError('Received-time window must be positive and at most 31 days');
     const target = new URL(endpoint);
     if (query) target.searchParams.set('query', query);
-    if (window.eventName !== undefined) {
-      const name = window.eventName;
+    for (const [key, column, parameter] of [
+      ['eventName', 'event_name', 'event_name_hex'],
+      ['sessionId', 'session_id', 'session_hex'],
+    ] as const) {
+      const value = window[key];
+      if (value === undefined) continue;
       if (
-        typeof name !== 'string' ||
-        !/\S/.test(name) ||
-        Buffer.byteLength(name) > 4096 ||
-        Buffer.from(name).toString() !== name
+        typeof value !== 'string' ||
+        !/\S/.test(value) ||
+        Buffer.byteLength(value) > 4096 ||
+        Buffer.from(value).toString() !== value
       )
-        throw new TypeError('Invalid event-name filter');
+        throw new TypeError('Invalid analytics filter');
       target.searchParams.set(
         'query',
         target.searchParams
           .get('query')!
-          .replace(' WHERE ', ' WHERE event_name = unhex({event_name_hex:String}) AND '),
+          .replace(' WHERE ', ` WHERE ${column} = unhex({${parameter}:String}) AND `),
       );
-      target.searchParams.set('param_event_name_hex', Buffer.from(name).toString('hex'));
+      target.searchParams.set(`param_${parameter}`, Buffer.from(value).toString('hex'));
     }
     if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
     if (cursor) {

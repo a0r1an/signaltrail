@@ -31,6 +31,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Added exact session-ID filters to count and paged-summary reads and both
+  authorized query routes. They compose with event-name filters and preserve
+  tenant scope, latest-version selection, and existing resource/cancellation
+  bounds. All 87 analytics units, lint, types, and builds pass. The expanded
+  real-storage probe passed with final cleanup in
+  `test-results/load/2026-11-04T00-02-32.854Z-analytics-read/` (November 3 local
+  time), including changed-session duplicates, literal/newline IDs, combined
+  paging, another project with the same session ID, and authorized empty results.
 - The installed ClickHouse image starts a temporary loopback-only server during
   initialization. The prior loopback healthcheck could succeed before the final
   network listener existed. A controlled init gate reproduced that exact false
@@ -207,21 +215,21 @@ performed. Historical sections below preserve evidence from their recorded dates
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                               |
-| ---------------------------------------------- | ----------------------------: | ---------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes             |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                  |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                   |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                 |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                        |
-| Analytics reader and query boundary unit tests |                            79 | Includes exact event-name filters, bounded lists, cursors, and authorization |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                |
+| Suite                                          | Latest observed passing count | Evidence scope                                                                 |
+| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------ |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes               |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                    |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                     |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                   |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                          |
+| Analytics reader and query boundary unit tests |                            87 | Includes exact session/name filters, bounded lists, cursors, and authorization |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                  |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 79 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 87 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
