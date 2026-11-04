@@ -174,3 +174,9 @@ The unit suite opens ephemeral loopback listeners for wire, disconnect, and slow
 header shutdown checks. `load authorized-analytics` additionally verifies real
 HTTP authorization, counts, and summary reads against owned PostgreSQL and
 ClickHouse fixtures. Production session verification remains pending.
+
+The implemented route reference is in
+[`docs/api/analytics.openapi.json`](../../docs/api/analytics.openapi.json).
+It is validated offline by this package's test suite. Its documented bearer
+binding is fixture-only; production session transport and server URLs must be
+configured before mounting a service. See the API reference README for limits.

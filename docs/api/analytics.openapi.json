@@ -1,0 +1,568 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "SignalTrail private analytics reads — reference binding",
+    "version": "0.1.0",
+    "description": "Reference for implemented query-handler and Node HTTP bridge routes. Not a deployed service or a production authentication configuration. The bearer-header scheme describes the isolated verified-session fixture binding only; replace it with the selected deployment session scheme when mounting the service. The library requires an injected identity/membership resolver and supplies no token verifier. Never authorize reads using public ingestion keys. Production session provider, TLS, credentials and route mounting remain pending."
+  },
+  "servers": [
+    {
+      "url": "https://query.invalid",
+      "description": "Documentation-only origin; not deployed."
+    }
+  ],
+  "security": [
+    {
+      "verifiedDashboardSession": []
+    }
+  ],
+  "paths": {
+    "/v1/analytics/count": {
+      "get": {
+        "operationId": "countReceivedEvents",
+        "summary": "Count received events",
+        "description": "Unknown or duplicate query parameters are rejected. A request body is not supported. Identity and membership must be verified by the injected server resolver. The complete count response is bounded to 4 KiB.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/projectId"
+          },
+          {
+            "$ref": "#/components/parameters/from"
+          },
+          {
+            "$ref": "#/components/parameters/to"
+          },
+          {
+            "$ref": "#/components/parameters/eventName"
+          },
+          {
+            "$ref": "#/components/parameters/sessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact unique-event count using latest received versions, before time/filter selection.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Application responses are not cacheable.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error414"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "431": {
+            "description": "Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed."
+          }
+        },
+        "x-maximum-request-url-characters": 4096
+      }
+    },
+    "/v1/analytics/events": {
+      "get": {
+        "operationId": "listReceivedEvents",
+        "summary": "List received event summaries",
+        "description": "Unknown or duplicate query parameters are rejected. A request body is not supported. Identity and membership must be verified by the injected server resolver. The 160-KiB storage-response budget may reduce page size; at most seven complete-query attempts share one deadline. Raw URL, distinct identity, properties and context are omitted.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/projectId"
+          },
+          {
+            "$ref": "#/components/parameters/from"
+          },
+          {
+            "$ref": "#/components/parameters/to"
+          },
+          {
+            "$ref": "#/components/parameters/eventName"
+          },
+          {
+            "$ref": "#/components/parameters/sessionId"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete unique-event page using latest received versions; ordering is receivedAt descending then eventId descending. Paging is not a snapshot.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Application responses are not cacheable.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error414"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "431": {
+            "description": "Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed."
+          }
+        },
+        "x-maximum-request-url-characters": 16384
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "verifiedDashboardSession": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Reference fixture binding for an externally verified dashboard session; no JWT format is implied. Production provider and header/cookie transport remain undecided. Public project ingestion keys are invalid."
+      }
+    },
+    "parameters": {
+      "projectId": {
+        "name": "projectId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Requested project scope, never authority. The PostgreSQL resolver requires a UUID and returns a canonical project ID; other injected resolvers must define their own canonicalization."
+        },
+        "description": "Session membership is checked on every request, before analytics storage."
+      },
+      "from": {
+        "name": "from",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/UtcTimestamp"
+        },
+        "description": "Inclusive received-at lower bound. Positive window of at most 31 days."
+      },
+      "to": {
+        "name": "to",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/UtcTimestamp"
+        },
+        "description": "Exclusive received-at upper bound. Latest receive timestamp wins when stable event IDs are retried."
+      },
+      "eventName": {
+        "name": "eventName",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        },
+        "description": "Optional exact event-name match; ANDed with sessionId."
+      },
+      "sessionId": {
+        "name": "sessionId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        },
+        "description": "Optional exact project-scoped session match; ANDed with eventName."
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        },
+        "description": "Maximum returned events. Adaptive byte-budget reduction may return fewer; follow hasMore/nextCursor."
+      },
+      "cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Opaque versioned keyset position bound to project, canonical UTC window, eventName and sessionId. Unsigned; every page still requires authorization. Preserve exactly. Version-two output; bounded version-one input remains accepted."
+        },
+        "description": "Continue the same scope and filters; page size may change."
+      }
+    },
+    "schemas": {
+      "UInt64": {
+        "type": "string",
+        "pattern": "^(0|[1-9]\\d{0,19})$",
+        "maxLength": 20,
+        "description": "Canonical unsigned decimal integer, checked at runtime to be <= 18446744073709551615. Keep as a string to preserve precision.",
+        "x-maximum-decimal-string": "18446744073709551615"
+      },
+      "UtcTimestamp": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$",
+        "description": "Valid UTC ISO timestamp, zero to three fractional digits. Calendar validity is checked at runtime."
+      },
+      "Identifier": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "\\S",
+        "description": "Exact, nonblank valid Unicode; at most 4096 UTF-8 bytes. No trimming or normalization. JSON Schema maxLength alone does not enforce the byte bound."
+      },
+      "Count": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["count"],
+        "properties": {
+          "count": {
+            "$ref": "#/components/schemas/UInt64"
+          }
+        }
+      },
+      "EventSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "eventName", "sessionId", "sequence", "receivedAt"],
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "eventName": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/UInt64"
+          },
+          "receivedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        }
+      },
+      "EventPage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["events", "hasMore", "nextCursor"],
+            "properties": {
+              "events": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/EventSummary"
+                }
+              },
+              "hasMore": {
+                "const": true
+              },
+              "nextCursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Opaque versioned keyset position bound to project, canonical UTC window, eventName and sessionId. Unsigned; every page still requires authorization. Preserve exactly. Version-two output; bounded version-one input remains accepted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["events", "hasMore"],
+            "properties": {
+              "events": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/EventSummary"
+                }
+              },
+              "hasMore": {
+                "const": false
+              }
+            }
+          }
+        ]
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Malformed request, unsupported body, duplicate credentials/parameters, invalid window/filter/limit, or mismatched cursor.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["INVALID_REQUEST", "INVALID_WINDOW"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Session identity was not verified. Public ingestion keys never grant reads.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["UNAUTHENTICATED"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Verified identity lacks project membership; no analytics read occurs.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["FORBIDDEN"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Unknown route, or event listing dependency is not configured.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["NOT_FOUND"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error405": {
+        "description": "Unsupported method. Only GET is supported.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          },
+          "Allow": {
+            "schema": {
+              "type": "string",
+              "const": "GET"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["METHOD_NOT_ALLOWED"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error414": {
+        "description": "Encoded request URL exceeds the route limit.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["URI_TOO_LONG"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Dependency unavailable, operation admission full, deadline, cancellation, or unconfirmed result. Generic error only.",
+        "headers": {
+          "Cache-Control": {
+            "description": "Application responses are not cacheable.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "enum": ["SERVICE_UNAVAILABLE"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-signaltrail-status": "reference-not-deployed",
+  "x-handler-defaults": {
+    "maxConcurrentRequests": 32,
+    "timeoutMs": 10000
+  },
+  "x-reader-defaults": {
+    "timeoutMs": 5000,
+    "maxWindowDays": 31,
+    "maxListAttemptBytes": 163840,
+    "maxListAttempts": 7,
+    "countResponseBytes": 4096
+  },
+  "x-node-http-defaults": {
+    "maxConnections": 128,
+    "maxHeaderBytes": 32768,
+    "headersTimeoutMs": 10000,
+    "requestTimeoutMs": 15000,
+    "keepAliveTimeoutMs": 5000,
+    "shutdownTimeoutMs": 1000
+  }
+}
