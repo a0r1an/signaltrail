@@ -72,24 +72,13 @@ services:
       - '127.0.0.1:9000:9000'
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+      - ./infra/clickhouse/healthcheck.sh:/healthcheck.sh:ro
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
     healthcheck:
-      test:
-        [
-          'CMD',
-          'clickhouse-client',
-          '--host',
-          '127.0.0.1',
-          '--user',
-          'signaltrail',
-          '--password',
-          'signaltrail_local',
-          '--query',
-          'SELECT 1',
-        ]
+      test: ['CMD', '/bin/sh', '/healthcheck.sh']
       interval: 5s
       timeout: 5s
       retries: 20

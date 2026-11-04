@@ -10,7 +10,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
-  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read
+  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|storage-image|storage-logs
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs install
@@ -91,6 +91,28 @@ try {
       'http://127.0.0.1:9644/public_metrics',
     );
   else if (group === 'load' && action === 'check') pnpm('test:load:unit');
+  else if (group === 'load' && action === 'storage-image')
+    docker(
+      'run',
+      '--rm',
+      '--pull',
+      'never',
+      '--entrypoint',
+      'cat',
+      'clickhouse/clickhouse-server:26.8',
+      '/entrypoint.sh',
+    );
+  else if (group === 'load' && action === 'storage-logs')
+    docker(
+      'compose',
+      '-f',
+      'tests/load/compose.yaml',
+      'logs',
+      '--no-color',
+      '--tail',
+      '200',
+      'clickhouse',
+    );
   else if (
     group === 'load' &&
     [
@@ -108,6 +130,7 @@ try {
       'sustained-bytes',
       'request-admission',
       'analytics-read',
+      'storage-readiness',
     ].includes(action)
   )
     pnpm('test:load', action);

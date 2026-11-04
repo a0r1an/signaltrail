@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-10-31
+Last updated: 2026-11-03
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -15,7 +15,7 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-10-31
+## Current checkpoint — 2026-11-03
 
 The analytics path now works through the low-level browser SDK, HTTP ingestion,
 Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
@@ -23,14 +23,30 @@ outage recovery, worker crash/restart, downstream deduplication, and dead-letter
 commits have local integration evidence. This is not a deployed product or a
 verified production availability guarantee.
 
-Autonomous development resumed on October 31. Latest verified application commit:
-`43943bd` (fully integration-verified explorer and keyset paging). The subsequent
-event-name filtering slice passes package checks but its expanded real-storage
-probe is not yet verified. Work is committed locally; no push, deployment, or remote CI verification
-has been performed in this continuation. Implementation and checks are
-agent-performed and do not establish independent learner mastery. Dated sections
-below preserve historical evidence; their pending-work statements apply to those
-dates rather than this checkpoint.
+Autonomous development resumed on November 3. Event-name filtering from
+`677482d` now has successful real-storage verification. The ClickHouse bootstrap
+healthcheck defect was reproduced and corrected with a controlled initialization
+gate. Changes are local; no push, deployment, or remote CI verification has been
+performed. Historical sections below preserve evidence from their recorded dates.
+
+### November 3 — startup readiness and filtering verification
+
+- The installed ClickHouse image starts a temporary loopback-only server during
+  initialization. The prior loopback healthcheck could succeed before the final
+  network listener existed. A controlled init gate reproduced that exact false
+  readiness assertion, then passed after checking the container hostname instead.
+- The successful gated probe and real analytics probe both completed cleanup:
+  `test-results/load/2026-11-03T17-52-32.216Z-storage-readiness/` and
+  `test-results/load/2026-11-03T17-53-15.921Z-analytics-read/`.
+  Filters, latest-version replacement, paging, and authorized listing passed.
+  The October 31 failed run remains failed evidence; it lacked server logs, so
+  its specific socket closure cannot be attributed uniquely after the fact.
+- Added the readiness probe to CI, standardized installed-image/startup-log
+  diagnostics, and retained ClickHouse failure logs before isolated teardown.
+  Development services were not restarted and their volumes were not removed.
+- Harness checks: 25 tests passed. Both Compose configurations validated quietly.
+  Package builds succeeded during the probes; the previous 79-unit analytics
+  checks remain the latest unit evidence for unchanged reader code.
 
 ### October 31 — sustained measurement and producer improvement
 
@@ -259,14 +275,11 @@ The full native browser/crash-recovery pipeline passed after producer coalescing
 The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
-Stopped at the user's request after committing and recording the current work.
-Next, investigate the isolated ClickHouse fixture's initial connection failure,
-then run `./scripts/signaltrail-ops.mjs load analytics-read` to verify the new
-event-name filters, replacement behavior, filtered paging, and real authorized
-listing. Preserve the failed run as failed evidence. The filter implementation
-already passes all 79 analytics units, lint, types, and builds; do not describe
-its real-storage integration as passing until a new completed probe proves it.
-Then continue the explorer/product work. Integrate a
+Startup readiness and exact-name filtering are now verified; do not repeat
+that investigation as unfinished work. Next, add exact session-ID filtering to
+counts and paged summaries, including combined event-name filters, tenant
+isolation, and replacement semantics. Continue the explorer/product work after
+that slice. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by
 fixture tests; public ingestion keys must never authorize reads. Longer endurance

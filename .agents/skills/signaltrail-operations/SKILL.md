@@ -212,6 +212,24 @@ resource bounds, parameter binding, and response validation. Probe diagnostics,
 when needed, contain only owned synthetic fixture errors, never real tenant data
 or request authorization headers.
 
+## ClickHouse startup readiness
+
+`load storage-readiness` owns a controlled initialization gate in the isolated
+ClickHouse container. It requires the configured healthcheck to fail while the
+image's temporary loopback-only server is initializing, releases the gate, then
+requires the final server to become healthy and answer through port 38123. The
+gate is enabled only for this scenario, has a deadline, and is removed with the
+owned containers/volumes. Never install it in the development or production stack.
+A bind-mounted init script is copied into the container with fixed non-executable
+permissions so the image sources it consistently across host filesystems.
+
+`load storage-image` reads the installed pinned image's entrypoint, with no mounts,
+no server, and no pulls. `load storage-logs` reads the isolated project's recent
+ClickHouse logs. Failed storage scenarios also retain `clickhouse.log` before
+teardown. The image's native loopback query can succeed on its temporary bootstrap
+server; the shared healthcheck targets the container hostname to wait for the
+final network listener. Do not hide fixture startup failures with migration retries.
+
 ## Monitoring and secrets
 
 Monitoring configuration lives under `infra/monitoring/`. It reads ignored

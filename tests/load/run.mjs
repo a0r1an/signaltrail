@@ -14,6 +14,7 @@ import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
+  'storage-readiness': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'analytics-read': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'request-admission': {
     rate: 0,
@@ -86,22 +87,31 @@ const isSustained = [
   'sustained-outage',
   'sustained-bytes',
 ].includes(scenario);
+const usesStorage =
+  isPipeline || isSustained || ['analytics-read', 'storage-readiness'].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
 const releaseRunLock = await acquireRunLock(resolve(root, 'test-results/load.lock'));
 const compose = ['compose', '--profile', '*', '-f', 'tests/load/compose.yaml'];
-const dockerEnv = { ...process.env, SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092' };
+const dockerEnv = {
+  ...process.env,
+  SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092',
+  SIGNALTRAIL_STORAGE_INIT_GATE: scenario === 'storage-readiness' ? '1' : '0',
+};
 function docker(args, capture = false, allowFailure = false, signal) {
   return new Promise((resolveRun, reject) => {
     const child = spawn('docker', [...compose, ...args], {
       cwd: root,
       env: dockerEnv,
       signal,
-      stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+      stdio: capture ? ['ignore', 'pipe', capture === 'combined' ? 'pipe' : 'inherit'] : 'inherit',
     });
     let output = '';
     child.stdout?.on('data', (chunk) => {
+      output += chunk;
+    });
+    child.stderr?.on('data', (chunk) => {
       output += chunk;
     });
     child.on('error', reject);
@@ -168,12 +178,17 @@ try {
   await docker([
     'up',
     '-d',
-    '--wait',
-    '--wait-timeout',
-    '120',
+    ...(scenario === 'storage-readiness' ? [] : ['--wait', '--wait-timeout', '120']),
     'redpanda',
-    ...(isPipeline || isSustained || scenario === 'analytics-read' ? ['clickhouse'] : []),
+    ...(usesStorage ? ['clickhouse'] : []),
   ]);
+  if (scenario === 'storage-readiness') {
+    const { exerciseStorageReadiness } = await import('./storage-readiness.mjs');
+    await writeFile(
+      resolve(directory, 'storage-readiness.json'),
+      JSON.stringify(await exerciseStorageReadiness({ docker }), null, 2),
+    );
+  }
   await docker(['run', '--rm', 'init']);
   await writeFile(
     resolve(directory, 'broker-process.txt'),
@@ -384,16 +399,32 @@ try {
         run: async (signal) => {
           const logs = await docker(
             ['logs', '--no-color', '--tail', '100', 'redpanda'],
-            true,
+            'combined',
             false,
             signal,
           );
           await writeFile(resolve(directory, 'broker.log'), logs, { signal });
         },
       },
+      ...(usesStorage
+        ? [
+            {
+              name: 'save storage diagnostics',
+              run: async (signal) => {
+                const logs = await docker(
+                  ['logs', '--no-color', '--tail', '200', 'clickhouse'],
+                  'combined',
+                  false,
+                  signal,
+                );
+                await writeFile(resolve(directory, 'clickhouse.log'), logs, { signal });
+              },
+            },
+          ]
+        : []),
     ]);
   } catch (diagnosticError) {
-    console.error('Could not save broker diagnostics:', diagnosticError);
+    console.error('Could not save load diagnostics:', diagnosticError);
   }
 } finally {
   clearInterval(interval);

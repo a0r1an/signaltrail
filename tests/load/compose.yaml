@@ -22,6 +22,19 @@ services:
       file: ../../compose.yaml
       service: clickhouse
     profiles: ['storage']
+    environment:
+      SIGNALTRAIL_STORAGE_INIT_GATE: ${SIGNALTRAIL_STORAGE_INIT_GATE:-0}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if [ "$${SIGNALTRAIL_STORAGE_INIT_GATE:-0}" = '1' ]; then
+          cp /signaltrail-init-gate.sh /docker-entrypoint-initdb.d/999-signaltrail-test-gate.sh
+          chmod 0644 /docker-entrypoint-initdb.d/999-signaltrail-test-gate.sh
+        fi
+        exec /entrypoint.sh
+    volumes:
+      - ./storage-init-gate.sh:/signaltrail-init-gate.sh:ro
     ports: !override
       - '127.0.0.1:38123:8123'
   k6:
