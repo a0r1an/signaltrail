@@ -289,3 +289,29 @@ it('bounds JSON nesting before recursive validation without counting brackets in
   ).toBe(200);
   expect(publish).toHaveBeenCalledTimes(1);
 });
+
+it('rejects unreadable identifiers individually while publishing valid batch siblings', async () => {
+  const publish = vi.fn().mockResolvedValue(undefined);
+  const handle = createIngestionHandler({ resolveProjectKey: () => 'project-1', publish });
+  const response = await handle(
+    request([
+      { ...event, eventId: 'x'.repeat(4097) },
+      { ...event, eventName: 'é'.repeat(2049) },
+      { ...event, sessionId: 'session-\ud800' },
+      event,
+    ]),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    results: [
+      { index: 0, status: 'rejected', code: 'INVALID_EVENT' },
+      { index: 1, status: 'rejected', code: 'INVALID_EVENT' },
+      { index: 2, status: 'rejected', code: 'INVALID_EVENT' },
+      { index: 3, eventId: event.eventId, status: 'accepted' },
+    ],
+  });
+  expect(publish).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ event }),
+    expect.any(AbortSignal),
+  );
+});

@@ -31,6 +31,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Event IDs, event names, and session IDs now share the reader's existing 4-KiB
+  UTF-8 bound and reject lone surrogates without rewriting values. Contract tests
+  reproduced 12 previously accepted invalid cases. Ingestion preserves valid
+  batch siblings; the processor dead-letters legacy invalid records before commit.
+  This tightens the private pre-release contract and does not migrate stored data.
+  Contracts (96), ingestion (64), worker (106), and SDK (252) units plus their
+  lint/type/build checks passed; all 13 native Chromium tests also passed.
+
 - Real HTTP overload checks confirm timed-out reads retain capacity until the
   underlying operation settles, then recover. A shutdown regression exposed
   keep-alive responses during draining; they now explicitly close the connection
@@ -269,18 +277,18 @@ performed. Historical sections below preserve evidence from their recorded dates
   tests, consumer-lag visibility, alert routing, and production capacity sizing.
   See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) before making unresolved decisions.
 
-## Latest verification evidence — 2026-10-31
+## Latest observed verification evidence
 
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
 | Suite                                          | Latest observed passing count | Evidence scope                                                            |
 | ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes          |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks               |
+| Contracts                                      |                            96 | November 3 identifier byte and Unicode validation checks                  |
+| Ingestion                                      |                            64 | November 3 valid-sibling identifier rejection checks                      |
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                     |
+| Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
 | Analytics reader and query boundary unit tests |                           113 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
@@ -349,8 +357,10 @@ The combined authorized-query probe and query-bound cursors are verified.
 Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
-recovery. Next, align event identifier validation with the existing read-side
-UTF-8/4-KiB bounds so newly ingested identifiers cannot poison summary reads. Session verification remains injectable;
+recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
+fix cursor JSON escaping expansion for valid control-character event IDs while
+preserving scope checks and compatibility. Large-page response caps remain
+independent limits requiring a separate bounded pagination design. Session verification remains injectable;
 production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after
 that slice. Integrate a

@@ -399,3 +399,26 @@ describe('validateAnalyticsEvents', () => {
     ]);
   });
 });
+
+describe.each(['eventId', 'eventName', 'sessionId'] as const)(
+  '%s UTF-8 read compatibility',
+  (field) => {
+    it.each([
+      ['ASCII overflow', 'x'.repeat(4097)],
+      ['multibyte overflow', 'é'.repeat(2049)],
+      ['unpaired high surrogate', 'id-\ud800'],
+      ['unpaired low surrogate', 'id-\udfff'],
+    ])('rejects %s before ingestion', (_description, value) => {
+      expect(AnalyticsEventSchema.safeParse({ ...validEvent, [field]: value }).success).toBe(false);
+    });
+    it.each([
+      ['ASCII boundary', 'x'.repeat(4096)],
+      ['multibyte boundary', 'é'.repeat(2048)],
+      ['astral boundary', '😀'.repeat(1024)],
+      ['literal whitespace and backslash', ' id \n\\value '],
+    ])('preserves %s exactly', (_description, value) => {
+      const result = AnalyticsEventSchema.parse({ ...validEvent, [field]: value });
+      expect(result[field]).toBe(value);
+    });
+  },
+);

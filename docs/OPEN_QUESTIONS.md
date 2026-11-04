@@ -77,9 +77,12 @@ Entries are questions, not approvals or completed work.
   reader. Paging is not a snapshot under concurrent writes or later retries;
   decide stable export/snapshot semantics before offering complete exports.
   Provisional cursor/list URL caps are 8/16 KiB and must fit production proxy
-  limits. Summary response bounds can reject unusually long stored identifiers
-  even when ingestion accepted them; align supported read/ingest sizes before
-  exposing the explorer to customers.
+  limits. New events now share the reader's 4-KiB/valid-UTF-8 identifier bounds. Historical
+  oversized rows remain unchanged and broker records violating the new contract
+  follow the acknowledged dead-letter path. Plan a compatible rollout before
+  production; aggregate page byte limits remain independent of per-field limits.
+  JSON escaping can also expand cursor bytes for valid control-character IDs;
+  this is a local implementation follow-up, not a user policy decision.
 
 ## Reversible defaults during autonomous work
 

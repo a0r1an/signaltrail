@@ -286,3 +286,25 @@ it('classifies valid but excessively nested JSON as an invalid record and preser
   await expect(processMessage({ ...message, value })).resolves.toEqual({ status: 'dead_lettered' });
   expect(effects).toEqual(['INVALID_RECORD', 'commit']);
 });
+
+it('dead-letters legacy oversized identifiers before committing instead of poisoning analytics', async () => {
+  const operations: unknown[] = [];
+  const processMessage = createEventProcessor({
+    writeEvent: async () => {
+      throw new Error('Unreadable identifier reached storage');
+    },
+    writeDeadLetter: async (letter) => {
+      operations.push(letter);
+    },
+    commit: async (cursor) => {
+      operations.push(cursor);
+    },
+  });
+  const value = Buffer.from(
+    JSON.stringify({ ...record, event: { ...record.event, eventId: 'x'.repeat(4097) } }),
+  );
+  expect(await processMessage({ ...message, value })).toEqual({ status: 'dead_lettered' });
+  expect(operations).toHaveLength(2);
+  expect(operations[0]).toMatchObject({ reason: 'INVALID_RECORD', payloadBytes: value.length });
+  expect(operations[1]).toEqual({ topic: 'analytics', partition: 0, offset: '9007199254740994' });
+});

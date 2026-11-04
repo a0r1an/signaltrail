@@ -1,6 +1,6 @@
 export const CONTRACT_VERSION = 1 as const;
 
-export { AnalyticsEventSchema } from './analytics-event.ts';
+export { AnalyticsEventSchema, MAX_ANALYTICS_IDENTIFIER_BYTES } from './analytics-event.ts';
 export {
   AnalyticsBatchResponseSchema,
   isAnalyticsBatchResponseForEvents,
