@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createProjectAccessResolver } from '../../packages/project-access/dist/index.js';
-import { createAnalyticsQueryHandler } from '../../packages/analytics/dist/index.js';
+import {
+  createAnalyticsQueryHandler,
+  createAnalyticsReader,
+} from '../../packages/analytics/dist/index.js';
+import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 
-export async function exerciseProjectAccess({ docker }) {
+export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
   const sql = (text, signal = AbortSignal.timeout(10000)) =>
     docker(
       [
@@ -87,13 +91,66 @@ export async function exerciseProjectAccess({ docker }) {
     status: 'forbidden',
   });
   let reads = 0;
+  let reader;
+  if (realAnalytics) {
+    const connection = {
+      endpoint: 'http://127.0.0.1:38123',
+      username: 'signaltrail',
+      password: 'signaltrail_local',
+    };
+    const migration = await fetch(connection.endpoint, {
+      method: 'POST',
+      headers: {
+        'X-ClickHouse-User': connection.username,
+        'X-ClickHouse-Key': connection.password,
+      },
+      body: await readFile(
+        new URL('../../infra/clickhouse/001-analytics-events.sql', import.meta.url),
+        'utf8',
+      ),
+      signal: AbortSignal.timeout(10000),
+    });
+    assert.equal(migration.status, 200);
+    assert.equal((await migration.text()).trim(), '');
+    const event = {
+      schemaVersion: 1,
+      eventId: 'event-a',
+      eventName: 'viewed',
+      distinctId: 'fixture-visitor',
+      sessionId: 'shared-session',
+      sequence: 0,
+      clientTimestamp: '2026-11-01T12:00:00.000Z',
+      url: 'https://fixture.invalid',
+      properties: {},
+      context: { sdkVersion: 'fixture' },
+    };
+    await createClickHouseBatchWriter(connection)([
+      { projectId: projectA, receivedAt: event.clientTimestamp, event },
+      { projectId: projectB, receivedAt: event.clientTimestamp, event },
+      {
+        projectId: projectB,
+        receivedAt: event.clientTimestamp,
+        event: { ...event, eventId: 'event-z', sequence: 1 },
+      },
+    ]);
+    reader = createAnalyticsReader(connection);
+  }
   const handler = createAnalyticsQueryHandler({
     resolveProjectAccess: resolve,
-    countReceivedEvents: async (window) => {
+    countReceivedEvents: async (window, signal) => {
       reads++;
+      if (reader) return reader.countReceivedEvents(window, signal);
       assert.equal(window.projectId, projectA);
       return { count: '1' };
     },
+    ...(reader
+      ? {
+          listReceivedEvents: async (window, signal) => {
+            reads++;
+            return reader.listReceivedEvents(window, signal);
+          },
+        }
+      : {}),
   });
   const target = new URL('https://fixture.invalid/v1/analytics/count');
   for (const [key, value] of Object.entries({
@@ -112,12 +169,54 @@ export async function exerciseProjectAccess({ docker }) {
     200,
   );
   assert.equal(reads, 1);
+  if (realAnalytics) {
+    target.searchParams.set('projectId', projectB);
+    const response = await handler(
+      new Request(target, { headers: { Authorization: 'Bearer fixture-b' } }),
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { count: '2' });
+    target.pathname = '/v1/analytics/events';
+    target.searchParams.set('limit', '1');
+    target.searchParams.set('sessionId', 'shared-session');
+    const firstResponse = await handler(
+      new Request(target, { headers: { Authorization: 'Bearer fixture-b' } }),
+    );
+    assert.equal(firstResponse.status, 200);
+    const first = await firstResponse.json();
+    assert.deepEqual(
+      first.events.map((event) => event.eventId),
+      ['event-z'],
+    );
+    assert.equal(first.hasMore, true);
+    target.searchParams.set('cursor', first.nextCursor);
+    const nextResponse = await handler(
+      new Request(target, { headers: { Authorization: 'Bearer fixture-b' } }),
+    );
+    assert.equal(nextResponse.status, 200);
+    const next = await nextResponse.json();
+    assert.deepEqual(
+      next.events.map((event) => event.eventId),
+      ['event-a'],
+    );
+    assert.equal(next.hasMore, false);
+    target.pathname = '/v1/analytics/count';
+    for (const key of ['limit', 'sessionId', 'cursor']) target.searchParams.delete(key);
+    target.searchParams.set('projectId', projectA);
+  }
+
   await sql(
     `DELETE FROM signaltrail_control.organization_memberships WHERE organization_id='${orgA}' AND principal_id='${userA}'`,
   );
   assert.deepEqual(await resolve(request('Bearer fixture-a'), projectA, signal), {
     status: 'forbidden',
   });
+  const readsBeforeRevokedRequest = reads;
+  assert.equal(
+    (await handler(new Request(target, { headers: { Authorization: 'Bearer fixture-a' } }))).status,
+    403,
+  );
+  assert.equal(reads, readsBeforeRevokedRequest);
   await sql(`DO $body$ BEGIN
     BEGIN INSERT INTO signaltrail_control.organization_memberships(organization_id,principal_id,role) VALUES ('${orgA}','${userB}','viewer');
     EXCEPTION WHEN check_violation THEN RETURN; END;
@@ -130,6 +229,7 @@ export async function exerciseProjectAccess({ docker }) {
     membershipRemovalImmediate: true,
     invalidRoleRejected: true,
     queryBoundaryVerified: true,
+    realClickHouseCountsAndPaging: realAnalytics,
     limitations: [
       'Fixture identity resolver and psql bridge only; no production session validation, database adapter, or route deployed.',
     ],

@@ -31,6 +31,12 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- The database membership resolver and real ClickHouse reader passed a combined
+  authorized-query probe in
+  `test-results/load/2026-11-04T00-12-28.561Z-authorized-analytics/`. Projects share
+  event/session IDs but return distinct correct totals and pages. Denied/revoked
+  requests perform no analytics read. All owned containers and volumes were
+  removed. CI uses this probe; production authentication remains pending.
 - Added `@signaltrail/project-access` and a transactional initial PostgreSQL
   schema for principals, organizations, projects, and memberships. Verified session
   issuer/subject pairs feed a fixed parameterized membership query; no identity
@@ -65,8 +71,8 @@ performed. Historical sections below preserve evidence from their recorded dates
   diagnostics, and retained ClickHouse failure logs before isolated teardown.
   Development services were not restarted and their volumes were not removed.
 - Harness checks: 25 tests passed. Both Compose configurations validated quietly.
-  Package builds succeeded during the probes; the previous 79-unit analytics
-  checks remain the latest unit evidence for unchanged reader code.
+  Package builds succeeded during the probes. Later 87-unit analytics and 16-unit
+  membership checks supersede the earlier reader-only unit checkpoint.
 
 ### October 31 — sustained measurement and producer improvement
 
@@ -298,8 +304,10 @@ passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
 Startup readiness and exact-name filtering are now verified; do not repeat
 that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
-Next, verify the PostgreSQL membership resolver and real ClickHouse reader together
-in one isolated authorized-query probe, including denied and revoked access. Continue the explorer/product work after
+The combined authorized-query probe is now verified. Next, bind pagination
+cursors to project/time/filter scope to prevent accidental position reuse after
+filter changes. This is input consistency, not an authorization token or snapshot
+promise. Continue the explorer/product work after
 that slice. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by

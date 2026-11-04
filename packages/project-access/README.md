@@ -44,9 +44,15 @@ It stores no credentials, ingestion keys, or session tokens.
 ```sh
 ./scripts/signaltrail-ops.mjs check access
 ./scripts/signaltrail-ops.mjs load project-access
+./scripts/signaltrail-ops.mjs load authorized-analytics
 ```
 
 The isolated probe uses owned PostgreSQL data on port 35433, a fixture identity
 resolver, and a fixture-only psql prepared-statement bridge. It verifies tenant
 and issuer isolation, removal, role constraints, and query-handler integration.
 It does not validate a production session provider or production SQL adapter.
+
+`authorized-analytics` includes those checks plus real ClickHouse counts and
+cursor-paged summaries for two projects sharing event/session IDs. It verifies
+that denied and revoked membership causes no storage read. CI uses this combined
+probe; the smaller PostgreSQL-only probe remains available for focused checks.

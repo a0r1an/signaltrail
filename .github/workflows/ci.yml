@@ -132,8 +132,8 @@ jobs:
         run: ./scripts/signaltrail-ops.mjs load analytics-read
       - name: Verify ClickHouse readiness waits for initialization
         run: ./scripts/signaltrail-ops.mjs load storage-readiness
-      - name: Verify project membership against isolated PostgreSQL
-        run: ./scripts/signaltrail-ops.mjs load project-access
+      - name: Verify PostgreSQL membership and authorized ClickHouse reads
+        run: ./scripts/signaltrail-ops.mjs load authorized-analytics
       - name: Install Chromium for the full pipeline probe
         run: pnpm --filter @signaltrail/browser-sdk exec playwright install --with-deps chromium
       - name: Verify browser persistence, worker recovery, dedupe, and dead-letter commits

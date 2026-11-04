@@ -15,6 +15,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
   'storage-readiness': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
+  'authorized-analytics': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'project-access': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'analytics-read': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'request-admission': {
@@ -89,7 +90,10 @@ const isSustained = [
   'sustained-bytes',
 ].includes(scenario);
 const usesStorage =
-  isPipeline || isSustained || ['analytics-read', 'storage-readiness'].includes(scenario);
+  isPipeline ||
+  isSustained ||
+  ['analytics-read', 'storage-readiness', 'authorized-analytics'].includes(scenario);
+const usesMetadata = ['project-access', 'authorized-analytics'].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
@@ -182,7 +186,7 @@ try {
     ...(scenario === 'storage-readiness' ? [] : ['--wait', '--wait-timeout', '120']),
     'redpanda',
     ...(usesStorage ? ['clickhouse'] : []),
-    ...(scenario === 'project-access' ? ['postgres'] : []),
+    ...(usesMetadata ? ['postgres'] : []),
   ]);
   if (scenario === 'storage-readiness') {
     const { exerciseStorageReadiness } = await import('./storage-readiness.mjs');
@@ -191,11 +195,15 @@ try {
       JSON.stringify(await exerciseStorageReadiness({ docker }), null, 2),
     );
   }
-  if (scenario === 'project-access') {
+  if (usesMetadata) {
     const { exerciseProjectAccess } = await import('./project-access.mjs');
     await writeFile(
       resolve(directory, 'project-access.json'),
-      JSON.stringify(await exerciseProjectAccess({ docker }), null, 2),
+      JSON.stringify(
+        await exerciseProjectAccess({ docker, realAnalytics: scenario === 'authorized-analytics' }),
+        null,
+        2,
+      ),
     );
   }
   await docker(['run', '--rm', 'init']);
@@ -431,7 +439,7 @@ try {
             },
           ]
         : []),
-      ...(scenario === 'project-access'
+      ...(usesMetadata
         ? [
             {
               name: 'save metadata diagnostics',

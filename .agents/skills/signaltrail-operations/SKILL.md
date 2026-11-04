@@ -238,6 +238,11 @@ the initial control-plane schema only there, and checks issuer/subject isolation
 organization membership, immediate revocation, role constraints, and integration
 with the analytics query boundary. It uses a fixture identity resolver and psql
 prepared-statement bridge, not a production session provider or database adapter.
+`load authorized-analytics` adds real ClickHouse counts and keyset-paged summaries
+for projects sharing event/session IDs. It verifies denied/revoked requests do
+not reach analytical storage and records `realClickHouseCountsAndPaging` in the
+component report. CI runs this superset; the smaller metadata probe remains
+available for focused checks. Both profiles start the same owned metadata service.
 Failed metadata runs retain `postgres.log`; normal cleanup removes only the owned
 project's containers and volumes. Never apply the migration to development or
 production data as part of this probe. Its role policy is a provisional default
