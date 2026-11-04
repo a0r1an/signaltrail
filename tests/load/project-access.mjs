@@ -187,6 +187,17 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
           event: { ...event, eventId: 'event-z', sequence: 1 },
         },
       ]);
+      await createClickHouseBatchWriter(connection)(
+        ['z', 'a'].map((prefix) => ({
+          projectId: projectB,
+          receivedAt: '2026-11-02T12:00:00.000Z',
+          event: {
+            ...event,
+            eventId: prefix + '\u0000'.repeat(4095),
+            sessionId: 'control-session',
+          },
+        })),
+      );
       reader = createAnalyticsReader(connection);
     }
     const queryOptions = {
@@ -252,6 +263,26 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
           ['event-a'],
         );
         assert.equal(page.hasMore, false);
+        wireTarget.searchParams.set('projectId', projectB);
+        wireTarget.searchParams.set('from', '2026-11-02T00:00:00Z');
+        wireTarget.searchParams.set('to', '2026-11-03T00:00:00Z');
+        wireTarget.searchParams.set('limit', '1');
+        const getControlPage = async () => {
+          const response = await fetch(wireTarget, {
+            headers: { Authorization: 'Bearer fixture-b' },
+            signal: AbortSignal.timeout(5000),
+          });
+          assert.equal(response.status, 200);
+          return response.json();
+        };
+        const controlFirst = await getControlPage();
+        assert.equal(controlFirst.events[0].eventId, 'z' + '\u0000'.repeat(4095));
+        assert.equal(controlFirst.hasMore, true);
+        assert.ok(controlFirst.nextCursor.length <= 8192);
+        wireTarget.searchParams.set('cursor', controlFirst.nextCursor);
+        const controlNext = await getControlPage();
+        assert.equal(controlNext.events[0].eventId, 'a' + '\u0000'.repeat(4095));
+        assert.equal(controlNext.hasMore, false);
       } finally {
         await http.close();
       }
@@ -356,6 +387,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       unsupportedMigrationVersionRejected: true,
       realClickHouseCountsAndPaging: realAnalytics,
       realHttpAuthorizedReads: realAnalytics,
+      maximumIdentifierCursorPaging: realAnalytics,
       cursorScopeVerified: realAnalytics,
       adapter,
       limitations: [

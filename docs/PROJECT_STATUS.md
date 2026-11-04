@@ -31,6 +31,12 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Cursor byte expansion was reproduced: a valid 4-KiB control-character ID made a
+  32,950-character cursor. Version-two wire encoding now encodes identifier bytes
+  independently; bounded version-one cursors remain accepted. All 122 analytics
+  tests and package checks pass. Real maximum-ID HTTP paging passed with cleanup
+  in `test-results/load/2026-11-04T01-12-08.657Z-authorized-analytics/`.
+
 - Event IDs, event names, and session IDs now share the reader's existing 4-KiB
   UTF-8 bound and reject lone surrogates without rewriting values. Contract tests
   reproduced 12 previously accepted invalid cases. Ingestion preserves valid
@@ -289,7 +295,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
-| Analytics reader and query boundary unit tests |                           113 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Analytics reader and query boundary unit tests |                           122 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -358,9 +364,10 @@ Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
 recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
-fix cursor JSON escaping expansion for valid control-character event IDs while
-preserving scope checks and compatibility. Large-page response caps remain
-independent limits requiring a separate bounded pagination design. Session verification remains injectable;
+handle large summary pages within a bounded response budget. Cursor expansion
+for valid control-character IDs is now fixed with scope checks and compatibility
+preserved. Page-size reduction must preserve complete results and cursors, avoid
+retrying malformed/failed queries, and share one overall read deadline. Session verification remains injectable;
 production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after
 that slice. Integrate a

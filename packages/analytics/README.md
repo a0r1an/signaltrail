@@ -98,8 +98,10 @@ formatting and different page sizes remain valid. Inputs are snapshotted before
 awaiting storage. Cursors are unsigned positions, not authorization tokens or
 secrets: the fingerprint prevents accidental reuse, not deliberate tampering.
 Every page still requires membership. Malformed/out-of-window positions fail
-before storage. Final pages omit the cursor. Old unversioned cursors from this
-private pre-release API are rejected.
+before storage. Final pages omit the cursor. New cursors use version-two wire encoding with independently base64url-encoded
+identifier bytes, keeping even control-character 4-KiB IDs inside the 8-KiB cap.
+Bounded version-one cursors remain accepted; unversioned cursors are rejected.
+The query-scope fingerprint is unchanged across wire versions.
 
 This is not a database snapshot: concurrent arrivals and later retries can move
 rows relative to a cursor or receive-time window. Do not promise complete,

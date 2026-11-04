@@ -81,8 +81,9 @@ Entries are questions, not approvals or completed work.
   oversized rows remain unchanged and broker records violating the new contract
   follow the acknowledged dead-letter path. Plan a compatible rollout before
   production; aggregate page byte limits remain independent of per-field limits.
-  JSON escaping can also expand cursor bytes for valid control-character IDs;
-  this is a local implementation follow-up, not a user policy decision.
+  Cursor control-character expansion is fixed with versioned byte encoding.
+  Oversized aggregate pages remain a local implementation follow-up, not a
+  user policy decision; do not silently drop rows or exceed response budgets.
 
 ## Reversible defaults during autonomous work
 
