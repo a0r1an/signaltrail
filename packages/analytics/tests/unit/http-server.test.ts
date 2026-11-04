@@ -44,7 +44,7 @@ async function fixture() {
 }
 
 function wire(port: number, headers: string[] = ['Host', 'query.invalid']) {
-  return new Promise<{ status: number; body: string }>((resolve, reject) => {
+  return new Promise<{ status: number; body: string; connection?: string }>((resolve, reject) => {
     const request = httpRequest({ host: '127.0.0.1', port, path, headers }, (response) => {
       let body = '';
       response.setEncoding('utf8');
@@ -165,11 +165,22 @@ it('aborts pending reads on shutdown and returns a bounded failure response', as
   const address = app.server.address();
   if (!address || typeof address === 'string') throw new Error('Missing test address');
   try {
-    const response = wire(address.port);
+    const response = new Promise<{ status: number; connection: string | undefined }>(
+      (resolve, reject) => {
+        const request = httpRequest({ host: '127.0.0.1', port: address.port, path }, (response) => {
+          response.resume();
+          response.once('end', () =>
+            resolve({ status: response.statusCode!, connection: response.headers.connection }),
+          );
+        });
+        request.once('error', reject);
+        request.end();
+      },
+    );
     const signal = await started;
     await app.close();
     expect(signal.aborted).toBe(true);
-    expect(await response).toEqual({ status: 503, body: '{"error":"SERVICE_UNAVAILABLE"}' });
+    expect(await response).toEqual({ status: 503, connection: 'close' });
   } finally {
     await app.close();
   }
@@ -198,6 +209,42 @@ it('forces incomplete-header connections closed by the shutdown deadline', async
     expect(socket.destroyed).toBe(true);
   } finally {
     socket.destroy();
+    await app.close();
+  }
+});
+
+it('retains capacity after HTTP timeout until the underlying read actually settles', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const app = createAnalyticsHttpServer({
+    origin: 'https://query.invalid',
+    query: {
+      timeoutMs: 50,
+      maxConcurrentRequests: 1,
+      resolveProjectAccess: async () => ({ status: 'authorized', projectId: 'trusted-project' }),
+      countReceivedEvents: async () => {
+        calls++;
+        if (calls === 1) await pending;
+        return { count: '9' };
+      },
+    },
+  });
+  await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  const address = app.server.address();
+  if (!address || typeof address === 'string') throw new Error('Missing test address');
+  try {
+    expect((await wire(address.port)).status).toBe(503);
+    expect((await wire(address.port)).status).toBe(503);
+    expect(calls).toBe(1);
+    release();
+    // The next socket round trip follows completion of the released operation.
+    expect(await wire(address.port)).toEqual({ status: 200, body: '{"count":"9"}' });
+    expect(calls).toBe(2);
+  } finally {
+    release();
     await app.close();
   }
 });

@@ -104,7 +104,7 @@ export function createAnalyticsHttpServer(options: AnalyticsHttpOptions) {
             if (!['connection', 'content-length', 'transfer-encoding'].includes(key))
               outgoing.setHeader(key, value);
           });
-          if (incoming.method !== 'GET') outgoing.setHeader('Connection', 'close');
+          if (closed || incoming.method !== 'GET') outgoing.setHeader('Connection', 'close');
           outgoing.writeHead(response.status);
           outgoing.end(body);
         } catch {
