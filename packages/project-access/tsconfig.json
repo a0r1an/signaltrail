@@ -1,0 +1,9 @@
+{
+  "extends": "@signaltrail/typescript-config/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts", "tests/unit/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
-  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics
+  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics|access
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
-  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|storage-image|storage-logs
+  ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|storage-image|storage-logs
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs install
@@ -44,6 +44,7 @@ const packages = {
   sdk: '@signaltrail/browser-sdk',
   processor: '@signaltrail/event-processor',
   analytics: '@signaltrail/analytics',
+  access: '@signaltrail/project-access',
 };
 function invalid() {
   throw new Error(`Unknown operation.\n${help}`);
@@ -52,7 +53,7 @@ try {
   if (args.length !== (group === 'install' ? 1 : 2)) invalid();
   if (group === 'check' && Object.hasOwn(packages, action)) {
     // Browser typechecks import ingestion declarations; build dependencies first.
-    if (!['contracts', 'analytics'].includes(action))
+    if (!['contracts', 'analytics', 'access'].includes(action))
       pnpm('--filter', '@signaltrail/contracts', 'build');
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
@@ -131,6 +132,7 @@ try {
       'request-admission',
       'analytics-read',
       'storage-readiness',
+      'project-access',
     ].includes(action)
   )
     pnpm('test:load', action);

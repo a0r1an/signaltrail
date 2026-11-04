@@ -31,6 +31,18 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Added `@signaltrail/project-access` and a transactional initial PostgreSQL
+  schema for principals, organizations, projects, and memberships. Verified session
+  issuer/subject pairs feed a fixed parameterized membership query; no identity
+  provider or default authentication is supplied. UUID project scope is checked,
+  cancellation and malformed results fail closed, and grants are not cached.
+  The provisional organization-wide read policy is in `OPEN_QUESTIONS.md`.
+- Project-access checks passed 16 units, lint, types, and builds. Real PostgreSQL
+  isolation, revocation, constraints, and query-boundary integration passed in
+  `test-results/load/2026-11-04T00-08-29.413Z-project-access/` with cleanup.
+  An earlier run deliberately failed the missing role constraint. These fixtures
+  use a test identity resolver and psql bridge; no production SQL adapter, session
+  verification, migration runner, or application route is installed.
 - Added exact session-ID filters to count and paged-summary reads and both
   authorized query routes. They compose with event-name filters and preserve
   tenant scope, latest-version selection, and existing resource/cancellation
@@ -223,6 +235,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                   |
 | Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                          |
 | Analytics reader and query boundary unit tests |                            87 | Includes exact session/name filters, bounded lists, cursors, and authorization |
+| Project access unit tests                      |                            16 | Verified-principal bounds, cancellation, scope checks, and no cached grants    |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                  |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
@@ -284,9 +297,9 @@ The server-side project-scoped analytics reader and injected membership boundary
 passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
 Startup readiness and exact-name filtering are now verified; do not repeat
-that investigation as unfinished work. Next, add exact session-ID filtering to
-counts and paged summaries, including combined event-name filters, tenant
-isolation, and replacement semantics. Continue the explorer/product work after
+that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
+Next, verify the PostgreSQL membership resolver and real ClickHouse reader together
+in one isolated authorized-query probe, including denied and revoked access. Continue the explorer/product work after
 that slice. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by

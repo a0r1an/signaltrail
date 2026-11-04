@@ -15,6 +15,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const scenario = process.argv[2] ?? 'baseline';
 const scenarios = {
   'storage-readiness': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
+  'project-access': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'analytics-read': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'request-admission': {
     rate: 0,
@@ -181,12 +182,20 @@ try {
     ...(scenario === 'storage-readiness' ? [] : ['--wait', '--wait-timeout', '120']),
     'redpanda',
     ...(usesStorage ? ['clickhouse'] : []),
+    ...(scenario === 'project-access' ? ['postgres'] : []),
   ]);
   if (scenario === 'storage-readiness') {
     const { exerciseStorageReadiness } = await import('./storage-readiness.mjs');
     await writeFile(
       resolve(directory, 'storage-readiness.json'),
       JSON.stringify(await exerciseStorageReadiness({ docker }), null, 2),
+    );
+  }
+  if (scenario === 'project-access') {
+    const { exerciseProjectAccess } = await import('./project-access.mjs');
+    await writeFile(
+      resolve(directory, 'project-access.json'),
+      JSON.stringify(await exerciseProjectAccess({ docker }), null, 2),
     );
   }
   await docker(['run', '--rm', 'init']);
@@ -418,6 +427,22 @@ try {
                   signal,
                 );
                 await writeFile(resolve(directory, 'clickhouse.log'), logs, { signal });
+              },
+            },
+          ]
+        : []),
+      ...(scenario === 'project-access'
+        ? [
+            {
+              name: 'save metadata diagnostics',
+              run: async (signal) => {
+                const logs = await docker(
+                  ['logs', '--no-color', '--tail', '100', 'postgres'],
+                  'combined',
+                  false,
+                  signal,
+                );
+                await writeFile(resolve(directory, 'postgres.log'), logs, { signal });
               },
             },
           ]

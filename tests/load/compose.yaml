@@ -1,5 +1,12 @@
 name: signaltrail-load
 services:
+  postgres:
+    extends:
+      file: ../../compose.yaml
+      service: postgres
+    profiles: ['metadata']
+    ports: !override
+      - '127.0.0.1:35433:5432'
   redpanda:
     extends:
       file: ../../compose.yaml
@@ -46,5 +53,6 @@ services:
       - 'host.docker.internal:host-gateway'
 
 volumes:
+  postgres_data:
   redpanda_data:
   clickhouse_data:

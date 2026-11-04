@@ -230,6 +230,19 @@ teardown. The image's native loopback query can succeed on its temporary bootstr
 server; the shared healthcheck targets the container hostname to wait for the
 final network listener. Do not hide fixture startup failures with migration retries.
 
+## Project membership foundation
+
+`check access` runs the private project-access package's lint, units, types, and
+build. `load project-access` starts an isolated PostgreSQL on port 35433, applies
+the initial control-plane schema only there, and checks issuer/subject isolation,
+organization membership, immediate revocation, role constraints, and integration
+with the analytics query boundary. It uses a fixture identity resolver and psql
+prepared-statement bridge, not a production session provider or database adapter.
+Failed metadata runs retain `postgres.log`; normal cleanup removes only the owned
+project's containers and volumes. Never apply the migration to development or
+production data as part of this probe. Its role policy is a provisional default
+recorded in `docs/OPEN_QUESTIONS.md`.
+
 ## Monitoring and secrets
 
 Monitoring configuration lives under `infra/monitoring/`. It reads ignored

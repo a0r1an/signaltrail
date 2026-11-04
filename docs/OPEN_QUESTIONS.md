@@ -5,6 +5,14 @@ Entries are questions, not approvals or completed work.
 
 ## Needs user input before production
 
+- **Project membership policy:** the new private membership foundation uses UUID
+  projects and verified issuer/subject identities. Its reversible default grants
+  owner/admin/member roles read access to all projects in their organization.
+  Confirm organization-wide versus project-specific visibility, account linking,
+  invitations, and last-owner protection before exposing administrative APIs.
+  Session verification, a parameterized/cancellable database adapter, read-only
+  database identity, and versioned migration application remain unconfigured.
+  The schema/probe uses only owned isolated data; no existing database is migrated.
 - **Infrastructure budget and host:** provider, VPS size, region, monthly budget,
   and expected personal-use traffic remain undecided. Current load results are
   local development evidence; do not treat them as production capacity estimates.
