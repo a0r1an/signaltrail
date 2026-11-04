@@ -123,7 +123,12 @@ function docker(args, capture = false, allowFailure = false, signal) {
     child.on('exit', (code) =>
       code === 0 || allowFailure
         ? resolveRun(output)
-        : reject(new Error(`Docker exited ${code}: ${args.join(' ')}`)),
+        : reject(
+            new Error(
+              `Docker exited ${code}: ${args.join(' ')}`,
+              capture === 'combined' ? { cause: new Error(output) } : undefined,
+            ),
+          ),
     );
   });
 }

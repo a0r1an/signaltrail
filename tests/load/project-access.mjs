@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createProjectAccessResolver } from '../../packages/project-access/dist/index.js';
+import { createHash } from 'node:crypto';
+import {
+  createProjectAccessResolver,
+  createInitialMigrationStatement,
+} from '../../packages/project-access/dist/index.js';
 import {
   createAnalyticsQueryHandler,
   createAnalyticsReader,
@@ -8,7 +12,7 @@ import {
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 
 export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
-  const sql = (text, signal = AbortSignal.timeout(10000)) =>
+  const sql = (text, signal = AbortSignal.timeout(10000), capture = true) =>
     docker(
       [
         'exec',
@@ -26,13 +30,60 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         '-c',
         text,
       ],
-      true,
+      capture,
       false,
       signal,
     );
-  await sql(
-    await readFile(new URL('../../infra/postgres/001-project-access.sql', import.meta.url), 'utf8'),
+  const migrationSource = await readFile(
+    new URL('../../infra/postgres/001-project-access.sql', import.meta.url),
+    'utf8',
   );
+  const migrationStatement = createInitialMigrationStatement(migrationSource);
+  const migrate = (statement) => sql(statement, AbortSignal.timeout(15000), 'combined');
+  const failsWith = (message) => (error) =>
+    error instanceof Error && error.cause instanceof Error && error.cause.message.includes(message);
+  const brokenSource = migrationSource.replace('COMMIT;', 'SELECT 1 / 0;\nCOMMIT;');
+  await assert.rejects(
+    migrate(createInitialMigrationStatement(brokenSource)),
+    failsWith('division by zero'),
+  );
+  assert.equal(
+    (
+      await sql(
+        "SELECT to_regnamespace('signaltrail_control') IS NULL AND to_regnamespace('signaltrail_migrations') IS NULL",
+      )
+    ).trim(),
+    't',
+  );
+  await sql('CREATE SCHEMA signaltrail_control');
+  await assert.rejects(
+    migrate(migrationStatement),
+    failsWith('schema "signaltrail_control" already exists'),
+  );
+  assert.equal((await sql("SELECT to_regnamespace('signaltrail_migrations') IS NULL")).trim(), 't');
+  await sql('DROP SCHEMA signaltrail_control');
+  await Promise.all([migrate(migrationStatement), migrate(migrationStatement)]);
+  await migrate(migrationStatement);
+  const checksum = createHash('sha256').update(migrationSource).digest('hex');
+  assert.equal(
+    (
+      await sql("SELECT version::text || ':' || checksum FROM signaltrail_migrations.applied")
+    ).trim(),
+    '1:' + checksum,
+  );
+  await assert.rejects(
+    migrate(createInitialMigrationStatement('BEGIN; SELECT 1; COMMIT;')),
+    failsWith('Migration checksum differs'),
+  );
+  assert.equal((await sql('SELECT count(*) FROM signaltrail_migrations.applied')).trim(), '1');
+  await sql(
+    "INSERT INTO signaltrail_migrations.applied(version,checksum) VALUES (2,repeat('0',64))",
+  );
+  await assert.rejects(
+    migrate(migrationStatement),
+    failsWith('Unsupported control-plane migration version'),
+  );
+  await sql('DELETE FROM signaltrail_migrations.applied WHERE version=2');
   const id = (n) => '00000000-0000-0000-0000-' + n.toString(16).padStart(12, '0');
   const [userA, userB, orgA, orgB, projectA, projectB] = [1, 2, 3, 4, 11, 12].map(id);
   await sql(`INSERT INTO signaltrail_control.principals(id,issuer,subject) VALUES ('${userA}','issuer-a','same-subject'),('${userB}','issuer-b','same-subject');
@@ -242,6 +293,11 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     membershipRemovalImmediate: true,
     invalidRoleRejected: true,
     queryBoundaryVerified: true,
+    migrationReplayVerified: true,
+    migrationRollbackVerified: true,
+    migrationChecksumVerified: true,
+    untrackedSchemaRejected: true,
+    unsupportedMigrationVersionRejected: true,
     realClickHouseCountsAndPaging: realAnalytics,
     cursorScopeVerified: realAnalytics,
     limitations: [

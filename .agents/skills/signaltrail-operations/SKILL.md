@@ -235,7 +235,8 @@ final network listener. Do not hide fixture startup failures with migration retr
 `check access` runs the private project-access package's lint, units, types, and
 build. `load project-access` starts an isolated PostgreSQL on port 35433, applies
 the initial control-plane schema only there, and checks issuer/subject isolation,
-organization membership, immediate revocation, role constraints, and integration
+organization membership, immediate revocation, role constraints, initial migration
+rollback/concurrent replay/checksum checks, and integration
 with the analytics query boundary. It uses a fixture identity resolver and psql
 prepared-statement bridge, not a production session provider or database adapter.
 `load authorized-analytics` adds real ClickHouse counts and keyset-paged summaries

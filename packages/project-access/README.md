@@ -37,9 +37,24 @@ separate product policy and implementation before deployment.
 `infra/postgres/001-project-access.sql` creates an initial schema with principals,
 organizations, projects, and memberships. UUIDs are assigned by trusted callers;
 issuer/subject pairs and memberships are unique. This migration is transactional
-and intended for an empty schema. It is not a versioned production migration
-runner and is not automatically applied to development or production data.
+and intended for an empty schema. It is not automatically applied to development
+or production data.
 It stores no credentials, ingestion keys, or session tokens.
+
+`createInitialMigrationStatement(repositorySql)` adds atomic application tracking
+for version 1 in `signaltrail_migrations.applied`. Execute the resulting statement
+as one operation through a separate migration identity. It uses a transaction
+advisory lock, five-second lock timeout, and ten-second statement timeout.
+Concurrent/identical replays are safe; changed source checksums, unsupported newer
+versions, and pre-existing untracked schemas are refused. Failed DDL rolls back
+both the control-plane schema and its application record. Checksums track source
+bytes, not manual database-schema drift. Keep applied SQL immutable; a future
+version needs a new migration and explicit runner support.
+
+This helper accepts repository-owned SQL only. It is not a SQL sanitizer or a
+customer API. A deployment CLI, migration credential provisioning, and future
+version orchestration remain separate work. The isolated probe verifies rollback,
+concurrent replay, checksum mismatch, unknown versions, and untracked-schema refusal.
 
 ```sh
 ./scripts/signaltrail-ops.mjs check access

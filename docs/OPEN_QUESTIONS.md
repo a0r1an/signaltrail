@@ -11,7 +11,10 @@ Entries are questions, not approvals or completed work.
   Confirm organization-wide versus project-specific visibility, account linking,
   invitations, and last-owner protection before exposing administrative APIs.
   Session verification, a parameterized/cancellable database adapter, read-only
-  database identity, and versioned migration application remain unconfigured.
+  database identity, and deployment migration application remain unconfigured.
+  A versioned initial migration statement now has fixture coverage for atomicity,
+  replay, checksum changes, and unsupported history. No deployment CLI or migration
+  identity has been configured, and existing development data is not migrated.
   The schema/probe uses only owned isolated data; no existing database is migrated.
 - **Infrastructure budget and host:** provider, VPS size, region, monthly budget,
   and expected personal-use traffic remain undecided. Current load results are

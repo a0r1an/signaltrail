@@ -31,6 +31,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Initial metadata migration application is now transactionally recorded with a
+  source checksum and advisory lock. Concurrent/identical replay, checksum mismatch,
+  unsupported newer history, rollback after DDL failure, and refusal to adopt an
+  untracked schema passed against PostgreSQL. All 22 project-access unit checks,
+  lint, types, and builds pass. The combined read/migration probe completed cleanup
+  in `test-results/load/2026-11-04T00-23-30.052Z-authorized-analytics/`.
+  The helper supports initial version 1 only; deployment credentials/CLI and future
+  migration versions remain pending. No existing development database was changed.
 - Pagination cursors now bind a versioned fingerprint to canonical project,
   UTC time window, event-name filter, and session filter. Mismatched scope is
   rejected before storage; equivalent timestamps and changed page sizes remain
@@ -78,7 +86,7 @@ performed. Historical sections below preserve evidence from their recorded dates
   diagnostics, and retained ClickHouse failure logs before isolated teardown.
   Development services were not restarted and their volumes were not removed.
 - Harness checks: 25 tests passed. Both Compose configurations validated quietly.
-  Package builds succeeded during the probes. Later 87-unit analytics and 16-unit
+  Package builds succeeded during the probes. Latest 99-unit analytics and 22-unit
   membership checks supersede the earlier reader-only unit checkpoint.
 
 ### October 31 — sustained measurement and producer improvement
@@ -240,16 +248,16 @@ performed. Historical sections below preserve evidence from their recorded dates
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                              |
-| ---------------------------------------------- | ----------------------------: | --------------------------------------------------------------------------- |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes            |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                 |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                  |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                       |
-| Analytics reader and query boundary unit tests |                            99 | Includes query-bound cursors, input snapshots, filters, and authorization   |
-| Project access unit tests                      |                            16 | Verified-principal bounds, cancellation, scope checks, and no cached grants |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption               |
+| Suite                                          | Latest observed passing count | Evidence scope                                                            |
+| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes          |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks               |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                     |
+| Analytics reader and query boundary unit tests |                            99 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Project access unit tests                      |                            22 | Membership scope/cancellation and bounded migration-source validation     |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
@@ -312,8 +320,10 @@ authorization. Query cancellation now reaches the underlying storage read.
 Startup readiness and exact-name filtering are now verified; do not repeat
 that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
 The combined authorized-query probe and query-bound cursors are verified.
-Next, make initial metadata migration application replay-safe and detect changed
-migration contents, using only the owned fixture database for verification.
+Initial metadata migration replay and change detection are also verified.
+Next, add a bounded parameterized PostgreSQL adapter so the membership resolver
+can run without the fixture-only psql bridge. Keep session verification injectable
+and leave the identity-provider decision in `OPEN_QUESTIONS.md`.
 Continue the explorer/product work after
 that slice. Integrate a
 session/membership resolver and dashboard route once the

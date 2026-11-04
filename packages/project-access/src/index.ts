@@ -1,3 +1,5 @@
+export { createInitialMigrationStatement } from './initial-migration.ts';
+
 export interface Principal {
   issuer: string;
   subject: string;
