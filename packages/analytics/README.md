@@ -90,10 +90,15 @@ One extra row determines `hasMore`; there is no unbounded offset or arbitrary SQ
 When more rows exist, `nextCursor` contains an opaque, bounded position for the
 next request. Pass it as `cursor` with the same project and time window.
 Paging uses `(received_at, event_id)` comparisons, including timestamp ties;
-it never uses an offset. Cursors are unsigned positions, not authorization tokens.
-Every page still requires project membership. Keep the same filters while paging.
-Malformed and out-of-window
-positions fail before storage. No cursor is returned on the final page.
+it never uses an offset. Cursors include a version and fingerprint of the
+canonical project, UTC window, event-name filter, and session filter. Changing or
+removing those values rejects the cursor before storage; equivalent timestamp
+formatting and different page sizes remain valid. Inputs are snapshotted before
+awaiting storage. Cursors are unsigned positions, not authorization tokens or
+secrets: the fingerprint prevents accidental reuse, not deliberate tampering.
+Every page still requires membership. Malformed/out-of-window positions fail
+before storage. Final pages omit the cursor. Old unversioned cursors from this
+private pre-release API are rejected.
 
 This is not a database snapshot: concurrent arrivals and later retries can move
 rows relative to a cursor or receive-time window. Do not promise complete,

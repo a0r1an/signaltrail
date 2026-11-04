@@ -31,6 +31,13 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Pagination cursors now bind a versioned fingerprint to canonical project,
+  UTC time window, event-name filter, and session filter. Mismatched scope is
+  rejected before storage; equivalent timestamps and changed page sizes remain
+  valid. Listing snapshots caller inputs before awaiting results. All 99 analytics
+  units and package checks pass, and the combined real-storage probe passed with
+  cleanup in `test-results/load/2026-11-04T00-17-25.921Z-authorized-analytics/`.
+  Cursors remain unsigned positions, not authorization or snapshot tokens.
 - The database membership resolver and real ClickHouse reader passed a combined
   authorized-query probe in
   `test-results/load/2026-11-04T00-12-28.561Z-authorized-analytics/`. Projects share
@@ -233,22 +240,22 @@ performed. Historical sections below preserve evidence from their recorded dates
 Counts below are the latest observed results from separate package runs, not a
 claim that the entire workspace or remote CI ran at final HEAD.
 
-| Suite                                          | Latest observed passing count | Evidence scope                                                                 |
-| ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------------ |
-| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes               |
-| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                    |
-| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                     |
-| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                   |
-| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                          |
-| Analytics reader and query boundary unit tests |                            87 | Includes exact session/name filters, bounded lists, cursors, and authorization |
-| Project access unit tests                      |                            16 | Verified-principal bounds, cancellation, scope checks, and no cached grants    |
-| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption                  |
+| Suite                                          | Latest observed passing count | Evidence scope                                                              |
+| ---------------------------------------------- | ----------------------------: | --------------------------------------------------------------------------- |
+| Contracts                                      |                            72 | Prior autonomous package checks; unchanged by final worker fixes            |
+| Ingestion                                      |                            63 | October 31 producer and request-processing admission checks                 |
+| Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                  |
+| Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                                |
+| Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                       |
+| Analytics reader and query boundary unit tests |                            99 | Includes query-bound cursors, input snapshots, filters, and authorization   |
+| Project access unit tests                      |                            16 | Verified-principal bounds, cancellation, scope checks, and no cached grants |
+| Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption               |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
   HTTP admission. The 13-test Chromium suite also passed after those changes.
   The real request-admission probe passed at
   `test-results/load/2026-10-31T15-57-34.911Z-request-admission/`.
-- Analytics lint, 87 units, types, and JavaScript/declaration builds passed.
+- Analytics lint, 99 units, types, and JavaScript/declaration builds passed.
   The real-storage read probe passed with final cleanup in
   `test-results/load/2026-10-31T16-11-11.187Z-analytics-read/`.
   The expanded fixture-authorization probe also passed and cleaned up in
@@ -304,10 +311,10 @@ passed unit verification; real ClickHouse checks cover the reader and fixture
 authorization. Query cancellation now reaches the underlying storage read.
 Startup readiness and exact-name filtering are now verified; do not repeat
 that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
-The combined authorized-query probe is now verified. Next, bind pagination
-cursors to project/time/filter scope to prevent accidental position reuse after
-filter changes. This is input consistency, not an authorization token or snapshot
-promise. Continue the explorer/product work after
+The combined authorized-query probe and query-bound cursors are verified.
+Next, make initial metadata migration application replay-safe and detect changed
+migration contents, using only the owned fixture database for verification.
+Continue the explorer/product work after
 that slice. Integrate a
 session/membership resolver and dashboard route once the
 identity-provider decision is settled. No production authentication is implied by

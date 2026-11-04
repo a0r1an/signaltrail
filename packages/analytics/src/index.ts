@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';
 export { createAnalyticsQueryHandler } from './query-handler.ts';
 export type { AnalyticsQueryOptions, ProjectAccess } from './query-handler.ts';
 
@@ -42,6 +44,21 @@ function timestamp(value: string) {
   )
     throw new TypeError('Invalid timestamp');
   return milliseconds;
+}
+
+function cursorScope(window: ReceivedEventWindow) {
+  return createHash('sha256')
+    .update('signaltrail:event-list:v1\n')
+    .update(
+      JSON.stringify([
+        window.projectId,
+        new Date(timestamp(window.from)).toISOString(),
+        new Date(timestamp(window.to)).toISOString(),
+        window.eventName ?? null,
+        window.sessionId ?? null,
+      ]),
+    )
+    .digest('hex');
 }
 
 async function boundedBody(response: Response, signal: AbortSignal, maximum: number) {
@@ -168,6 +185,8 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     }
     if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
     if (cursor) {
+      if (cursor.scope !== cursorScope(window))
+        throw new TypeError('Event cursor does not match query scope');
       target.searchParams.set('param_before', cursor.receivedAt);
       target.searchParams.set('param_before_id_hex', Buffer.from(cursor.eventId).toString('hex'));
     }
@@ -224,6 +243,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       window: EventListWindow,
       signal?: AbortSignal,
     ): Promise<{ events: EventSummary[]; hasMore: boolean; nextCursor?: string }> {
+      window = { ...window };
       const limit = window.limit ?? 50;
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
         throw new RangeError('Event list limit must be between 1 and 100');
@@ -285,7 +305,12 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
           const last = events.at(-1);
           const nextCursor =
             hasMore && last
-              ? encodeEventCursor({ receivedAt: last.receivedAt, eventId: last.eventId })
+              ? encodeEventCursor({
+                  version: 1,
+                  scope: cursorScope(window),
+                  receivedAt: last.receivedAt,
+                  eventId: last.eventId,
+                })
               : undefined;
           if (nextCursor && nextCursor.length > 8192)
             throw new Error('Event cursor exceeded its bound');
@@ -314,4 +339,3 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     },
   };
 }
-import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';

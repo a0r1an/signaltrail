@@ -200,6 +200,19 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       ['event-a'],
     );
     assert.equal(next.hasMore, false);
+    target.searchParams.set('sessionId', 'changed-filter');
+    assert.equal(
+      (await handler(new Request(target, { headers: { Authorization: 'Bearer fixture-b' } })))
+        .status,
+      400,
+    );
+    target.searchParams.set('sessionId', 'shared-session');
+    target.searchParams.set('projectId', projectA);
+    assert.equal(
+      (await handler(new Request(target, { headers: { Authorization: 'Bearer fixture-a' } })))
+        .status,
+      400,
+    );
     target.pathname = '/v1/analytics/count';
     for (const key of ['limit', 'sessionId', 'cursor']) target.searchParams.delete(key);
     target.searchParams.set('projectId', projectA);
@@ -230,6 +243,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     invalidRoleRejected: true,
     queryBoundaryVerified: true,
     realClickHouseCountsAndPaging: realAnalytics,
+    cursorScopeVerified: realAnalytics,
     limitations: [
       'Fixture identity resolver and psql bridge only; no production session validation, database adapter, or route deployed.',
     ],

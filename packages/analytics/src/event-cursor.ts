@@ -1,4 +1,6 @@
 export interface EventCursor {
+  version: 1;
+  scope: string;
   receivedAt: string;
   eventId: string;
 }
@@ -18,7 +20,10 @@ export function decodeEventCursor(value: string): EventCursor {
     ) as EventCursor;
     if (
       !parsed ||
-      Object.keys(parsed).length !== 2 ||
+      Object.keys(parsed).length !== 4 ||
+      parsed.version !== 1 ||
+      typeof parsed.scope !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(parsed.scope) ||
       typeof parsed.receivedAt !== 'string' ||
       typeof parsed.eventId !== 'string' ||
       !/\S/.test(parsed.eventId) ||
