@@ -12,6 +12,7 @@ import {
   createAnalyticsReader,
 } from '../../packages/analytics/dist/index.js';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
+import { readQueryReferenceResponse } from '../../packages/analytics/tests/query-reference.ts';
 import { exercisePostgresAdapter } from './postgres-adapter.mjs';
 
 export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
@@ -244,6 +245,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
           signal: AbortSignal.timeout(5000),
         });
         assert.equal(denied.status, 403);
+        assert.deepEqual(await readQueryReferenceResponse('count', denied), { error: 'FORBIDDEN' });
         assert.equal(reads, 0);
         const allowed = await fetch(wireTarget, {
           headers: { Authorization: 'Bearer fixture-a' },
@@ -251,14 +253,14 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         });
         assert.equal(allowed.status, 200);
         assert.equal(allowed.headers.get('cache-control'), 'no-store');
-        assert.deepEqual(await allowed.json(), { count: '1' });
+        assert.deepEqual(await readQueryReferenceResponse('count', allowed), { count: '1' });
         wireTarget.pathname = '/v1/analytics/events';
         const listing = await fetch(wireTarget, {
           headers: { Authorization: 'Bearer fixture-a' },
           signal: AbortSignal.timeout(5000),
         });
         assert.equal(listing.status, 200);
-        const page = await listing.json();
+        const page = await readQueryReferenceResponse('events', listing);
         assert.deepEqual(
           page.events.map((event) => event.eventId),
           ['event-a'],
@@ -274,7 +276,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
             signal: AbortSignal.timeout(5000),
           });
           assert.equal(response.status, 200);
-          return response.json();
+          return readQueryReferenceResponse('events', response);
         };
         const controlFirst = await getControlPage();
         assert.equal(controlFirst.events[0].eventId, 'z' + '\u0000'.repeat(4095));
@@ -393,6 +395,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       realHttpAuthorizedReads: realAnalytics,
       maximumIdentifierCursorPaging: realAnalytics,
       adaptiveLargePages: realAnalytics,
+      queryReferenceConformance: realAnalytics,
       cursorScopeVerified: realAnalytics,
       adapter,
       limitations: [

@@ -31,6 +31,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Added test-only response conformance against the OpenAPI reference. Tests cover
+  actual handler success/errors, both page variants, exact decimal types, headers,
+  and rejection of private extra fields. All 152 analytics tests and package checks
+  pass. AJV is an explicit development dependency already cached by the document
+  validator; no new runtime dependency was introduced. The real HTTP/storage probe
+  passed the same schemas with full owned-resource cleanup in
+  `test-results/load/2026-11-04T04-33-48.735Z-authorized-analytics/`.
+
 - Added `docs/api/analytics.openapi.json`, an OpenAPI 3.1.1 reference for current
   read routes, errors, decimal values, filters, cursors, and adaptive pages.
   Validation runs in analytics units with development-only OpenAPI tooling;
@@ -311,7 +319,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
-| Analytics reader and query boundary unit tests |                           130 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Analytics reader and query boundary unit tests |                           152 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -380,9 +388,9 @@ Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
 recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
-add generated dashboard client types and automated response-conformance checks
-from the new OpenAPI reference, while preserving the explicit fixture-only session
-binding. The production identity provider/transport remains a user decision. Large-page reduction and cursor byte
+add generated dashboard client types from the new OpenAPI reference, preserving
+the explicit fixture-only session binding. Response-conformance checks are now
+implemented; confirm the recorded real HTTP/storage probe before repeating it. The production identity provider/transport remains a user decision. Large-page reduction and cursor byte
 encoding are locally verified; do not repeat them as unfinished work. Session verification remains injectable;
 production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after

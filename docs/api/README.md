@@ -27,9 +27,14 @@ resolution. This is part of the existing runner and CI package tests:
 ./scripts/signaltrail-ops.mjs check analytics
 ```
 
-This schema check does not prove production identity integration or complete
-request/response conformance. The owned `load authorized-analytics` probe supplies
-separate wire/storage evidence. Generated dashboard types and automated response
-conformance are follow-up work.
+Test-only AJV validators also check actual handler response shapes, both page
+variants, exact decimal strings, error codes, cache/content headers, and exclusion
+of extra private fields. The owned `load authorized-analytics` probe applies the
+same response checks over real HTTP and storage. JSON Schema date-time format
+validation is disabled in this helper; UTC patterns, shapes, and types are checked,
+while byte limits, UInt64 numeric bounds, calendar validity, and scope invariants
+remain covered by the runtime reader tests. This is not exhaustive request/response
+or production session-provider validation. Generated dashboard types remain
+follow-up work. Both validators are development dependencies only.
 
 Reference: [OpenAPI 3.1.1 specification](https://spec.openapis.org/oas/v3.1.1.html).
