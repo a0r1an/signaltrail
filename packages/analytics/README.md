@@ -109,10 +109,22 @@ unchanging multi-page exports. A snapshot/export policy remains separate work.
 
 Summaries contain only event ID, name, session ID, exact decimal sequence, and
 receive timestamp. They exclude URL, identity, properties, and context payloads.
-The entire storage response is capped at 64 KiB, including the extra row. Each
-identifier/name is capped at 4 KiB; an oversized or malformed response fails as
-unconfirmed rather than returning partial data. These provisional read bounds
-do not change event-ingestion validation.
+The storage response is capped at 160 KiB per attempt, including the lookahead
+row. This fits two complete worst-case JSON-escaped rows at the 4-KiB per-field
+bound. New events use the same valid-UTF-8/per-field bounds in contracts.
+
+If a complete query response exceeds the byte budget, the reader halves the page
+limit and runs a new complete query. It returns up to the requested event count;
+use `hasMore` and `nextCursor`, not page length, to determine completion. At most
+seven attempts are possible from a 100-event request. Every attempt shares one
+overall reader deadline and caller cancellation signal. Partial/truncated response
+bytes are discarded, never promoted to a successful page. Detected malformed
+responses, storage errors, and cancellation do not trigger page reduction.
+
+A one-event page that still exceeds the byte budget fails privately. Historical
+invalid identifiers also fail validation; existing storage is not rewritten.
+The additional queries are a bounded fallback for large identifiers, not a
+throughput optimization or production capacity guarantee.
 
 Supply `listReceivedEvents: reader.listReceivedEvents` to the query handler to
 enable `GET /v1/analytics/events` with the count route's parameters and an optional

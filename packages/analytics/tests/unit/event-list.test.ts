@@ -100,7 +100,7 @@ it.each([
   JSON.stringify({ ...row, receivedAtMs: 'NaN' }),
   JSON.stringify(row) + '\n' + JSON.stringify(row),
   JSON.stringify(row) + '\nprivate SQL failure',
-  ' '.repeat(65537),
+  ' '.repeat(160 * 1024 + 1),
 ])('rejects malformed or oversized event results', async (body) => {
   const reader = createAnalyticsReader({
     endpoint: 'http://clickhouse:8123',

@@ -63,6 +63,8 @@ function cursorScope(window: ReceivedEventWindow) {
     .digest('hex');
 }
 
+class OversizedQueryResult extends Error {}
+
 async function boundedBody(response: Response, signal: AbortSignal, maximum: number) {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Missing query result');
@@ -79,7 +81,7 @@ async function boundedBody(response: Response, signal: AbortSignal, maximum: num
       signal.throwIfAborted();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > maximum) throw new Error('Query result exceeded its bound');
+      if (size > maximum) throw new OversizedQueryResult('Query result exceeded its bound');
       chunks.push(chunk.value);
     }
     return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
@@ -149,6 +151,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     query?: string,
     limit?: number,
     cursor?: EventCursor,
+    propagateOversize = false,
   ): Promise<T> {
     if (signal?.aborted) throw new Error('Analytics query was not confirmed');
     if (
@@ -233,7 +236,10 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         })(),
         deadline,
       ]);
-    } catch {
+    } catch (error) {
+      if (propagateOversize && error instanceof OversizedQueryResult && !controller.signal.aborted)
+        throw error;
+      // eslint-disable-next-line preserve-caught-error -- Storage errors may contain tenant data or credentials.
       throw new Error('Analytics query was not confirmed');
     } finally {
       clearTimeout(timer);
@@ -260,68 +266,99 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         ? " AND (received_at, event_id) < (parseDateTime64BestEffort({before:String}, 3, 'UTC'), unhex({before_id_hex:String}))"
         : '';
       const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
-      return execute(
-        window,
-        signal,
-        65536,
-        (body) => {
-          const rows = body.trim()
-            ? body
-                .trim()
-                .split('\n')
-                .map((line) => JSON.parse(line) as Record<string, string>)
-            : [];
-          if (rows.length > limit + 1) throw new Error('Too many event rows');
-          const ids = new Set<string>();
-          for (const row of rows) {
+      // One timer covers all complete-query attempts, not a fresh budget per retry.
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      const timer = setTimeout(cancel, timeoutMs);
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
+      let pageLimit = limit;
+      try {
+        while (true) {
+          try {
+            return await execute(
+              window,
+              controller.signal,
+              160 * 1024,
+              (body) => {
+                const rows = body.trim()
+                  ? body
+                      .trim()
+                      .split('\n')
+                      .map((line) => JSON.parse(line) as Record<string, string>)
+                  : [];
+                if (rows.length > pageLimit + 1) throw new Error('Too many event rows');
+                const ids = new Set<string>();
+                for (const row of rows) {
+                  if (
+                    !row ||
+                    Object.keys(row).length !== 5 ||
+                    !['eventId', 'eventName', 'sessionId'].every(
+                      (key) =>
+                        typeof row[key] === 'string' &&
+                        /\S/.test(row[key]!) &&
+                        Buffer.from(row[key]!).toString('utf8') === row[key] &&
+                        Buffer.byteLength(row[key]!) <= 4096,
+                    ) ||
+                    typeof row.sequence !== 'string' ||
+                    !/^(0|[1-9]\d{0,19})$/.test(row.sequence) ||
+                    BigInt(row.sequence) > 18446744073709551615n ||
+                    typeof row.receivedAtMs !== 'string' ||
+                    !/^-?(0|[1-9]\d{0,15})$/.test(row.receivedAtMs) ||
+                    !Number.isSafeInteger(Number(row.receivedAtMs)) ||
+                    !Number.isFinite(new Date(Number(row.receivedAtMs)).getTime()) ||
+                    ids.has(row.eventId!)
+                  )
+                    throw new Error('Invalid event row');
+                  ids.add(row.eventId!);
+                }
+                const events = rows.slice(0, pageLimit).map((row) => ({
+                  eventId: row.eventId!,
+                  eventName: row.eventName!,
+                  sessionId: row.sessionId!,
+                  sequence: row.sequence!,
+                  receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
+                }));
+                const hasMore = rows.length > pageLimit;
+                const last = events.at(-1);
+                const nextCursor =
+                  hasMore && last
+                    ? encodeEventCursor({
+                        version: 1,
+                        scope: cursorScope(window),
+                        receivedAt: last.receivedAt,
+                        eventId: last.eventId,
+                      })
+                    : undefined;
+                if (nextCursor && nextCursor.length > 8192)
+                  throw new Error('Event cursor exceeded its bound');
+                return { events, hasMore, ...(nextCursor ? { nextCursor } : {}) };
+              },
+              query,
+              pageLimit + 1,
+              cursor,
+              true,
+            );
+          } catch (error) {
             if (
-              !row ||
-              Object.keys(row).length !== 5 ||
-              !['eventId', 'eventName', 'sessionId'].every(
-                (key) =>
-                  typeof row[key] === 'string' &&
-                  /\S/.test(row[key]!) &&
-                  Buffer.from(row[key]!).toString('utf8') === row[key] &&
-                  Buffer.byteLength(row[key]!) <= 4096,
-              ) ||
-              typeof row.sequence !== 'string' ||
-              !/^(0|[1-9]\d{0,19})$/.test(row.sequence) ||
-              BigInt(row.sequence) > 18446744073709551615n ||
-              typeof row.receivedAtMs !== 'string' ||
-              !/^-?(0|[1-9]\d{0,15})$/.test(row.receivedAtMs) ||
-              !Number.isSafeInteger(Number(row.receivedAtMs)) ||
-              !Number.isFinite(new Date(Number(row.receivedAtMs)).getTime()) ||
-              ids.has(row.eventId!)
-            )
-              throw new Error('Invalid event row');
-            ids.add(row.eventId!);
+              error instanceof OversizedQueryResult &&
+              pageLimit > 1 &&
+              !controller.signal.aborted
+            ) {
+              pageLimit = Math.floor(pageLimit / 2);
+              continue;
+            }
+            if (error instanceof OversizedQueryResult) {
+              // eslint-disable-next-line preserve-caught-error -- Keep internal response-size diagnostics private.
+              throw new Error('Analytics query was not confirmed');
+            }
+            throw error;
           }
-          const events = rows.slice(0, limit).map((row) => ({
-            eventId: row.eventId!,
-            eventName: row.eventName!,
-            sessionId: row.sessionId!,
-            sequence: row.sequence!,
-            receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
-          }));
-          const hasMore = rows.length > limit;
-          const last = events.at(-1);
-          const nextCursor =
-            hasMore && last
-              ? encodeEventCursor({
-                  version: 1,
-                  scope: cursorScope(window),
-                  receivedAt: last.receivedAt,
-                  eventId: last.eventId,
-                })
-              : undefined;
-          if (nextCursor && nextCursor.length > 8192)
-            throw new Error('Event cursor exceeded its bound');
-          return { events, hasMore, ...(nextCursor ? { nextCursor } : {}) };
-        },
-        query,
-        limit + 1,
-        cursor,
-      );
+        }
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
+      }
     },
     countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
       return execute(window, signal, 4096, (body) => {

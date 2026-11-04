@@ -82,8 +82,9 @@ Entries are questions, not approvals or completed work.
   follow the acknowledged dead-letter path. Plan a compatible rollout before
   production; aggregate page byte limits remain independent of per-field limits.
   Cursor control-character expansion is fixed with versioned byte encoding.
-  Oversized aggregate pages remain a local implementation follow-up, not a
-  user policy decision; do not silently drop rows or exceed response budgets.
+  Aggregate pages now shrink safely within a 160-KiB attempt budget and one
+  overall deadline; this remains a provisional operational limit requiring
+  representative workload measurement.
 
 ## Reversible defaults during autonomous work
 

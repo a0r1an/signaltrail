@@ -188,13 +188,14 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         },
       ]);
       await createClickHouseBatchWriter(connection)(
-        ['z', 'a'].map((prefix) => ({
+        ['z', 'a', '0'].map((prefix) => ({
           projectId: projectB,
           receivedAt: '2026-11-02T12:00:00.000Z',
           event: {
             ...event,
             eventId: prefix + '\u0000'.repeat(4095),
-            sessionId: 'control-session',
+            eventName: 'n' + '\u0000'.repeat(4095),
+            sessionId: 's' + '\u0000'.repeat(4095),
           },
         })),
       );
@@ -266,7 +267,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         wireTarget.searchParams.set('projectId', projectB);
         wireTarget.searchParams.set('from', '2026-11-02T00:00:00Z');
         wireTarget.searchParams.set('to', '2026-11-03T00:00:00Z');
-        wireTarget.searchParams.set('limit', '1');
+        wireTarget.searchParams.set('limit', '50');
         const getControlPage = async () => {
           const response = await fetch(wireTarget, {
             headers: { Authorization: 'Bearer fixture-b' },
@@ -281,7 +282,10 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         assert.ok(controlFirst.nextCursor.length <= 8192);
         wireTarget.searchParams.set('cursor', controlFirst.nextCursor);
         const controlNext = await getControlPage();
-        assert.equal(controlNext.events[0].eventId, 'a' + '\u0000'.repeat(4095));
+        assert.deepEqual(
+          controlNext.events.map((event) => event.eventId),
+          ['a', '0'].map((prefix) => prefix + '\u0000'.repeat(4095)),
+        );
         assert.equal(controlNext.hasMore, false);
       } finally {
         await http.close();
@@ -388,6 +392,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       realClickHouseCountsAndPaging: realAnalytics,
       realHttpAuthorizedReads: realAnalytics,
       maximumIdentifierCursorPaging: realAnalytics,
+      adaptiveLargePages: realAnalytics,
       cursorScopeVerified: realAnalytics,
       adapter,
       limitations: [

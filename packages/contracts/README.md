@@ -21,8 +21,8 @@ an explicit rollout/recovery plan before production.
 The low-level SDK queue accepts typed complete events and does not automatically
 run this schema on enqueue. JavaScript integrations can call `safeParse` before
 enqueue; ingestion always validates independently. A public capture API remains
-separate work. Per-field bounds do not guarantee a maximum-sized 100-row page
-fits the reader's independent response byte cap, and cursor wire encoding has
-its own bound.
+separate work. Per-field bounds do not guarantee a maximum-sized 100-row page fits a single
+response. The reader reduces oversized pages within one deadline and returns a
+cursor. Cursor wire encoding has its own independently verified bound.
 
 Run `./scripts/signaltrail-ops.mjs check contracts` for contract verification.
