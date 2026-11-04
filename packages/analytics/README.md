@@ -131,3 +131,32 @@ ANDed and must be kept unchanged between pages. Session IDs are scoped to the
 authorized project, not globally unique identities. Replacement selection occurs
 before session filtering as well. Session-filtered results retain receive-time
 ordering; this is not a client sequence-ordered session timeline.
+
+## Node HTTP bridge
+
+`createAnalyticsHttpServer({ origin, query, maxConnections?, shutdownTimeoutMs? })`
+returns an unbound Node `server` and idempotent async `close()`. Supply the same
+required authorization/storage callbacks as the query handler in `query`, then
+listen on an explicitly chosen interface. The configured HTTP(S) origin must have
+no credentials, path, query, or fragment. Requests use that fixed origin and Host
+for session verification; client Host and forwarding headers do not select the
+Request URL. Identity resolvers must not independently trust forwarding headers.
+No listener, session provider, TLS termination, CORS policy, or deployment is
+configured automatically.
+
+The bridge rejects duplicate Authorization headers, non-origin-form request
+URLs, and request bodies before authorization. Normal GET request completion does
+not cancel an in-progress read; disconnects and shutdown do. The connection cap
+is 128 by default (1–1024), distinct from the handler's 32-operation admission.
+Headers are limited to 32 KiB with a ten-second header deadline, a fifteen-second
+request deadline, and five-second keep-alive timeout. These are provisional
+Node HTTP limits, not a proxy configuration or whole-process memory guarantee.
+
+Shutdown stops admission, aborts active handler signals, closes idle connections,
+and forcibly closes remaining HTTP connections after one second by default
+(configurable 100–10,000 ms). It does not close caller-owned database pools or
+wait indefinitely for dependencies ignoring cancellation. Close those separately.
+The unit suite opens ephemeral loopback listeners for wire, disconnect, and slow
+header shutdown checks. `load authorized-analytics` additionally verifies real
+HTTP authorization, counts, and summary reads against owned PostgreSQL and
+ClickHouse fixtures. Production session verification remains pending.

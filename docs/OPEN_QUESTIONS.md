@@ -66,8 +66,10 @@ Entries are questions, not approvals or completed work.
   totals. A server must authorize project membership before calling the reader;
   public ingestion keys must never grant read access. Production read-only
   ClickHouse credentials and allowed query settings remain to be provisioned.
-  An injected Request/Response query boundary now tests denial before reads,
-  canonical project scope, deadlines, and admission. It is not mounted or deployed.
+  The injected query boundary and Node HTTP bridge now test denial before reads,
+  canonical project scope, deadlines, admission, disconnects, and shutdown. Real
+  HTTP fixtures use PostgreSQL membership and ClickHouse reads. The library server
+  is not mounted in the dashboard or deployed.
   Choose the dashboard session provider, membership persistence, and same-origin
   cookie/origin policy before wiring an actual application route; fixture-only
   authorization is not a production fallback.

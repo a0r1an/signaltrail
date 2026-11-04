@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';
 export { createAnalyticsQueryHandler } from './query-handler.ts';
 export type { AnalyticsQueryOptions, ProjectAccess } from './query-handler.ts';
+export { createAnalyticsHttpServer } from './http-server.ts';
+export type { AnalyticsHttpOptions } from './http-server.ts';
 
 export interface AnalyticsReaderOptions {
   endpoint: string;

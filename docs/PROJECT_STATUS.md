@@ -31,6 +31,15 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Added the Node HTTP query bridge with a configured origin, duplicate-auth/body
+  rejection before authorization, connection/header limits, disconnect cancellation,
+  and bounded idempotent shutdown including incomplete headers. All 112 analytics
+  tests, lint, types, and builds pass; 25 load-harness units pass. Real HTTP denied
+  and authorized reads passed against PostgreSQL and ClickHouse with full cleanup
+  in `test-results/load/2026-11-04T01-04-54.854Z-authorized-analytics/`.
+  The server is an unbound library factory; production identity/session integration,
+  TLS termination, process entrypoint, and deployment remain pending.
+
 - Added a bounded node-postgres membership adapter: explicit connection config,
   certificate verification by default, bound parameters, one extended statement,
   read-only session default, connection/query/server deadlines, admission retained
@@ -267,7 +276,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                     |
-| Analytics reader and query boundary unit tests |                            99 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Analytics reader and query boundary unit tests |                           112 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -333,9 +342,10 @@ Startup readiness and exact-name filtering are now verified; do not repeat
 that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
 The combined authorized-query probe and query-bound cursors are verified.
 Initial metadata migration replay and change detection are also verified.
-The bounded PostgreSQL adapter is now verified. Next, add a Node HTTP bridge
-for the authorized query handler and test real wire requests, disconnects, and
-shutdown using the owned combined probe. Session verification remains injectable;
+The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
+real wire authorization/storage reads, disconnects, and bounded shutdown. Next,
+verify overload refusal and recovery through the real HTTP bridge before extending
+the explorer/product surface. Session verification remains injectable;
 production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after
 that slice. Integrate a

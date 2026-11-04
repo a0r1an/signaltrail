@@ -8,6 +8,7 @@ import {
 } from '../../packages/project-access/dist/index.js';
 import {
   createAnalyticsQueryHandler,
+  createAnalyticsHttpServer,
   createAnalyticsReader,
 } from '../../packages/analytics/dist/index.js';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
@@ -188,7 +189,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       ]);
       reader = createAnalyticsReader(connection);
     }
-    const handler = createAnalyticsQueryHandler({
+    const queryOptions = {
       resolveProjectAccess: resolve,
       countReceivedEvents: async (window, signal) => {
         reads++;
@@ -204,7 +205,8 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
             },
           }
         : {}),
-    });
+    };
+    const handler = createAnalyticsQueryHandler(queryOptions);
     const target = new URL('https://fixture.invalid/v1/analytics/count');
     for (const [key, value] of Object.entries({
       projectId: projectA,
@@ -212,6 +214,50 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       to: '2026-11-02T00:00:00Z',
     }))
       target.searchParams.set(key, value);
+    if (realAnalytics) {
+      const http = createAnalyticsHttpServer({
+        origin: 'https://fixture.invalid',
+        query: queryOptions,
+      });
+      try {
+        await new Promise((resolve) => http.server.listen(0, '127.0.0.1', resolve));
+        const address = http.server.address();
+        assert.ok(address && typeof address !== 'string');
+        const wireTarget = new URL(
+          target.pathname + target.search,
+          `http://127.0.0.1:${address.port}`,
+        );
+        const denied = await fetch(wireTarget, {
+          headers: { Authorization: 'Bearer fixture-b' },
+          signal: AbortSignal.timeout(5000),
+        });
+        assert.equal(denied.status, 403);
+        assert.equal(reads, 0);
+        const allowed = await fetch(wireTarget, {
+          headers: { Authorization: 'Bearer fixture-a' },
+          signal: AbortSignal.timeout(5000),
+        });
+        assert.equal(allowed.status, 200);
+        assert.equal(allowed.headers.get('cache-control'), 'no-store');
+        assert.deepEqual(await allowed.json(), { count: '1' });
+        wireTarget.pathname = '/v1/analytics/events';
+        const listing = await fetch(wireTarget, {
+          headers: { Authorization: 'Bearer fixture-a' },
+          signal: AbortSignal.timeout(5000),
+        });
+        assert.equal(listing.status, 200);
+        const page = await listing.json();
+        assert.deepEqual(
+          page.events.map((event) => event.eventId),
+          ['event-a'],
+        );
+        assert.equal(page.hasMore, false);
+      } finally {
+        await http.close();
+      }
+      reads = 0;
+    }
+
     assert.equal(
       (await handler(new Request(target, { headers: { Authorization: 'Bearer fixture-b' } })))
         .status,
@@ -309,6 +355,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       untrackedSchemaRejected: true,
       unsupportedMigrationVersionRejected: true,
       realClickHouseCountsAndPaging: realAnalytics,
+      realHttpAuthorizedReads: realAnalytics,
       cursorScopeVerified: realAnalytics,
       adapter,
       limitations: [
