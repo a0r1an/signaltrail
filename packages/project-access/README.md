@@ -2,7 +2,7 @@
 
 `@signaltrail/project-access` connects a verified session identity to a project
 membership lookup. It does not authenticate cookies, verify JWTs, create users,
-or expose a listener. It has no runtime dependencies or default authentication.
+or expose a listener. Its PostgreSQL adapter uses node-postgres; it supplies no default authentication.
 
 ```ts
 const resolveProjectAccess = createProjectAccessResolver({
@@ -26,8 +26,8 @@ Membership grants are not cached, so removal affects the next lookup.
 The injected database adapter receives `{ text, values, signal }`. It must bind
 values through the database driver, enforce a statement deadline, and implement
 cancellation. The query handler provides response deadlines/admission, including
-retaining slots for dependencies that ignore cancellation. A driver and production
-connection/role configuration are deliberately not chosen by this package.
+retaining slots for dependencies that ignore cancellation. The provided node-postgres adapter implements this contract; production
+credentials, CA trust, and database role provisioning remain unconfigured.
 
 The provisional policy permits owner, admin, and member roles to read every
 project in their organization. Project-specific roles, invitations, last-owner
@@ -63,7 +63,7 @@ concurrent replay, checksum mismatch, unknown versions, and untracked-schema ref
 ```
 
 The isolated probe uses owned PostgreSQL data on port 35433, a fixture identity
-resolver, and a fixture-only psql prepared-statement bridge. It verifies tenant
+resolver, the real node-postgres adapter, and psql only for migration/seeding. It verifies tenant
 and issuer isolation, removal, role constraints, and query-handler integration.
 It does not validate a production session provider or production SQL adapter.
 
@@ -71,3 +71,37 @@ It does not validate a production session provider or production SQL adapter.
 cursor-paged summaries for two projects sharing event/session IDs. It verifies
 that denied and revoked membership causes no storage read. CI uses this combined
 probe; the smaller PostgreSQL-only probe remains available for focused checks.
+
+## Bounded PostgreSQL adapter
+
+`createPostgresMembershipDatabase({ connectionString, tls?, ca?, maxConnections?,
+maxInFlight?, timeoutMs?, onPoolError? })` returns `query`, `snapshot`, and `close`.
+Pass `query` to the membership resolver and close the adapter during shutdown.
+The connection URL must specify user, password, host, and database; URL query
+options/fragments and port zero are rejected. This prevents ambient PG settings
+from silently changing the configured destination or credentials. TLS verifies
+certificates by default; the local fixture explicitly disables TLS. `ca` supplies
+optional CA trust without disabling verification. Do not print connection URLs.
+
+Defaults are four connections, 16 admitted operations, a five-second total wait,
+30-second idle eviction, and server statement/lock timeouts just below the total
+wait. Acquisition and execution count toward admission. Cancellation discards a
+checked-out connection; a cancelled pool waiter retains its slot until acquisition
+settles and any late connection is discarded. Parameters are copied before waiting.
+Errors use generic messages without SQL, credentials, or identity values. Pool
+error diagnostics receive no private error object and cannot alter query outcomes.
+
+The driver uses one extended-protocol statement with bound values. Internal query
+text is capped at 16 KiB, with up to 16 string parameters of 4 KiB each. This is
+for bounded, server-owned membership queries, not customer SQL or an arbitrary
+result-size guarantee. A read-only session default blocks ordinary writes; it
+does not replace a restricted production database identity. Migration/admin work
+uses a separate executor and identity.
+
+`close` stops admission, aborts work, waits for acquisition/execution to settle,
+and ends the pool. The shutdown wait is bounded at the query timeout plus one
+second; failure is reported rather than silently called successful. Process
+supervision must handle an unconfirmed shutdown. The real fixture checks pool
+saturation, queued and active cancellation, parameter snapshots, statement timeout,
+read-only defaults, backend termination/recovery, diagnostic isolation, and close
+with active/queued operations. These checks are not a production pool-sizing test.

@@ -10,8 +10,10 @@ Entries are questions, not approvals or completed work.
   owner/admin/member roles read access to all projects in their organization.
   Confirm organization-wide versus project-specific visibility, account linking,
   invitations, and last-owner protection before exposing administrative APIs.
-  Session verification, a parameterized/cancellable database adapter, read-only
-  database identity, and deployment migration application remain unconfigured.
+  Session verification, a read-only database identity, TLS/CA provisioning, and
+  deployment migration application remain unconfigured. A bounded real PostgreSQL
+  adapter is now locally verified; its pool/query limits still need representative
+  workload measurement before production sizing.
   A versioned initial migration statement now has fixture coverage for atomicity,
   replay, checksum changes, and unsupported history. No deployment CLI or migration
   identity has been configured, and existing development data is not migrated.

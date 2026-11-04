@@ -1,4 +1,6 @@
 export { createInitialMigrationStatement } from './initial-migration.ts';
+export { createPostgresMembershipDatabase } from './postgres-database.ts';
+export type { PostgresDatabaseOptions } from './postgres-database.ts';
 
 export interface Principal {
   issuer: string;

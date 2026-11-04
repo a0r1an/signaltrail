@@ -77,7 +77,8 @@ not one per request. These are instance limits, not proxy or distributed quotas.
 
 The isolated probe uses a fixture-only membership resolver to verify denied
 requests never reach storage and an authorized request returns a real count.
-Production session validation, membership persistence, credentials, host routing,
+A PostgreSQL membership resolver and bounded driver are available in
+`@signaltrail/project-access`. Production session validation, metadata provisioning, credentials, host routing,
 CSRF/origin policy for the chosen session scheme, and query metrics remain pending.
 
 ## Event explorer summaries

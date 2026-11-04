@@ -31,6 +31,17 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 3 — startup readiness and filtering verification
 
+- Added a bounded node-postgres membership adapter: explicit connection config,
+  certificate verification by default, bound parameters, one extended statement,
+  read-only session default, connection/query/server deadlines, admission retained
+  through cancellation, and idempotent bounded shutdown. Its snapshots expose no
+  credentials or query values. The combined probe now uses the real driver rather
+  than a psql membership bridge; psql remains fixture migration/seeding only.
+- Real driver checks passed with cleanup in
+  `test-results/load/2026-11-04T00-48-13.124Z-authorized-analytics/`: pool saturation,
+  cancelled acquisition retaining capacity, active cancellation, immutable queued
+  values, statement timeout, killed idle/active backends, recovery, throwing pool
+  diagnostics, read-only defaults, and shutdown with queued/active work.
 - Initial metadata migration application is now transactionally recorded with a
   source checksum and advisory lock. Concurrent/identical replay, checksum mismatch,
   unsupported newer history, rollback after DDL failure, and refusal to adopt an
@@ -61,9 +72,10 @@ performed. Historical sections below preserve evidence from their recorded dates
 - Project-access checks passed 16 units, lint, types, and builds. Real PostgreSQL
   isolation, revocation, constraints, and query-boundary integration passed in
   `test-results/load/2026-11-04T00-08-29.413Z-project-access/` with cleanup.
-  An earlier run deliberately failed the missing role constraint. These fixtures
-  use a test identity resolver and psql bridge; no production SQL adapter, session
-  verification, migration runner, or application route is installed.
+  An earlier run deliberately failed the missing role constraint. At that initial checkpoint,
+  the fixture used a test identity resolver and psql bridge. The driver and migration
+  checks above supersede that limitation; production session verification and an
+  application route remain pending.
 - Added exact session-ID filters to count and paged-summary reads and both
   authorized query routes. They compose with event-name filters and preserve
   tenant scope, latest-version selection, and existing resource/cancellation
@@ -256,7 +268,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           105 | October 31 process and storage-latency metrics checks                     |
 | Analytics reader and query boundary unit tests |                            99 | Includes query-bound cursors, input snapshots, filters, and authorization |
-| Project access unit tests                      |                            22 | Membership scope/cancellation and bounded migration-source validation     |
+| Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
 - October 31 ingestion checks passed all 63 units, lint, types, and builds after
@@ -321,9 +333,10 @@ Startup readiness and exact-name filtering are now verified; do not repeat
 that investigation as unfinished work. Exact session-ID filtering and the PostgreSQL membership foundation are complete.
 The combined authorized-query probe and query-bound cursors are verified.
 Initial metadata migration replay and change detection are also verified.
-Next, add a bounded parameterized PostgreSQL adapter so the membership resolver
-can run without the fixture-only psql bridge. Keep session verification injectable
-and leave the identity-provider decision in `OPEN_QUESTIONS.md`.
+The bounded PostgreSQL adapter is now verified. Next, add a Node HTTP bridge
+for the authorized query handler and test real wire requests, disconnects, and
+shutdown using the owned combined probe. Session verification remains injectable;
+production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after
 that slice. Integrate a
 session/membership resolver and dashboard route once the

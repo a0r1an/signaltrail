@@ -237,8 +237,11 @@ build. `load project-access` starts an isolated PostgreSQL on port 35433, applie
 the initial control-plane schema only there, and checks issuer/subject isolation,
 organization membership, immediate revocation, role constraints, initial migration
 rollback/concurrent replay/checksum checks, and integration
-with the analytics query boundary. It uses a fixture identity resolver and psql
-prepared-statement bridge, not a production session provider or database adapter.
+with the analytics query boundary. It uses a fixture identity resolver and the real bounded node-postgres adapter.
+psql is used only for fixture migration/seeding, not membership reads. The probe
+also checks pool saturation, cancellation, timeouts, backend recovery, read-only
+defaults, parameter snapshots, and shutdown. Production credentials, TLS trust,
+and session-provider integration remain separate work.
 `load authorized-analytics` adds real ClickHouse counts and keyset-paged summaries
 for projects sharing event/session IDs. It verifies denied/revoked requests do
 not reach analytical storage and records `realClickHouseCountsAndPaging` in the
