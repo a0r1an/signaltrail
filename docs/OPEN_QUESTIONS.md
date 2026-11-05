@@ -78,9 +78,12 @@ Entries are questions, not approvals or completed work.
 
 - **Analytics read semantics and access:** the new server-only reader counts
   unique events by latest `received_at`, using a required UTC window of at most
-  31 days. A later retry can move an event between received-time windows. Decide
-  event-time versus receive-time product semantics before exposing dashboard
-  totals. A server must authorize project membership before calling the reader;
+  31 days. A later retry can move an event between received-time windows.
+  User decision: product dashboard dates must use when the event happened
+  (client event time), with received time retained for delivery diagnostics.
+  Current queries/UI still use received time; schema/query migration and
+  malformed or unreasonable client-clock handling remain to be implemented
+  before exposing event-time totals. Do not claim current reads meet this decision. A server must authorize project membership before calling the reader;
   public ingestion keys must never grant read access. Production read-only
   ClickHouse credentials and allowed query settings remain to be provisioned.
   The injected query boundary and Node HTTP bridge now test denial before reads,
