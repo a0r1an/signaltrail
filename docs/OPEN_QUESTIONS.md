@@ -46,8 +46,11 @@ Entries are questions, not approvals or completed work.
   their precedence, parameter allowlist and URL privacy rules remain to be
   specified. A campaign change does not independently rotate sessions under the
   current inactivity-based rule. Never use query parameters as identity or copy
-  arbitrary query strings into attribution. Logout/shared-device reset and cross-tab identity
-  persistence remain to be specified. Keep the low-level APIs stable.
+  arbitrary query strings into attribution.
+  User approved explicit SDK `reset()` on logout: clear the identified user,
+  generate a new anonymous visitor ID, and start a new session. Existing queued
+  events retain their captured identities; reset must not reattribute them.
+  Cross-tab identity persistence and direct account switching remain to be specified. Keep the low-level APIs stable.
   An uncommitted capture-client stub/test exists; it is unfinished, not a usable
   API or verified implementation.
 - **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
