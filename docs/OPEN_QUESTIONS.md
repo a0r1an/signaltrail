@@ -28,6 +28,10 @@ Entries are questions, not approvals or completed work.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.
+- **Replay consent and enablement:** user approved replay as a separate explicit
+  opt-in from analytics. Analytics initialization must not start page recording.
+  Applications enable replay separately after handling any required consent.
+  Recording/consent lifecycle implementation remains pending.
 - **SDK telemetry consent:** aggregate health reporting is opt-in and sampled.
   Keep those defaults; decide product-facing consent and documentation before
   enabling it in a deployed application.
