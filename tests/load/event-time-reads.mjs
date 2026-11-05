@@ -1,3 +1,6 @@
+import { createAnalyticsQueryHandler } from '../../packages/analytics/dist/index.js';
+import { createQueryClient } from '../../packages/analytics/dist/query-client.js';
+import { readQueryReferenceResponse } from '../../packages/analytics/tests/query-reference.ts';
 import assert from 'node:assert/strict';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 
@@ -66,8 +69,49 @@ export async function exerciseEventTimeReads(connection, reader, window) {
   assert.deepEqual(await reader.countOccurredEvents({ ...scope, eventName: 'missing' }), {
     count: '0',
   });
+  const handler = createAnalyticsQueryHandler({
+    countReceivedEvents: reader.countReceivedEvents,
+    countOccurredEvents: reader.countOccurredEvents,
+    countOccurredVisitors: reader.countOccurredVisitors,
+    listOccurredEvents: reader.listOccurredEvents,
+    resolveProjectAccess: async (request, requested) =>
+      request.headers.get('Authorization') !== 'Bearer fixture-dashboard-session'
+        ? { status: 'unauthenticated' }
+        : requested === scope.projectId
+          ? { status: 'authorized', projectId: scope.projectId }
+          : { status: 'forbidden' },
+  });
+  const client = createQueryClient({
+    endpoint: 'https://query.invalid',
+    fetch: async (url, init) => {
+      const response = await handler(
+        new Request(url, {
+          ...init,
+          headers: { Authorization: 'Bearer fixture-dashboard-session' },
+        }),
+      );
+      const operation = new URL(url).pathname.slice('/v1/analytics/'.length);
+      await readQueryReferenceResponse(operation, response.clone());
+      return response;
+    },
+  });
+  try {
+    assert.deepEqual(await client.countOccurredEvents(scope), { count: '3' });
+    assert.deepEqual(await client.countOccurredVisitors(scope), { count: '1' });
+    const page = await client.listOccurredEvents({ ...scope, limit: 1 });
+    assert.equal(page.events[0].eventId, 'replayed');
+    assert.equal(page.events[0].occurredAt, '2026-10-01T13:00:00.000Z');
+    assert.equal(
+      (await client.listOccurredEvents({ ...scope, cursor: page.nextCursor, limit: 1 })).events[0]
+        .eventId,
+      'late',
+    );
+  } finally {
+    client.close();
+  }
   return {
     passed: true,
+    occurrenceHandlerClientAndReference: true,
     occurred,
     received: { count: '5' },
     lateArrivalUsesClientTime: true,

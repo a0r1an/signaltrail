@@ -22,7 +22,7 @@ function dereference(value: JsonObject): JsonObject {
 
 /** Test-only schema conformance; semantic byte/UInt64/calendar checks stay in runtime readers. */
 export function matchesQueryReference(
-  operation: 'count' | 'events',
+  operation: 'count' | 'events' | 'occurred/count' | 'occurred/events' | 'occurred/visitors/count',
   status: number,
   body: unknown,
 ): boolean {
@@ -46,7 +46,7 @@ export function matchesQueryReference(
 }
 
 export async function readQueryReferenceResponse(
-  operation: 'count' | 'events',
+  operation: 'count' | 'events' | 'occurred/count' | 'occurred/events' | 'occurred/visitors/count',
   response: Response,
 ): Promise<unknown> {
   let body: unknown;

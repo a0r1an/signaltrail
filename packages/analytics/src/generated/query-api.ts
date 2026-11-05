@@ -44,6 +44,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/occurred/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count events by occurrence time
+         * @description Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900–2299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.
+         */
+        get: operations["countOccurredEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/occurred/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List events by occurrence time
+         * @description Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900–2299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.
+         */
+        get: operations["listOccurredEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/occurred/visitors/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count identified visitors by occurrence time
+         * @description Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900–2299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.
+         */
+        get: operations["countOccurredVisitors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -75,6 +135,25 @@ export interface components {
             nextCursor: string;
         } | {
             events: components["schemas"]["EventSummary"][];
+            /** @constant */
+            hasMore: false;
+        };
+        OccurredEventSummary: {
+            eventId: components["schemas"]["Identifier"];
+            eventName: components["schemas"]["Identifier"];
+            sessionId: components["schemas"]["Identifier"];
+            sequence: components["schemas"]["UInt64"];
+            receivedAt: components["schemas"]["UtcTimestamp"];
+            occurredAt: components["schemas"]["UtcTimestamp"];
+        };
+        OccurredEventPage: {
+            events: components["schemas"]["OccurredEventSummary"][];
+            /** @constant */
+            hasMore: true;
+            /** @description Opaque versioned keyset position bound to project, canonical UTC window, eventName and sessionId. Unsigned; every page still requires authorization. Preserve exactly. Version-two output; bounded version-one input remains accepted. */
+            nextCursor: string;
+        } | {
+            events: components["schemas"]["OccurredEventSummary"][];
             /** @constant */
             hasMore: false;
         };
@@ -282,6 +361,151 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventPage"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            405: components["responses"]["Error405"];
+            414: components["responses"]["Error414"];
+            /** @description Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed. */
+            431: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["Error503"];
+        };
+    };
+    countOccurredEvents: {
+        parameters: {
+            query: {
+                /** @description Session membership is checked on every request, before analytics storage. */
+                projectId: components["parameters"]["projectId"];
+                /** @description Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                from: components["schemas"]["UtcTimestamp"];
+                /** @description Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                to: components["schemas"]["UtcTimestamp"];
+                /** @description Optional exact event-name match; ANDed with sessionId. */
+                eventName?: components["parameters"]["eventName"];
+                /** @description Optional exact project-scoped session match; ANDed with eventName. */
+                sessionId?: components["parameters"]["sessionId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact occurrence-time result; visitor links resolve retained project history retroactively. */
+            200: {
+                headers: {
+                    /** @description Application responses are not cacheable. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Count"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            405: components["responses"]["Error405"];
+            414: components["responses"]["Error414"];
+            /** @description Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed. */
+            431: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["Error503"];
+        };
+    };
+    listOccurredEvents: {
+        parameters: {
+            query: {
+                /** @description Session membership is checked on every request, before analytics storage. */
+                projectId: components["parameters"]["projectId"];
+                /** @description Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                from: components["schemas"]["UtcTimestamp"];
+                /** @description Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                to: components["schemas"]["UtcTimestamp"];
+                /** @description Optional exact event-name match; ANDed with sessionId. */
+                eventName?: components["parameters"]["eventName"];
+                /** @description Optional exact project-scoped session match; ANDed with eventName. */
+                sessionId?: components["parameters"]["sessionId"];
+                /** @description Maximum returned events. Adaptive byte-budget reduction may return fewer; follow hasMore/nextCursor. */
+                limit?: components["parameters"]["limit"];
+                /** @description Continue the same scope and filters; page size may change. */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact occurrence-time result; visitor links resolve retained project history retroactively. */
+            200: {
+                headers: {
+                    /** @description Application responses are not cacheable. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurredEventPage"];
+                };
+            };
+            400: components["responses"]["Error400"];
+            401: components["responses"]["Error401"];
+            403: components["responses"]["Error403"];
+            404: components["responses"]["Error404"];
+            405: components["responses"]["Error405"];
+            414: components["responses"]["Error414"];
+            /** @description Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed. */
+            431: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["Error503"];
+        };
+    };
+    countOccurredVisitors: {
+        parameters: {
+            query: {
+                /** @description Session membership is checked on every request, before analytics storage. */
+                projectId: components["parameters"]["projectId"];
+                /** @description Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                from: components["schemas"]["UtcTimestamp"];
+                /** @description Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900–2299. */
+                to: components["schemas"]["UtcTimestamp"];
+                /** @description Optional exact event-name match; ANDed with sessionId. */
+                eventName?: components["parameters"]["eventName"];
+                /** @description Optional exact project-scoped session match; ANDed with eventName. */
+                sessionId?: components["parameters"]["sessionId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact occurrence-time result; visitor links resolve retained project history retroactively. */
+            200: {
+                headers: {
+                    /** @description Application responses are not cacheable. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Count"];
                 };
             };
             400: components["responses"]["Error400"];

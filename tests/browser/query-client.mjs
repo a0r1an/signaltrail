@@ -68,6 +68,18 @@ const queryHandler = createAnalyticsQueryHandler({
       ? { status: 'authorized', projectId }
       : { status: 'forbidden' };
   },
+  countOccurredEvents: async () => {
+    reads++;
+    return { count: '2' };
+  },
+  countOccurredVisitors: async () => {
+    reads++;
+    return { count: '1' };
+  },
+  listOccurredEvents: async () => {
+    reads++;
+    return { events: [{ ...event, occurredAt: '2026-11-01T10:00:00.000Z' }], hasMore: false };
+  },
   countReceivedEvents: async () => {
     reads++;
     return { count: '18446744073709551615' };
@@ -277,6 +289,19 @@ try {
         timeout: 5000,
       });
       result.cases.disposal = true;
+      const occurrence = await page.evaluate(
+        async (query) => ({
+          events: await window.client.countOccurredEvents(query),
+          visitors: await window.client.countOccurredVisitors(query),
+          page: await window.client.listOccurredEvents(query),
+        }),
+        query,
+      );
+      assert.deepEqual(occurrence.events, { count: '2' });
+      assert.deepEqual(occurrence.visitors, { count: '1' });
+      assert.equal(occurrence.page.events[0].occurredAt, '2026-11-01T10:00:00.000Z');
+      assert.equal(occurrence.page.events[0].receivedAt, event.receivedAt);
+      result.cases.occurrenceTimeCountsAndPaging = true;
       assert.deepEqual(errors, []);
       result.passed = true;
     })(),

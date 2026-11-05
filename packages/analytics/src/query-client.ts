@@ -3,14 +3,20 @@ import type {
   AnalyticsCountResponse,
   AnalyticsEventListRequest,
   AnalyticsEventPage,
+  AnalyticsOccurredEventPage,
 } from './api-types.ts';
 import {
   isCountResponse,
   isEventPage,
+  isOccurredEventPage,
   queryJson,
   utcMilliseconds,
   validIdentifier,
 } from './query-response.ts';
+
+type Operation =
+  'count' | 'events' | 'occurred/count' | 'occurred/events' | 'occurred/visitors/count';
+const listing = (operation: Operation) => operation.endsWith('events');
 
 export interface QueryClientOptions {
   endpoint: string;
@@ -70,17 +76,14 @@ export function createQueryClient(options: QueryClientOptions) {
   let closed = false;
   const active = new Map<AbortController, (error: AnalyticsQueryClientError) => void>();
 
-  function target(
-    operation: 'count' | 'events',
-    input: AnalyticsCountRequest | AnalyticsEventListRequest,
-  ) {
+  function target(operation: Operation, input: AnalyticsCountRequest | AnalyticsEventListRequest) {
     const allowed = [
       'projectId',
       'from',
       'to',
       'eventName',
       'sessionId',
-      ...(operation === 'events' ? ['limit', 'cursor'] : []),
+      ...(listing(operation) ? ['limit', 'cursor'] : []),
     ];
     const query = input as AnalyticsEventListRequest;
     if (
@@ -114,12 +117,12 @@ export function createQueryClient(options: QueryClientOptions) {
       const value = (query as unknown as Record<string, unknown>)[key];
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
-    if (url.href.length > (operation === 'count' ? 4096 : 16384))
+    if (url.href.length > (listing(operation) ? 16384 : 4096))
       throw new RangeError('Analytics query URL exceeded its bound');
     return { url: url.href, maximum: query.limit ?? 50 };
   }
   async function execute(
-    operation: 'count' | 'events',
+    operation: Operation,
     query: AnalyticsCountRequest | AnalyticsEventListRequest,
     signal?: AbortSignal,
   ): Promise<AnalyticsCountResponse | AnalyticsEventPage> {
@@ -170,9 +173,11 @@ export function createQueryClient(options: QueryClientOptions) {
         const body = await queryJson(
           response,
           controller.signal,
-          operation === 'count' ? 4096 : 192 * 1024,
+          listing(operation) ? 192 * 1024 : 4096,
         );
-        if (operation === 'count' && isCountResponse(body)) return body;
+        if (!listing(operation) && isCountResponse(body)) return body;
+        if (operation === 'occurred/events' && isOccurredEventPage(body, request.maximum))
+          return body;
         if (operation === 'events' && isEventPage(body, request.maximum)) return body;
         throw new AnalyticsQueryClientError('INVALID_RESPONSE');
       } catch (error) {
@@ -204,6 +209,24 @@ export function createQueryClient(options: QueryClientOptions) {
       signal?: AbortSignal,
     ): Promise<AnalyticsEventPage> {
       return (await execute('events', query, signal)) as AnalyticsEventPage;
+    },
+    async countOccurredEvents(
+      query: AnalyticsCountRequest,
+      signal?: AbortSignal,
+    ): Promise<AnalyticsCountResponse> {
+      return (await execute('occurred/count', query, signal)) as AnalyticsCountResponse;
+    },
+    async countOccurredVisitors(
+      query: AnalyticsCountRequest,
+      signal?: AbortSignal,
+    ): Promise<AnalyticsCountResponse> {
+      return (await execute('occurred/visitors/count', query, signal)) as AnalyticsCountResponse;
+    },
+    async listOccurredEvents(
+      query: AnalyticsEventListRequest,
+      signal?: AbortSignal,
+    ): Promise<AnalyticsOccurredEventPage> {
+      return (await execute('occurred/events', query, signal)) as AnalyticsOccurredEventPage;
     },
     close() {
       closed = true;

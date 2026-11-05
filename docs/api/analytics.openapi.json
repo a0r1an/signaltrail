@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.1",
   "info": {
-    "title": "SignalTrail private analytics reads — reference binding",
+    "title": "SignalTrail private analytics reads \u2014 reference binding",
     "version": "0.1.0",
     "description": "Reference for implemented query-handler and Node HTTP bridge routes. Not a deployed service or a production authentication configuration. The bearer-header scheme describes the isolated verified-session fixture binding only; replace it with the selected deployment session scheme when mounting the service. The library requires an injected identity/membership resolver and supplies no token verifier. Never authorize reads using public ingestion keys. Production session provider, TLS, credentials and route mounting remain pending."
   },
@@ -161,6 +161,258 @@
           }
         },
         "x-maximum-request-url-characters": 16384
+      }
+    },
+    "/v1/analytics/occurred/count": {
+      "get": {
+        "operationId": "countOccurredEvents",
+        "summary": "Count events by occurrence time",
+        "description": "Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900\u20132299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/projectId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "$ref": "#/components/parameters/eventName"
+          },
+          {
+            "$ref": "#/components/parameters/sessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact occurrence-time result; visitor links resolve retained project history retroactively.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Application responses are not cacheable.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error414"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "431": {
+            "description": "Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed."
+          }
+        },
+        "x-maximum-request-url-characters": 4096
+      }
+    },
+    "/v1/analytics/occurred/events": {
+      "get": {
+        "operationId": "listOccurredEvents",
+        "summary": "List events by occurrence time",
+        "description": "Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900\u20132299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/projectId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "$ref": "#/components/parameters/eventName"
+          },
+          {
+            "$ref": "#/components/parameters/sessionId"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact occurrence-time result; visitor links resolve retained project history retroactively.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Application responses are not cacheable.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurredEventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error414"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "431": {
+            "description": "Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed."
+          }
+        },
+        "x-maximum-request-url-characters": 16384
+      }
+    },
+    "/v1/analytics/occurred/visitors/count": {
+      "get": {
+        "operationId": "countOccurredVisitors",
+        "summary": "Count identified visitors by occurrence time",
+        "description": "Optional reader binding; unavailable bindings return 404. Uses client event time in a half-open UTC window, with millisecond precision and query dates in 1900\u20132299. Malformed or out-of-range stored times are excluded. Identity links are project scoped and control records are excluded. Authentication and membership are checked before reads. Client clock accuracy is not guaranteed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/projectId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Inclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UtcTimestamp"
+            },
+            "description": "Exclusive occurrence-time bound; positive UTC window of at most 31 days, in years 1900\u20132299."
+          },
+          {
+            "$ref": "#/components/parameters/eventName"
+          },
+          {
+            "$ref": "#/components/parameters/sessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact occurrence-time result; visitor links resolve retained project history retroactively.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Application responses are not cacheable.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Count"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "414": {
+            "$ref": "#/components/responses/Error414"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "431": {
+            "description": "Node HTTP parser may reject oversized headers before application handling. No JSON error shape is guaranteed."
+          }
+        },
+        "x-maximum-request-url-characters": 4096
       }
     }
   },
@@ -337,6 +589,77 @@
                 "maxItems": 100,
                 "items": {
                   "$ref": "#/components/schemas/EventSummary"
+                }
+              },
+              "hasMore": {
+                "const": false
+              }
+            }
+          }
+        ]
+      },
+      "OccurredEventSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "eventName", "sessionId", "sequence", "receivedAt", "occurredAt"],
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "eventName": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/UInt64"
+          },
+          "receivedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        }
+      },
+      "OccurredEventPage": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["events", "hasMore", "nextCursor"],
+            "properties": {
+              "events": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/OccurredEventSummary"
+                }
+              },
+              "hasMore": {
+                "const": true
+              },
+              "nextCursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "Opaque versioned keyset position bound to project, canonical UTC window, eventName and sessionId. Unsigned; every page still requires authorization. Preserve exactly. Version-two output; bounded version-one input remains accepted."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["events", "hasMore"],
+            "properties": {
+              "events": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/OccurredEventSummary"
                 }
               },
               "hasMore": {

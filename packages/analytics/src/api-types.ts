@@ -15,3 +15,6 @@ type ErrorResponse =
   'Error400' | 'Error401' | 'Error403' | 'Error404' | 'Error405' | 'Error414' | 'Error503';
 export type AnalyticsQueryError =
   components['responses'][ErrorResponse]['content']['application/json'];
+
+export type AnalyticsOccurredEventSummary = components['schemas']['OccurredEventSummary'];
+export type AnalyticsOccurredEventPage = components['schemas']['OccurredEventPage'];

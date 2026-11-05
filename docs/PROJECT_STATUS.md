@@ -29,6 +29,23 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — event-time handler/client boundary
+
+- Added optional occurrence-time count, visitor-count and listing routes under
+  `/v1/analytics/occurred/`. Existing membership-before-read, no-store, bounded
+  admission/URL/body handling and cancellation are reused. Unconfigured optional
+  readers return 404. The browser client strictly validates both timestamps;
+  received-time endpoints remain separate diagnostics.
+- Updated OpenAPI and generated declarations, including occurrence summaries.
+  All 229 analytics tests, lint, type/build and API drift checks pass. Native
+  cookie-session fixture probe passes:
+  `test-results/query-client-browser/2026-11-05T23-44-54.410Z/report.json`. Real
+  ClickHouse → handler → client → reference-schema verification passes with cleanup:
+  `test-results/load/2026-11-05T23-45-26.637Z-analytics-read/analytics-read.json`.
+- No production session or deployed route proof is implied. Next: wire the
+  dashboard server to owner-session plus PostgreSQL membership checks, then mount
+  the explorer with occurrence-time queries. Live Clerk setup remains unverified.
+
 ### November 5 — event-time listing foundation
 
 - Added `listOccurredEvents`, returning occurrence time and receipt diagnostics,

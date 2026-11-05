@@ -1,4 +1,9 @@
-import type { ReceivedEventWindow, EventListWindow, EventSummary } from './index.ts';
+import type {
+  ReceivedEventWindow,
+  EventListWindow,
+  EventSummary,
+  OccurredEventSummary,
+} from './index.ts';
 
 export type ProjectAccess =
   | { status: 'authorized'; projectId: string }
@@ -19,6 +24,18 @@ export interface AnalyticsQueryOptions {
     window: EventListWindow,
     signal?: AbortSignal,
   ): Promise<{ events: EventSummary[]; hasMore: boolean; nextCursor?: string }>;
+  countOccurredEvents?(
+    window: ReceivedEventWindow,
+    signal?: AbortSignal,
+  ): Promise<{ count: string }>;
+  countOccurredVisitors?(
+    window: ReceivedEventWindow,
+    signal?: AbortSignal,
+  ): Promise<{ count: string }>;
+  listOccurredEvents?(
+    window: EventListWindow,
+    signal?: AbortSignal,
+  ): Promise<{ events: OccurredEventSummary[]; hasMore: boolean; nextCursor?: string }>;
   timeoutMs?: number;
   maxConcurrentRequests?: number;
 }
@@ -44,10 +61,23 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
   return async (request: Request): Promise<Response> => {
     if (request.url.length > 16384) return json({ error: 'URI_TOO_LONG' }, 414);
     const url = new URL(request.url);
-    const listing = url.pathname === '/v1/analytics/events' && !!options.listReceivedEvents;
+    const listOperation =
+      url.pathname === '/v1/analytics/events'
+        ? options.listReceivedEvents
+        : url.pathname === '/v1/analytics/occurred/events'
+          ? options.listOccurredEvents
+          : undefined;
+    const countOperation =
+      url.pathname === '/v1/analytics/count'
+        ? options.countReceivedEvents
+        : url.pathname === '/v1/analytics/occurred/count'
+          ? options.countOccurredEvents
+          : url.pathname === '/v1/analytics/occurred/visitors/count'
+            ? options.countOccurredVisitors
+            : undefined;
+    const listing = !!listOperation;
     if (!listing && request.url.length > 4096) return json({ error: 'URI_TOO_LONG' }, 414);
-    if (!listing && url.pathname !== '/v1/analytics/count')
-      return json({ error: 'NOT_FOUND' }, 404);
+    if (!listing && !countOperation) return json({ error: 'NOT_FOUND' }, 404);
     if (request.method !== 'GET') {
       const response = json({ error: 'METHOD_NOT_ALLOWED' }, 405);
       response.headers.set('Allow', 'GET');
@@ -94,7 +124,7 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
             if (rawLimit !== null && (!/^[1-9]\d{0,2}$/.test(rawLimit) || Number(rawLimit) > 100))
               return json({ error: 'INVALID_WINDOW' }, 400);
             return json(
-              await options.listReceivedEvents!(
+              await listOperation!(
                 {
                   projectId: access.projectId,
                   ...filter,
@@ -111,7 +141,7 @@ export function createAnalyticsQueryHandler(options: AnalyticsQueryOptions) {
             );
           }
           return json(
-            await options.countReceivedEvents(
+            await countOperation!(
               {
                 projectId: access.projectId,
                 ...filter,

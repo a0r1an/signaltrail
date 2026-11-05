@@ -6,7 +6,7 @@ and operationally verifiable failure recovery.
 
 ## Current state
 
-The analytics pipeline works locally from the low-level browser SDK through HTTP
+The analytics pipeline works locally from the public browser capture SDK through HTTP
 ingestion and Redpanda into ClickHouse. It has native-browser persistence,
 retry/recovery, downstream deduplication, and isolated real-storage test coverage.
 Authorized count and paged event queries, a browser query client, and an injected
@@ -14,13 +14,13 @@ React event explorer are implemented. Owner-only Clerk sign-in routes and guards
 are implemented, but real account configuration/verification remain pending. The
 explorer is not mounted in a live route.
 
-Production authentication verification, identified-user linking, session recording
+Production authentication verification, session recording
 and replay playback, deployment, and backup/restore drills remain ahead.
 This is not a production-ready service or an availability guarantee.
 
 ## Architecture
 
-- **Browser SDK:** anonymous `track`/`reset`, private URL/campaign capture, shared
+- **Browser SDK:** `track`/`identify`/`reset`, private URL/campaign capture, shared
   sessions, IndexedDB buffering, bounded batching, retries with stable IDs,
   multi-tab coordination, and page-exit delivery attempts.
 - **Ingestion:** validates events independently, authorizes ingestion keys, bounds
@@ -28,7 +28,8 @@ This is not a production-ready service or an availability guarantee.
 - **Event processor:** consumes broker records, writes ClickHouse, handles dead
   letters, and commits offsets after required acknowledgements.
 - **Analytics reads:** project membership authorization through PostgreSQL,
-  bounded ClickHouse queries, exact counts, filters and cursor-based summaries.
+  bounded ClickHouse queries, identified visitor counts, event-time reads, filters
+  and cursor-based summaries.
 - **Dashboard:** Next.js, with an injected explorer component and browser fixture.
 - **Operations:** Docker local services, isolated load/recovery probes, and metrics
   forwarding through Grafana Alloy. S3 is selected for future replay objects.

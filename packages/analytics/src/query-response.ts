@@ -2,6 +2,7 @@ import type {
   AnalyticsCountResponse,
   AnalyticsEventPage,
   AnalyticsEventSummary,
+  AnalyticsOccurredEventPage,
 } from './api-types.ts';
 
 const encoder = new TextEncoder();
@@ -37,23 +38,28 @@ function uint64(value: unknown): value is string {
 export function isCountResponse(value: unknown): value is AnalyticsCountResponse {
   return object(value) && Object.keys(value).length === 1 && uint64(value.count);
 }
-function summary(value: unknown): value is AnalyticsEventSummary {
+function summary(value: unknown, occurred = false): value is AnalyticsEventSummary {
   return (
     object(value) &&
-    Object.keys(value).length === 5 &&
+    Object.keys(value).length === (occurred ? 6 : 5) &&
     validIdentifier(value.eventId) &&
     validIdentifier(value.eventName) &&
     validIdentifier(value.sessionId) &&
     uint64(value.sequence) &&
-    Number.isFinite(utcMilliseconds(value.receivedAt))
+    Number.isFinite(utcMilliseconds(value.receivedAt)) &&
+    (!occurred || Number.isFinite(utcMilliseconds(value.occurredAt)))
   );
 }
-export function isEventPage(value: unknown, maximum: number): value is AnalyticsEventPage {
+export function isEventPage(
+  value: unknown,
+  maximum: number,
+  occurred = false,
+): value is AnalyticsEventPage {
   if (
     !object(value) ||
     !Array.isArray(value.events) ||
     value.events.length > maximum ||
-    !value.events.every(summary)
+    !value.events.every((event) => summary(event, occurred))
   )
     return false;
   if (new Set(value.events.map((event) => event.eventId)).size !== value.events.length)
@@ -67,6 +73,12 @@ export function isEventPage(value: unknown, maximum: number): value is Analytics
     value.nextCursor.length <= 8192 &&
     /^[A-Za-z0-9_-]+$/.test(value.nextCursor)
   );
+}
+export function isOccurredEventPage(
+  value: unknown,
+  maximum: number,
+): value is AnalyticsOccurredEventPage {
+  return isEventPage(value, maximum, true);
 }
 export async function queryJson(
   response: Response,

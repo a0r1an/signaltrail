@@ -274,8 +274,7 @@ Malformed or out-of-range stored strings are excluded from event-time counts,
 while remaining available through received-time diagnostics. Conversion uses
 [ClickHouse's nullable parser](https://clickhouse.com/docs/reference/functions/regular-functions/type-conversion-functions#parseDateTime64BestEffortOrNull).
 This prevents one legacy value from poisoning a query. It does not establish
-clock accuracy, clamp future events, or enforce a clock-skew policy. Event-time listing is available through `listOccurredEvents`; HTTP routes and
-dashboard wiring remain pending. The isolated storage probe
+clock accuracy, clamp future events, or enforce a clock-skew policy. Event-time listing is available through `listOccurredEvents`; HTTP handler/client bindings are available; dashboard mounting remains pending. The isolated storage probe
 verifies late arrival, replay, time boundaries and invalid/extreme legacy values.
 
 `listOccurredEvents` returns `occurredAt` plus the existing `receivedAt` diagnostic
@@ -284,3 +283,21 @@ cursor scope includes the date basis; received-time cursors are rejected before
 reads. The existing byte limit, adaptive page shrinking, cancellation and overall
 query deadline apply to both listing methods. A list is not a snapshot under
 concurrent writes or later corrected payloads.
+
+## Occurrence-time HTTP/client bindings
+
+Configure the handler's optional `countOccurredEvents`, `countOccurredVisitors`
+and `listOccurredEvents` callbacks to enable:
+
+- `GET /v1/analytics/occurred/count`
+- `GET /v1/analytics/occurred/visitors/count`
+- `GET /v1/analytics/occurred/events`
+
+They use the existing project/window/filter query parameters, authorization before
+reads, request admission, cancellation, deadlines, no-store responses and URL
+bounds. Missing reader bindings return 404. `createQueryClient` exposes methods
+with the same names; occurrence pages require both `occurredAt` and `receivedAt`
+and reject received-only or malformed responses. Generated OpenAPI types include
+`AnalyticsOccurredEventSummary` / `AnalyticsOccurredEventPage`. Identity fields,
+URLs and raw event properties remain absent from summaries. These library routes
+are not a deployed service or a substitute for real session verification.

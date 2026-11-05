@@ -5,6 +5,7 @@ import type {
   AnalyticsEventListRequest,
   AnalyticsEventPage,
   AnalyticsEventSummary,
+  AnalyticsOccurredEventSummary,
   AnalyticsQueryError,
 } from '../../src/api-types.ts';
 
@@ -39,5 +40,13 @@ it('narrows cursor presence by hasMore and excludes private summary fields', () 
   }>();
   expectTypeOf<keyof AnalyticsEventSummary>().toEqualTypeOf<
     'eventId' | 'eventName' | 'sessionId' | 'sequence' | 'receivedAt'
+  >();
+});
+
+it('requires both occurrence and receive timestamps in occurrence summaries', () => {
+  expectTypeOf<AnalyticsOccurredEventSummary['occurredAt']>().toEqualTypeOf<string>();
+  expectTypeOf<AnalyticsOccurredEventSummary['receivedAt']>().toEqualTypeOf<string>();
+  expectTypeOf<keyof AnalyticsOccurredEventSummary>().toEqualTypeOf<
+    'eventId' | 'eventName' | 'sessionId' | 'sequence' | 'receivedAt' | 'occurredAt'
   >();
 });
