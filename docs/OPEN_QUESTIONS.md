@@ -71,6 +71,10 @@ Entries are questions, not approvals or completed work.
   expiry and deletion across storage/backups before rollout; this is not a
   promise that aggregates remain after raw-event deletion. Replay and dead-letter
   retention are separate decisions.
+- **Replay retention:** user approved a configurable 14-day default for replay
+  recordings. Recording, object lifecycle/deletion and metadata cleanup are not
+  implemented. This default does not authorize changing the existing S3 bucket
+  or deleting objects; enforcement requires a scoped implementation.
 - **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
   Invalid messages within the cap retain original bytes as base64 in DLQ records;
   oversized messages retain only source coordinates, byte count, and SHA-256.
