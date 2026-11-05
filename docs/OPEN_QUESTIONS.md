@@ -111,8 +111,9 @@ Entries are questions, not approvals or completed work.
   31 days. A later retry can move an event between received-time windows.
   User decision: product dashboard dates must use when the event happened
   (client event time), with received time retained for delivery diagnostics.
-  Current queries/UI still use received time; schema/query migration and
-  malformed or unreasonable client-clock handling remain to be implemented
+  Server-only event-time count methods now exist and exclude malformed/extreme
+  stored dates; existing API/UI/listing still use received time. Listing/API
+  migration and unreasonable client-clock handling remain to be implemented
   before exposing event-time totals. Do not claim current reads meet this decision. A server must authorize project membership before calling the reader;
   public ingestion keys must never grant read access. Production read-only
   ClickHouse credentials and allowed query settings remain to be provisioned.

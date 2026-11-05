@@ -29,6 +29,21 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — event-time count foundation
+
+- Added server-only `countOccurredEvents` / `countOccurredVisitors` alongside
+  received-time diagnostics. Product time uses the client timestamp; link
+  resolution remains independent of the requested activity date range.
+  Nullable parsing excludes malformed/out-of-range legacy strings instead of
+  failing the whole query. Supported read window: 1900–2299, milliseconds.
+- All 215 analytics tests and lint/type/build checks pass; 25 load-harness checks
+  pass. Disposable ClickHouse verification passes with cleanup in
+  `test-results/load/2026-11-05T23-38-06.655Z-analytics-read/analytics-read.json`: late
+  delivery and retry preserve occurrence date, UTC boundaries are half-open,
+  extreme years and malformed legacy strings do not poison counts.
+- Event-time listing, API/UI migration and a client-clock-skew policy remain.
+  No production clock correctness or query-capacity guarantee is implied.
+
 ### November 5 — full public identity pipeline proof
 
 - Extended the native-browser recovery probe with public `track` / `identify`

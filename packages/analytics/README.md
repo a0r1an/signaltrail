@@ -261,3 +261,19 @@ identity data; representative performance is unmeasured. It has no HTTP route or
 dashboard widget yet. Retention/deletion can change retroactive resolution.
 The disposable ClickHouse probe verifies merge, conflicts, namespace collisions,
 project isolation, replayed data and outside-window links.
+
+## Event-time count foundation
+
+`countOccurredEvents` and `countOccurredVisitors` use client event time with the
+same half-open UTC window, filters and query bounds. Late arrivals and retries
+retain their captured event time; receipt-time methods remain available for
+diagnostics. The identity index remains scoped to the retained project history.
+
+Event-time queries currently support years 1900–2299 and millisecond precision.
+Malformed or out-of-range stored strings are excluded from event-time counts,
+while remaining available through received-time diagnostics. Conversion uses
+[ClickHouse's nullable parser](https://clickhouse.com/docs/reference/functions/regular-functions/type-conversion-functions#parseDateTime64BestEffortOrNull).
+This prevents one legacy value from poisoning a query. It does not establish
+clock accuracy, clamp future events, or enforce a clock-skew policy. No event-time
+HTTP route, listing or dashboard has been wired yet. The isolated storage probe
+verifies late arrival, replay, time boundaries and invalid/extreme legacy values.

@@ -1,3 +1,4 @@
+import { EVENT_TIME_SQL, validateEventTimeWindow } from './event-time.ts';
 import { visitorCountQuery } from './visitor-count-query.ts';
 import { createHash } from 'node:crypto';
 import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';
@@ -367,6 +368,26 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         clearTimeout(timer);
         signal?.removeEventListener('abort', cancel);
       }
+    },
+    countOccurredEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
+      validateEventTimeWindow(window);
+      return execute(
+        window,
+        signal,
+        4096,
+        decodeCount,
+        `SELECT toString(count()) AS count FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND ${EVENT_TIME_SQL} >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND ${EVENT_TIME_SQL} < parseDateTime64BestEffort({to:String}, 3, 'UTC') FORMAT JSONEachRow`,
+      );
+    },
+    countOccurredVisitors(window: ReceivedEventWindow, signal?: AbortSignal) {
+      validateEventTimeWindow(window);
+      return execute(
+        window,
+        signal,
+        4096,
+        decodeCount,
+        visitorCountQuery(database, table, 'occurred'),
+      );
     },
     /** Server-only read: current retained project links resolve history retroactively. */
     countReceivedVisitors(window: ReceivedEventWindow, signal?: AbortSignal) {

@@ -1,3 +1,4 @@
+import { exerciseEventTimeReads } from './event-time-reads.mjs';
 import { exerciseVisitorReads } from './visitor-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -303,6 +304,7 @@ export async function exerciseAnalyticsReads({ directory }) {
   return {
     passed: true,
     visitorResolution: await exerciseVisitorReads(connection, reader, window),
+    eventTime: await exerciseEventTimeReads(connection, reader, window),
     counts,
     halfOpenWindow: true,
     latestVersionBeforeTimeFilter: true,
