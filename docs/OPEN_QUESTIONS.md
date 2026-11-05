@@ -13,7 +13,9 @@ Entries are questions, not approvals or completed work.
   administrative APIs.
   Clerk is selected, with invite-only registration, a manually created email/
   password account, and server-side access restricted to the owner Clerk user ID
-  for the first 90 days. Configuration and integration remain pending.
+  for the first 90 days. Local Next.js integration now guards pages/APIs and
+  fails closed without configuration. Clerk account/settings and valid-login
+  verification remain pending; see `setup/clerk.md`.
   Session verification, a read-only database identity, TLS/CA provisioning, and
   deployment migration application remain unconfigured. A bounded real PostgreSQL
   adapter is now locally verified; its pool/query limits still need representative
@@ -64,8 +66,8 @@ Entries are questions, not approvals or completed work.
   before `identify(B)` when A is currently identified: create a fresh anonymous
   identity context/session for B without linking A’s history to B. Previously
   queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
-  An uncommitted capture-client stub/test exists; it is unfinished, not a usable
-  API or verified implementation.
+  The abandoned explicit-identity capture stub was removed after these identity
+  decisions; the public capture API remains pending implementation.
 - **Analytics retention:** user approved a configurable 90-day default for raw
   analytics events. Retention enforcement is not implemented. Define late-event
   expiry and deletion across storage/backups before rollout; this is not a

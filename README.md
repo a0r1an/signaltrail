@@ -10,9 +10,11 @@ The analytics pipeline works locally from the low-level browser SDK through HTTP
 ingestion and Redpanda into ClickHouse. It has native-browser persistence,
 retry/recovery, downstream deduplication, and isolated real-storage test coverage.
 Authorized count and paged event queries, a browser query client, and an injected
-React event explorer are implemented. The explorer is not mounted in a live route.
+React event explorer are implemented. Owner-only Clerk sign-in routes and guards
+are implemented, but real account configuration/verification remain pending. The
+explorer is not mounted in a live route.
 
-Production authentication, a convenient `init`/`track` SDK API, session recording
+Production authentication verification, a convenient `init`/`track` SDK API, session recording
 and replay playback, deployment, and backup/restore drills remain ahead.
 This is not a production-ready service or an availability guarantee.
 
@@ -63,6 +65,7 @@ be substituted with outage experiments against development services.
 - [Current implementation, evidence and next steps](docs/PROJECT_STATUS.md)
 - [Open questions and provisional decisions](docs/OPEN_QUESTIONS.md)
 - [Query API reference](docs/api/analytics.openapi.json)
+- [Private Clerk setup](docs/setup/clerk.md)
 - [Licensing scope](docs/LICENSING.md)
 
 ## License

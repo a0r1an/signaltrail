@@ -48,6 +48,18 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify unconfigured dashboard auth fails closed
+        run: ./scripts/signaltrail-ops.mjs dashboard auth-smoke
+
+      - name: Upload dashboard authentication probe
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-auth-smoke
+          path: test-results/dashboard-auth/
+          retention-days: 7
+          if-no-files-found: ignore
+
   browser-sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 15

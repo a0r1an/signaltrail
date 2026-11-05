@@ -29,6 +29,34 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — owner-only Clerk integration
+
+- Added Clerk Next.js 7.9.25, sign-in/dashboard routes, session-only server
+  verification, exact issuer/owner-ID checks, authorized-party origin restriction
+  and a no-store session-status API. Guards run at protected resources, not only
+  in proxy. Missing configuration fails closed without fixture credentials.
+- Dashboard checks pass 47 tests plus lint, route types, TypeScript and optimized
+  Next build. A production Next process on an owned ephemeral port verified
+  503/no-store on unconfigured protected resources, rejection of forged headers,
+  and the unavailable sign-in state. Cleanup completed successfully in
+  `test-results/dashboard-auth/2026-11-05T21-10-47.230Z/report.json`. An initial
+  report-writer wiring error was corrected before that successful run.
+- Added `dashboard auth-smoke`, CI invocation/artifacts, `.env.example`, and
+  `docs/setup/clerk.md`. No real credentials were read or changed, no Clerk
+  application/account was created, and no valid-password login is claimed.
+  Remote CI remains unverified. Real instance configuration/login and membership
+  bootstrap remain pending before connecting analytics to the live dashboard.
+- Removed the abandoned uncommitted explicit-identity SDK stub/test after the
+  user selected automatic anonymous identity and session semantics.
+- User decisions recorded in `OPEN_QUESTIONS.md`: org-wide visibility, anonymous
+  identity linking/reset/account-switch isolation, shared same-origin/project
+  tab state, 30-minute inactivity sessions, stable identity across campaigns,
+  URL privacy/UTM allowlist, event-time dashboards, explicit replay opt-in,
+  90-day raw analytics retention and 14-day replay retention. Most SDK/storage
+  behaviors remain implementation work; documentation is not completion evidence.
+- Next: SDK capture URL/campaign sanitization and identity/session implementation
+  while real Clerk setup remains pending.
+
 ### November 5 — event explorer view
 
 - Implemented the injected React explorer: UTC range/exact filters, precise

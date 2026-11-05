@@ -345,3 +345,11 @@ synthetic project data and fixture-only session transport. Reports, screenshots
 and failure traces are in `test-results/event-explorer-browser/`. Success is
 recorded only after browser/server cleanup. This is not a deployed route or
 production authentication proof; use `check dashboard` for Next build validation.
+
+`dashboard auth-smoke` builds analytics/dashboard, then starts an owned Next
+production server on an ephemeral loopback port with explicit blank auth config.
+It verifies fail-closed protected pages/API, forged-header denial and sign-in
+setup state, then stops its child before reporting success. Reports live in
+`test-results/dashboard-auth/`. This never uses real Clerk credentials and does
+not establish successful login or live revocation behavior. Do not overlap Next
+build operations. Account configuration is documented in `docs/setup/clerk.md`.

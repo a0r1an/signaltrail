@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics|access|dashboard
-  ./scripts/signaltrail-ops.mjs dashboard browser
+  ./scripts/signaltrail-ops.mjs dashboard browser|auth-smoke
   ./scripts/signaltrail-ops.mjs api generate|check|browser
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
@@ -62,6 +62,10 @@ try {
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
       pnpm('--filter', packages[action], script);
+  } else if (group === 'dashboard' && action === 'auth-smoke') {
+    pnpm('--filter', '@signaltrail/analytics', 'build');
+    pnpm('--filter', '@signaltrail/dashboard', 'build');
+    tasks.push({ command: 'node', args: ['tests/browser/dashboard-auth.mjs'] });
   } else if (group === 'dashboard' && action === 'browser') {
     pnpm('--filter', '@signaltrail/analytics', 'build');
     pnpm('--filter', '@signaltrail/dashboard', 'harness:build');
