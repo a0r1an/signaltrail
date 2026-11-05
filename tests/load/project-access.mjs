@@ -1,3 +1,4 @@
+import { exerciseDashboardReads } from './dashboard-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -148,6 +149,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     });
     let reads = 0;
     let reader;
+    let dashboard;
     if (realAnalytics) {
       const connection = {
         endpoint: 'http://127.0.0.1:38123',
@@ -349,6 +351,15 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         for (const client of clients) client.close();
         await http.close();
       }
+      dashboard = await exerciseDashboardReads({
+        reader,
+        database,
+        sql,
+        projectA,
+        projectB,
+        userA,
+        orgA,
+      });
       reads = 0;
     }
 
@@ -438,6 +449,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     });
     return {
       passed: true,
+      ...(dashboard ? { dashboard } : {}),
       issuerIsolation: true,
       crossOrganizationDenied: true,
       membershipRemovalImmediate: true,

@@ -273,3 +273,10 @@ and the point at which an answer becomes necessary.
 - **Clerk setup progress:** user reports creating a Clerk account. Application,
   invite-only mode, application owner and local environment setup are not yet
   verified. Do not infer successful private login from an admin account.
+
+- **Live dashboard verification:** the server analytics resource now requires the
+  owner session plus PostgreSQL membership on every request. Restricted read roles,
+  tracked migration/bootstrap tooling, actual owner principal/membership, and live
+  Clerk login remain unconfigured/unverified. Never replace these checks with
+  fixture access to make the page work. Server connection limits must also be
+  validated across Vercel function instances.

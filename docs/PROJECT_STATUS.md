@@ -29,6 +29,27 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — dashboard analytics server binding
+
+- Added the Node-runtime Next resource `/api/analytics/[...path]`. Every request
+  uses resource-level Clerk owner verification and fresh PostgreSQL organization
+  membership before bounded analytics reads. Config/identity/database failures
+  fail closed. Service connections are reused; authorization grants are not.
+  Remote database TLS verification is required; explicit plaintext development
+  connections are loopback-only. Setup is in `docs/setup/dashboard-data.md`.
+- Added the workspace membership dependency and standard runner prerequisites.
+  Offline installation reused cached packages. All 65 dashboard tests and
+  lint/types/optimized build pass. Production HTTP denial probe passes with cleanup:
+  `test-results/dashboard-auth/2026-11-05T23-50-21.853Z/report.json`.
+- Real PostgreSQL/ClickHouse dashboard-boundary verification passes with cleanup:
+  `test-results/load/2026-11-05T23-51-40.823Z-authorized-analytics/project-access.json`.
+  Cross-organization and revoked membership stop before reads. This uses an
+  injected verified principal, not a real Clerk login; the fixture emits a Node
+  typeless-module warning from importing the dashboard TypeScript boundary.
+- No real credentials, owner membership or external resources were changed.
+  Live Clerk/data-role setup remains unverified. Next: connect the explorer UI
+  to the occurrence-time server route and verify its native browser behavior.
+
 ### November 5 — event-time handler/client boundary
 
 - Added optional occurrence-time count, visitor-count and listing routes under

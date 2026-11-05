@@ -4,7 +4,8 @@ The dashboard uses Clerk sessions plus a server-side owner-ID restriction.
 It accepts session tokens only, checks the configured issuer and owner, and does
 not treat an email address, public ingestion key, or client-provided user ID as
 proof of access. Clerk authentication does not replace project membership checks.
-The initial dashboard page confirms access; it does not yet read analytics.
+The initial dashboard page confirms access; the protected analytics server route
+also requires organization membership. See [data setup](dashboard-data.md).
 
 ## Clerk account configuration
 

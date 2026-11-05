@@ -11,7 +11,8 @@ ingestion and Redpanda into ClickHouse. It has native-browser persistence,
 retry/recovery, downstream deduplication, and isolated real-storage test coverage.
 Authorized count and paged event queries, a browser query client, and an injected
 React event explorer are implemented. Owner-only Clerk sign-in routes and guards
-are implemented, but real account configuration/verification remain pending. The
+and the membership-protected analytics resource are implemented; real account
+configuration/verification remain pending. The
 explorer is not mounted in a live route.
 
 Production authentication verification, session recording

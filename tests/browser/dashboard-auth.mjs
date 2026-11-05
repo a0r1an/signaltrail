@@ -39,6 +39,10 @@ try {
         SIGNALTRAIL_OWNER_CLERK_USER_ID: '',
         SIGNALTRAIL_CLERK_ISSUER: '',
         SIGNALTRAIL_DASHBOARD_ORIGIN: '',
+        SIGNALTRAIL_CLICKHOUSE_READ_URL: '',
+        SIGNALTRAIL_CLICKHOUSE_READ_USER: '',
+        SIGNALTRAIL_CLICKHOUSE_READ_PASSWORD: '',
+        SIGNALTRAIL_MEMBERSHIP_DATABASE_URL: '',
       },
     },
   );
@@ -63,7 +67,14 @@ try {
   assert.ok(origin, 'Owned Next server did not publish an ephemeral listener');
   const get = (path, headers = {}) =>
     fetch(`${origin}${path}`, { redirect: 'manual', headers, signal: AbortSignal.timeout(5000) });
-  for (const path of ['/', '/dashboard', '/api/session']) {
+  for (const path of [
+    '/',
+    '/dashboard',
+    '/api/session',
+    '/api/analytics/occurred/count',
+    '/api/analytics/occurred/events',
+    '/api/analytics/occurred/visitors/count',
+  ]) {
     const response = await get(path);
     assert.equal(response.status, 503);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');

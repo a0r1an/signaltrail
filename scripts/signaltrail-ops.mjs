@@ -58,12 +58,16 @@ try {
     // Browser typechecks import ingestion declarations; build dependencies first.
     if (!['contracts', 'analytics', 'access', 'dashboard'].includes(action))
       pnpm('--filter', '@signaltrail/contracts', 'build');
-    if (action === 'dashboard') pnpm('--filter', '@signaltrail/analytics', 'build');
+    if (action === 'dashboard') {
+      pnpm('--filter', '@signaltrail/analytics', 'build');
+      pnpm('--filter', '@signaltrail/project-access', 'build');
+    }
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
       pnpm('--filter', packages[action], script);
   } else if (group === 'dashboard' && action === 'auth-smoke') {
     pnpm('--filter', '@signaltrail/analytics', 'build');
+    pnpm('--filter', '@signaltrail/project-access', 'build');
     pnpm('--filter', '@signaltrail/dashboard', 'build');
     tasks.push({ command: 'node', args: ['tests/browser/dashboard-auth.mjs'] });
   } else if (group === 'dashboard' && action === 'browser') {
