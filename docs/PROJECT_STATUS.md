@@ -29,6 +29,26 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — shared anonymous session foundation
+
+- Added an internal IndexedDB identity store scoped like the delivery queue by
+  endpoint/project key. Atomic read/write transactions allocate one persistent
+  anonymous visitor/session and unique sequence numbers across connections.
+  Captured activity refreshes a 30-minute inactivity window; expiry rotates only
+  session, and reset rotates both IDs. Backward clocks do not expire sessions;
+  sequence precision exhaustion starts a fresh session. No capture/identify API
+  uses this module yet and no server identity linking is implemented.
+- Twelve fake-IndexedDB behaviors pass, including persistence/reopen, concurrent
+  connections, scope isolation, aborted-write rollback, failed-reset reporting,
+  missing-storage preservation and upgrade connection release. All 279 SDK tests
+  plus lint, types and builds pass. Native browser identity tests remain pending.
+- Store opens have a five-second deadline with abandoned late connection closure.
+  Internal operations report unavailable storage instead of silently claiming a
+  shared reset succeeded. Public capture fallback policy remains to be integrated;
+  existing delivery queue memory fallback is unchanged.
+- Next: connect validated page/event capture to this store and automatic delivery,
+  then implement explicit identify transitions and durable linking.
+
 ### November 5 — capture URL/campaign foundation
 
 - Added public `createPageContextCapture` with default credential/query/fragment

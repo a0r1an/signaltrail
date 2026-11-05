@@ -67,6 +67,10 @@ Entries are questions, not approvals or completed work.
   before `identify(B)` when A is currently identified: create a fresh anonymous
   identity context/session for B without linking A’s history to B. Previously
   queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
+  An internal durable anonymous/session store now verifies atomic sharing,
+  30-minute inactivity rotation and reset with fake IndexedDB, but is not yet
+  connected to capture. Define high-level behavior when identity storage is
+  unavailable; never report a cross-tab reset as successful if its write fails.
   The abandoned explicit-identity capture stub was removed after these identity
   decisions; the public capture API remains pending implementation.
 - **Analytics retention:** user approved a configurable 90-day default for raw
