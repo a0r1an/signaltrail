@@ -31,6 +31,13 @@ const identifier = z
     error: 'Expected valid UTF-8 within the analytics identifier byte limit',
   });
 
+export const IDENTITY_LINK_EVENT_NAME = '$identify';
+export const AnalyticsIdentitySchema = z.strictObject({
+  kind: z.enum(['identified', 'link']),
+  anonymousId: identifier,
+  userId: identifier,
+});
+
 const campaignValue = z
   .string()
   .min(1)
@@ -45,7 +52,7 @@ const campaignValue = z
     { error: 'Expected bounded campaign text' },
   );
 
-export const AnalyticsEventSchema = z.object({
+const analyticsEvent = z.object({
   schemaVersion: z.literal(1),
   eventId: identifier,
   eventName: identifier,
@@ -58,5 +65,26 @@ export const AnalyticsEventSchema = z.object({
   context: z.object({
     sdkVersion: z.string().min(1).regex(/\S/),
     campaign: z.partialRecord(z.enum(CAMPAIGN_PARAMETERS), campaignValue).optional(),
+    identity: AnalyticsIdentitySchema.optional(),
   }),
+});
+
+export const AnalyticsCaptureInputSchema = analyticsEvent.pick({
+  eventName: true,
+  properties: true,
+});
+export const AnalyticsEventSchema = analyticsEvent.superRefine((event, context) => {
+  const identity = event.context.identity;
+  if (identity && identity.userId !== event.distinctId)
+    context.addIssue({
+      code: 'custom',
+      message: 'Identity does not match event',
+      path: ['distinctId'],
+    });
+  if ((event.eventName === IDENTITY_LINK_EVENT_NAME) !== (identity?.kind === 'link'))
+    context.addIssue({
+      code: 'custom',
+      message: 'Invalid identity link event',
+      path: ['eventName'],
+    });
 });

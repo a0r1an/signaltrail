@@ -39,8 +39,8 @@ Entries are questions, not approvals or completed work.
   enabling it in a deployed application.
 - **Public SDK capture API:** `openAnalyticsClient` now implements anonymous
   `track`/`reset`, generated visitor/session/event IDs, validated inputs, private
-  URL/campaign capture and existing batching/retries. `identify` and durable
-  server-side identity linking remain unimplemented. User decisions: generate anonymous
+  URL/campaign capture and existing batching/retries. `identify` now stores local transitions and durable link records atomically;
+  server-side visitor-history resolution remains unimplemented. User decisions: generate anonymous
   visitor IDs; support `identify(userId)` and link earlier anonymous activity
   within the same project; expire sessions after 30 minutes without captured
   activity, retaining the session on tab reopen within that window. URL navigation
@@ -263,3 +263,12 @@ from outside contributors should be assumed. See `LICENSING.md`.
 
 New unknowns discovered during work should include the impact, current default,
 and the point at which an answer becomes necessary.
+
+- **Identity outbox retention (provisional):** links currently retain a stable
+  payload for up to 90 days, bounded by 64 records / 1 MiB per project/endpoint.
+  Ordinary events retain the existing queue expiry. Confirm the link retention
+  and capacity policy before release; these are reversible defaults rather than
+  measured capacity recommendations. Client identity assertions never grant access.
+- **Clerk setup progress:** user reports creating a Clerk account. Application,
+  invite-only mode, application owner and local environment setup are not yet
+  verified. Do not infer successful private login from an admin account.

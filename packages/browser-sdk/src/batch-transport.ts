@@ -35,6 +35,7 @@ export interface EventDrop {
 }
 export interface BatchTransportOptions {
   telemetry?: SdkTelemetryOptions;
+  onEventAccepted?: (event: { eventId: string; identityLink: boolean }) => void | Promise<void>;
   onEventDropped?: (drop: EventDrop) => void;
   maxRequestBytes?: number;
   queue?: EventQueueOptions;
@@ -289,8 +290,21 @@ export async function openBatchTransport(
         if (applied.status === 'invalid_response')
           return await scheduleRetry(batch.claimId, 'invalid_response');
         if (applied.status === 'applied') {
-          for (const outcome of AnalyticsBatchResponseSchema.parse(result.payload).results)
+          for (const outcome of AnalyticsBatchResponseSchema.parse(result.payload).results) {
             health.increment(outcome.status === 'retry' ? 'retryEvents' : outcome.status);
+            if (outcome.status === 'accepted') {
+              try {
+                void Promise.resolve(
+                  options.onEventAccepted?.({
+                    eventId: outcome.eventId,
+                    identityLink: batch.events[outcome.index]?.context.identity?.kind === 'link',
+                  }),
+                ).catch(() => {});
+              } catch {
+                /* Observers cannot interrupt delivery. */
+              }
+            }
+          }
         } else if (applied.status === 'storage_error') health.increment('storageErrors');
         return applied;
       } catch {

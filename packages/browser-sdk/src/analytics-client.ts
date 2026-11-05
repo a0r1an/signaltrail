@@ -1,4 +1,9 @@
-import { AnalyticsEventSchema } from '@signaltrail/contracts';
+import {
+  AnalyticsEventSchema,
+  AnalyticsCaptureInputSchema,
+  IDENTITY_LINK_EVENT_NAME,
+  AnalyticsIdentitySchema,
+} from '@signaltrail/contracts';
 import {
   openAutomaticDelivery,
   type AutomaticDeliveryOptions,
@@ -12,7 +17,7 @@ import { openIdentityStore } from './identity-store.ts';
 import { SDK_VERSION } from './version.ts';
 
 type Properties = ReturnType<typeof AnalyticsEventSchema.parse>['properties'];
-const captureInput = AnalyticsEventSchema.pick({ eventName: true, properties: true });
+const captureInput = AnalyticsCaptureInputSchema;
 export interface AnalyticsClientOptions extends AutomaticDeliveryOptions {
   getUrl?: () => string;
   allowedQueryParameters?: readonly string[];
@@ -26,13 +31,19 @@ export interface AnalyticsClient {
     properties?: Properties,
     options?: EnqueueOptions,
   ): Promise<CaptureResult>;
+  identify(
+    userId: string,
+  ): Promise<
+    | { status: 'identified'; changed: boolean }
+    | { status: 'invalid_user' | 'identity_unavailable' | 'closed' }
+  >;
   reset(): Promise<{ status: 'reset' | 'identity_unavailable' | 'closed' }>;
   flush: AutomaticDelivery['flush'];
   getHealth: AutomaticDelivery['getHealth'];
   readonly deliveryState: AutomaticDelivery['deliveryState'];
   close(): void;
 }
-/** Anonymous capture only; identified-user linking is a separate forthcoming API. */
+/** Durable capture and project-scoped identity. Local identification is not a server acknowledgement. */
 export async function openAnalyticsClient(
   config: EventQueueConfig,
   options: AnalyticsClientOptions = {},
@@ -51,12 +62,38 @@ export async function openAnalyticsClient(
   );
   let delivery: AutomaticDelivery;
   try {
-    delivery = await openAutomaticDelivery(normalized, deliveryOptions);
+    delivery = await openAutomaticDelivery(normalized, {
+      ...deliveryOptions,
+      onEventAccepted(event) {
+        if (event.identityLink) void identities.acknowledgeLink(event.eventId).catch(() => {});
+        return deliveryOptions.onEventAccepted?.(event);
+      },
+    });
   } catch {
     identities.close();
     throw new Error('Analytics client initialization failed');
   }
   let closed = false;
+  let pumping = false;
+  let pumpTimer: ReturnType<typeof setTimeout> | undefined;
+  async function pumpLinks() {
+    if (closed || pumping) return;
+    pumping = true;
+    try {
+      const links = await identities.pendingLinks();
+      // One per turn keeps an unavailable upload from blocking all identity work.
+      if (!closed && links[0]) await delivery.enqueue(links[0]);
+    } catch {
+      /* Keep the durable outbox for a later attempt. */
+    } finally {
+      pumping = false;
+      if (!closed)
+        pumpTimer = setTimeout(() => {
+          void pumpLinks();
+        }, 2000);
+    }
+  }
+  void pumpLinks();
   return {
     async track(eventName, properties = {}, capture = {}) {
       if (closed) return { status: 'closed' };
@@ -71,6 +108,7 @@ export async function openAnalyticsClient(
         )
           return { status: 'invalid_event' };
         urgent = capture.sendImmediately;
+        if (eventName === IDENTITY_LINK_EVENT_NAME) return { status: 'invalid_event' };
         input = captureInput.parse({ eventName, properties });
         page = capturePage(getUrl());
         eventId = crypto.randomUUID();
@@ -89,13 +127,22 @@ export async function openAnalyticsClient(
           schemaVersion: 1,
           eventId,
           ...input,
-          distinctId: identity.anonymousId,
+          distinctId: identity.identifiedId ?? identity.anonymousId,
           sessionId: identity.sessionId,
           sequence: identity.sequence,
           clientTimestamp: new Date(identity.capturedAt).toISOString(),
           url: page.url,
           context: {
             sdkVersion: SDK_VERSION,
+            ...(identity.identifiedId === undefined
+              ? {}
+              : {
+                  identity: {
+                    kind: 'identified',
+                    anonymousId: identity.anonymousId,
+                    userId: identity.identifiedId,
+                  },
+                }),
             ...(Object.keys(page.campaign).length ? { campaign: page.campaign } : {}),
           },
         });
@@ -106,6 +153,19 @@ export async function openAnalyticsClient(
         return { ...result, eventId };
       } catch {
         return { status: closed ? 'closed' : 'delivery_error' };
+      }
+    },
+    async identify(userId) {
+      if (closed) return { status: 'closed' };
+      if (!AnalyticsIdentitySchema.shape.userId.safeParse(userId).success)
+        return { status: 'invalid_user' };
+      try {
+        const result = await identities.identify(userId, capturePage(getUrl()));
+        clearTimeout(pumpTimer);
+        void pumpLinks();
+        return { status: 'identified', changed: result.changed };
+      } catch {
+        return { status: closed ? 'closed' : 'identity_unavailable' };
       }
     },
     async reset() {
@@ -125,6 +185,7 @@ export async function openAnalyticsClient(
     close() {
       if (closed) return;
       closed = true;
+      clearTimeout(pumpTimer);
       delivery.close();
       identities.close();
     },

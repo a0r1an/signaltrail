@@ -104,3 +104,52 @@ test('public anonymous capture reaches ingestion with generated identity and pri
   expect(record.event.sessionId).toMatch(/^[a-f0-9-]{36}$/);
   expect(captured).toMatchObject({ eventId: record.event.eventId });
 });
+
+declare global {
+  interface Window {
+    identityClient?: import('../../src/analytics-client.ts').AnalyticsClient;
+  }
+}
+test('public identify automatically delivers a durable link separately from identified activity', async ({
+  page,
+  request,
+  scenario,
+}) => {
+  await open(page, scenario);
+  try {
+    await page.evaluate(async (scenario) => {
+      window.identityClient = await window.openAnalyticsClient(
+        { projectKey: `harness-real-${scenario}`, ingestionUrl: 'http://127.0.0.1:4178/v1/events' },
+        { flushIntervalMs: 100 },
+      );
+      await window.identityClient.track('anonymous_before');
+      const result = await window.identityClient.identify('customer-1');
+      if (result.status !== 'identified') throw new Error('Identify failed');
+      await window.identityClient.track('identified_after');
+    }, scenario);
+    await expect
+      .poll(async () => (await state(request, scenario)).publications?.length ?? 0)
+      .toBe(3);
+    const events = (await state(request, scenario)).publications!.map((record) => record.event);
+    const before = events.find((event) => event.eventName === 'anonymous_before')!;
+    const after = events.find((event) => event.eventName === 'identified_after')!;
+    const link = events.find((event) => event.eventName === '$identify')!;
+    expect(after.distinctId).toBe('customer-1');
+    expect(after.context.identity).toEqual({
+      kind: 'identified',
+      anonymousId: before.distinctId,
+      userId: 'customer-1',
+    });
+    expect(link.context.identity).toEqual({
+      kind: 'link',
+      anonymousId: before.distinctId,
+      userId: 'customer-1',
+    });
+    expect(link.eventId).not.toBe(after.eventId);
+  } finally {
+    await page.evaluate(() => {
+      window.identityClient?.close();
+      delete window.identityClient;
+    });
+  }
+});

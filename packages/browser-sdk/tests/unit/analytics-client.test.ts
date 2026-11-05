@@ -240,3 +240,77 @@ it('preserves queue size/drop policies and reports oversize capture with its eve
     client.close();
   }
 });
+it('captures identified events and preserves anonymous history across logout', async () => {
+  const client = await openAnalyticsClient(config, { getUrl, fetch: send });
+  try {
+    await client.track('before');
+    const before = (await queued())[0]!;
+    expect(await client.identify('customer-1')).toEqual({ status: 'identified', changed: true });
+    await client.track('after');
+    const after = (await queued()).find((event) => event.eventName === 'after')!;
+    expect(after.distinctId).toBe('customer-1');
+    expect(after.context.identity).toEqual({
+      kind: 'identified',
+      anonymousId: before.distinctId,
+      userId: 'customer-1',
+    });
+    await client.reset();
+    await client.track('logout');
+    const events = await queued();
+    expect(events.find((event) => event.eventName === 'before')).toEqual(before);
+    expect(events.find((event) => event.eventName === 'logout')!.distinctId).not.toBe(
+      before.distinctId,
+    );
+    expect(events.find((event) => event.eventName === 'logout')!.context.identity).toBeUndefined();
+  } finally {
+    client.close();
+  }
+});
+it('retains a stable link across reopening until a validated acceptance is received', async () => {
+  let client = await openAnalyticsClient(config, { getUrl, fetch: send });
+  try {
+    await client.identify('customer-1');
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(async () =>
+      expect((await queued()).some((event) => event.eventName === '$identify')).toBe(true),
+    );
+    await client.flush();
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    const sent = send.mock.calls.flatMap(
+      (call) =>
+        (
+          JSON.parse(call[1]!.body as string) as {
+            events: ReturnType<typeof AnalyticsEventSchema.parse>[];
+          }
+        ).events,
+    );
+    expect(sent.filter((event) => event.eventName === '$identify')).toHaveLength(1);
+    await vi.waitFor(async () => {
+      const { openIdentityStore } = await import('../../src/identity-store.ts');
+      const store = await openIdentityStore(config);
+      try {
+        expect(await store.pendingLinks()).toEqual([]);
+      } finally {
+        store.close();
+      }
+    });
+    client.close();
+    send.mockClear();
+    client = await openAnalyticsClient(config, { getUrl, fetch: send });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(send).not.toHaveBeenCalled();
+  } finally {
+    client.close();
+  }
+});
+it('rejects reserved control names and invalid user IDs without identifying the visitor', async () => {
+  const client = await openAnalyticsClient(config, { getUrl, fetch: send });
+  try {
+    expect(await client.identify(' ')).toEqual({ status: 'invalid_user' });
+    expect(await client.track('$identify')).toEqual({ status: 'invalid_event' });
+    await client.track('normal');
+    expect((await queued())[0]!.context.identity).toBeUndefined();
+  } finally {
+    client.close();
+  }
+});

@@ -132,7 +132,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     'Basic ' + Buffer.from(options.username + ':' + options.password).toString('base64');
   endpoint.searchParams.set(
     'query',
-    `SELECT toString(count()) AS count FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') FORMAT JSONEachRow`,
+    `SELECT toString(count()) AS count FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') FORMAT JSONEachRow`,
   );
   endpoint.searchParams.set(
     'max_execution_time',
@@ -265,7 +265,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       const cursorFilter = cursor
         ? " AND (received_at, event_id) < (parseDateTime64BestEffort({before:String}, 3, 'UTC'), unhex({before_id_hex:String}))"
         : '';
-      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
+      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
       // One timer covers all complete-query attempts, not a fresh budget per retry.
       const controller = new AbortController();
       const cancel = () => controller.abort();

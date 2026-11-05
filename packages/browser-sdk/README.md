@@ -2,8 +2,8 @@
 
 This private pre-release package currently exposes persistent queue, transport,
 automatic delivery, health reporting, and page-context capture primitives.
-The public anonymous `openAnalyticsClient` API supports `track`, `reset`, batching
-and retries. `identify` and server-side linking remain unimplemented. Existing
+The public `openAnalyticsClient` API supports `track`, `identify`, `reset`, batching
+and retries. Server-side visitor resolution remains unimplemented. Existing
 low-level enqueue methods still accept complete typed events and do not
 automatically sanitize caller-supplied URLs/properties.
 
@@ -44,7 +44,7 @@ This pre-release high-level API currently requires identity IndexedDB: opening
 fails if it is unavailable; later identity-write failures report
 `identity_unavailable`. It does not silently claim a cross-tab reset succeeded.
 The low-level delivery queue's existing memory fallback remains unchanged.
-Identified-user linking and a coordinated identity fallback are future work.
+Server-side visitor resolution and a coordinated identity fallback are future work.
 
 ## URL and campaign capture
 
@@ -80,7 +80,7 @@ are omitted rather than guessed or truncated. Invalid URLs throw a generic
 An internal IndexedDB store drives anonymous visitor identity,
 30-minute inactivity sessions, shared atomic sequence allocation and cross-tab
 reset visibility on the next operation. Unit and native Chromium tests cover it.
-It drives public anonymous capture but does not implement identified-user linking.
+It drives public capture and atomic identified-user transitions with a durable link outbox.
 Unavailable identity storage reports failure; existing queue memory fallback is
 unchanged. See the project question log for capture integration decisions.
 
@@ -95,3 +95,22 @@ Run these from the repository root. Unit tests use fake IndexedDB; the separate
 Chromium suite verifies native storage/delivery. See the project status for actual
 verification and limitations. This package and shared contracts are MIT licensed;
 other platform packages retain their own licenses.
+
+## Identified visitors
+
+Call `await client.identify('your-stable-user-id')` after login. A result with
+`status: 'identified'` confirms a local durable transition, not server acceptance.
+New events carry the user ID plus their anonymous identity context. A separate
+`$identify` control record retains its event ID across retries and reopening; it
+is removed from the identity outbox only after validated server acceptance.
+These records are excluded from ordinary analytics event counts and lists.
+Visitor-history resolution in the reader is still pending. Identity metadata is
+client asserted and must never authorize access.
+
+Repeating the same user ID is idempotent. Switching users creates fresh anonymous
+and session IDs; `reset()` clears identification without rewriting queued history
+or pending links. The project-scoped outbox permits at most 64 links / 1 MiB; a
+failed transition leaves the prior identity unchanged. Link retention currently
+uses a provisional 90-day bound, matching the default raw-history window, while
+ordinary queued events retain their existing expiry. This policy needs validation
+before release. Storage errors never silently claim identification success.

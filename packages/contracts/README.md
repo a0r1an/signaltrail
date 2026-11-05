@@ -37,3 +37,9 @@ field remain accepted. Update ingestion and processor contracts before using new
 SDK campaign capture: older readers can strip unrecognized optional context.
 Campaign context describes the captured event, not a visitor identity or a
 first/last-touch attribution decision.
+
+Identity metadata is optional in `context.identity` and strictly validates its
+kind, anonymous ID and user ID. The user ID must equal the event distinct ID.
+`$identify` is reserved for link control records. Deploy compatible ingestion,
+processor and reader code before an identity-emitting SDK: older parsers strip
+optional metadata. These client assertions are analytics data, not authentication.

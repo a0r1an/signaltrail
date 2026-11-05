@@ -161,3 +161,21 @@ it.each([
   await expect(reader.listReceivedEvents({ ...window, cursor })).rejects.toThrow();
   expect(send).not.toHaveBeenCalled();
 });
+it.each(['countReceivedEvents', 'listReceivedEvents'] as const)(
+  'excludes identity link control records from %s',
+  async (operation) => {
+    const send = vi.fn<typeof fetch>(
+      async () => new Response(operation === 'countReceivedEvents' ? '{"count":"0"}' : ''),
+    );
+    const reader = createAnalyticsReader({
+      endpoint: 'http://clickhouse:8123',
+      username: 'reader',
+      password: 'fixture',
+      fetch: send,
+    });
+    await reader[operation](window);
+    expect(new URL(String(send.mock.calls[0]![0])).searchParams.get('query')).toContain(
+      "event_name != '$identify'",
+    );
+  },
+);

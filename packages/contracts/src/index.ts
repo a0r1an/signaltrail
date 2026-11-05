@@ -5,6 +5,9 @@ export {
   MAX_ANALYTICS_IDENTIFIER_BYTES,
   CAMPAIGN_PARAMETERS,
   MAX_CAMPAIGN_VALUE_BYTES,
+  AnalyticsIdentitySchema,
+  AnalyticsCaptureInputSchema,
+  IDENTITY_LINK_EVENT_NAME,
 } from './analytics-event.ts';
 export {
   AnalyticsBatchResponseSchema,

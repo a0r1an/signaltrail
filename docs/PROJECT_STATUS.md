@@ -29,6 +29,25 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — durable client identification
+
+- Added `identify(userId)` with atomic identity/outbox writes, idempotent same-user
+  calls, fresh context on account switch, and reset preserving queued history.
+  DB version 2 upgrades existing anonymous identities without replacing them.
+  Links retain their original payload until validated server acceptance; bounded
+  periodic delivery resumes after reopening. Provisional bounds: 64 links / 1 MiB
+  and 90-day link expiry. Identity storage remains required.
+- Added strict optional identity context and reserved `$identify` link records.
+  Ordinary reader counts/lists exclude control records. Server-side resolution
+  of anonymous history is still pending; client identity is never authorization.
+- Verification: contracts 110, SDK 302, analytics 210 tests; package lint/types/
+  builds pass. All 17 Chromium tests pass, including public identification through
+  the real HTTP ingestion handler. Broker publication is simulated in that suite;
+  no new real-broker identity-history or production login proof is claimed.
+- Clerk account creation reported by user; application configuration and live
+  owner login remain unverified. Next: server-side visitor resolution and real
+  storage verification, followed by authenticated analytics route wiring.
+
 ### November 5 — public anonymous capture API
 
 - Added public `openAnalyticsClient` with validated `track`, shared anonymous

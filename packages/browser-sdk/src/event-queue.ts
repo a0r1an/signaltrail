@@ -1,3 +1,4 @@
+import { IDENTITY_LINK_MAX_AGE_MS } from './identity-policy.ts';
 import { normalizeQueueConfig, type EventQueueConfig } from './project-config.ts';
 export type { EventQueueConfig } from './project-config.ts';
 import {
@@ -36,7 +37,10 @@ function payloadBytes(event: AnalyticsEvent): number {
 }
 
 function isExpired(event: AnalyticsEvent, time: number, maxAgeMs: number): boolean {
-  return time - Date.parse(event.clientTimestamp) >= maxAgeMs;
+  return (
+    time - Date.parse(event.clientTimestamp) >=
+    (event.context.identity?.kind === 'link' ? IDENTITY_LINK_MAX_AGE_MS : maxAgeMs)
+  );
 }
 
 interface QueueDatabase extends DBSchema {

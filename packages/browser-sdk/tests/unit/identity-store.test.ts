@@ -168,7 +168,7 @@ it('closes its connection for a future database upgrade and rejects new operatio
   const name = (await indexedDB.databases()).find((db) =>
     db.name?.startsWith('signaltrail:identity:'),
   )!.name!;
-  const upgraded = await openDB(name, 2);
+  const upgraded = await openDB(name, 3);
   try {
     await expect(store.allocate()).rejects.toThrow('Identity storage unavailable');
   } finally {
@@ -181,7 +181,7 @@ it('rotates session before sequence precision is exhausted', async () => {
   try {
     const first = await store.allocate();
     const name = (await indexedDB.databases())[0]!.name!;
-    const db = await openDB(name, 1);
+    const db = await openDB(name, 2);
     try {
       const current = (await db.get('identity', 'current')) as Record<string, unknown>;
       await db.put('identity', { ...current, nextSequence: Number.MAX_SAFE_INTEGER }, 'current');
@@ -192,6 +192,125 @@ it('rotates session before sequence precision is exhausted', async () => {
     expect(next.anonymousId).toBe(first.anonymousId);
     expect(next.sessionId).not.toBe(first.sessionId);
     expect(next.sequence).toBe(0);
+  } finally {
+    store.close();
+  }
+});
+
+const page = { url: 'https://example.com/', campaign: {} };
+it('persists an identity link with its original event ID until explicitly acknowledged', async () => {
+  let store = await openIdentityStore(config);
+  try {
+    const anonymous = await store.allocate();
+    expect(await store.identify('user-a', page)).toEqual({ changed: true });
+    const links = await store.pendingLinks();
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      eventName: '$identify',
+      distinctId: 'user-a',
+      sequence: 1,
+      context: { identity: { kind: 'link', anonymousId: anonymous.anonymousId, userId: 'user-a' } },
+    });
+    store.close();
+    store = await openIdentityStore(config);
+    expect(await store.pendingLinks()).toEqual(links);
+    expect(await store.allocate()).toMatchObject({
+      anonymousId: anonymous.anonymousId,
+      identifiedId: 'user-a',
+      sequence: 2,
+    });
+    expect(await store.identify('user-a', page)).toEqual({ changed: false });
+    expect(await store.pendingLinks()).toEqual(links);
+    await store.acknowledgeLink(links[0]!.eventId);
+    expect(await store.pendingLinks()).toEqual([]);
+  } finally {
+    store.close();
+  }
+});
+it('rotates the anonymous visitor and session on account switch without merging users', async () => {
+  const store = await openIdentityStore(config);
+  try {
+    await store.identify('user-a', page);
+    const a = await store.allocate();
+    await store.identify('user-b', page);
+    const b = await store.allocate();
+    expect(b.identifiedId).toBe('user-b');
+    expect(b.anonymousId).not.toBe(a.anonymousId);
+    expect(b.sessionId).not.toBe(a.sessionId);
+    expect(
+      (await store.pendingLinks()).map((event) => event.context.identity?.userId).sort(),
+    ).toEqual(['user-a', 'user-b']);
+    await store.reset();
+    expect((await store.allocate()).identifiedId).toBeUndefined();
+    expect(await store.pendingLinks()).toHaveLength(2);
+  } finally {
+    store.close();
+  }
+});
+it('rolls back both the identity transition and outbox when the identity write fails', async () => {
+  const store = await openIdentityStore(config);
+  try {
+    const anonymous = await store.allocate();
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
+      throw new Error('private detail');
+    });
+    await expect(store.identify('user-a', page)).rejects.toThrow('Identity storage unavailable');
+    vi.restoreAllMocks();
+    expect(await store.pendingLinks()).toEqual([]);
+    expect(await store.allocate()).toMatchObject({
+      anonymousId: anonymous.anonymousId,
+      sequence: 1,
+    });
+  } finally {
+    store.close();
+  }
+});
+it('serializes simultaneous identification of the same user across connections', async () => {
+  const a = await openIdentityStore(config),
+    b = await openIdentityStore(config);
+  try {
+    const results = await Promise.all([a.identify('user-a', page), b.identify('user-a', page)]);
+    expect(results.filter((result) => result.changed)).toHaveLength(1);
+    expect(await b.pendingLinks()).toHaveLength(1);
+  } finally {
+    a.close();
+    b.close();
+  }
+});
+it('preserves version-one anonymous identities when adding the link outbox', async () => {
+  const name = `signaltrail:identity:v1:${JSON.stringify([config.ingestionUrl, config.projectKey])}`;
+  const old = await openDB(name, 1, {
+    upgrade(db) {
+      db.createObjectStore('identity');
+    },
+  });
+  const anonymousId = crypto.randomUUID(),
+    sessionId = crypto.randomUUID();
+  await old.put(
+    'identity',
+    { version: 1, anonymousId, sessionId, nextSequence: 5, lastActivity: Date.now() },
+    'current',
+  );
+  old.close();
+  const store = await openIdentityStore(config);
+  try {
+    expect(await store.allocate()).toMatchObject({ anonymousId, sessionId, sequence: 5 });
+    expect(await store.pendingLinks()).toEqual([]);
+  } finally {
+    store.close();
+  }
+});
+it('rejects an identity transition at outbox capacity without changing the current user', async () => {
+  const store = await openIdentityStore(config);
+  try {
+    for (let index = 0; index < 64; index++) await store.identify(`user-${index}`, page);
+    const before = await store.allocate();
+    await expect(store.identify('overflow', page)).rejects.toThrow('Identity storage unavailable');
+    expect(await store.allocate()).toMatchObject({
+      anonymousId: before.anonymousId,
+      identifiedId: 'user-63',
+    });
+    expect(await store.pendingLinks()).toHaveLength(64);
   } finally {
     store.close();
   }
