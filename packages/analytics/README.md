@@ -180,3 +180,9 @@ The implemented route reference is in
 It is validated offline by this package's test suite. Its documented bearer
 binding is fixture-only; production session transport and server URLs must be
 configured before mounting a service. See the API reference README for limits.
+
+Browser-facing API models are available with
+`import type { AnalyticsEventPage } from '@signaltrail/analytics/api-types'`.
+That subpath exports types only, generated from the reference. It has no runtime
+client or authentication defaults. Builds verify a DOM-only consumer without
+Node ambient types; normal lint verifies generated-type drift.

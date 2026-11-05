@@ -34,7 +34,40 @@ same response checks over real HTTP and storage. JSON Schema date-time format
 validation is disabled in this helper; UTC patterns, shapes, and types are checked,
 while byte limits, UInt64 numeric bounds, calendar validity, and scope invariants
 remain covered by the runtime reader tests. This is not exhaustive request/response
-or production session-provider validation. Generated dashboard types remain
+or production session-provider validation. Generated dashboard types are described below; a runtime client remains
 follow-up work. Both validators are development dependencies only.
 
 Reference: [OpenAPI 3.1.1 specification](https://spec.openapis.org/oas/v3.1.1.html).
+
+## Generated TypeScript types
+
+```sh
+./scripts/signaltrail-ops.mjs api generate
+./scripts/signaltrail-ops.mjs api check
+```
+
+The pinned development generator writes
+`packages/analytics/src/generated/query-api.ts`. The artifact is committed and
+excluded from independent formatting so byte-for-byte drift checks remain valid.
+Analytics lint and CI check drift; regenerate after editing the reference.
+
+Dashboard code can consume the package's type-only subpath:
+
+```ts
+import type {
+  AnalyticsCountRequest,
+  AnalyticsCountResponse,
+  AnalyticsEventPage,
+} from '@signaltrail/analytics/api-types';
+
+function nextCursor(page: AnalyticsEventPage): string | undefined {
+  return page.hasMore ? page.nextCursor : undefined;
+}
+```
+
+Counts and sequences stay strings. Non-final pages require a cursor; final pages
+omit it. These types do not validate runtime data or attach authentication.
+The subpath has a TypeScript `types` export only; do not import it as a runtime
+module. Package builds compile a DOM-only consumer against the emitted public
+declarations with Node ambient types disabled. No browser code needs to import
+the server reader or HTTP bridge.

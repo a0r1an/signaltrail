@@ -1,6 +1,6 @@
 # Open questions and working assumptions
 
-Updated: 2026-11-03. Record unresolved decisions here for asynchronous review.
+Updated: 2026-11-05. Record unresolved decisions here for asynchronous review.
 Entries are questions, not approvals or completed work.
 
 ## Needs user input before production

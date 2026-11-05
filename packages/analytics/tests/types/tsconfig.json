@@ -1,0 +1,12 @@
+{
+  "extends": "@signaltrail/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "skipLibCheck": false
+  },
+  "include": ["public-api.ts"]
+}

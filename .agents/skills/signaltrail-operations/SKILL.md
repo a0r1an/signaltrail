@@ -28,6 +28,7 @@ Preview an operation without side effects:
 | Ingestion lint, units, types, build  | `./scripts/signaltrail-ops.mjs check ingestion`                       |
 | Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
 | SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
+| Generate / check query API types     | `./scripts/signaltrail-ops.mjs api generate` / `api check`            |
 | Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
 | Measure native IndexedDB queue cost  | `./scripts/signaltrail-ops.mjs browser benchmark`                     |
 | Measure minified SDK transfer sizes  | `./scripts/signaltrail-ops.mjs browser size`                          |
@@ -301,3 +302,18 @@ machine details. Success is recorded only after owned resources close.
 These are local queue measurements without upload, concurrent tabs, CPU
 throttling, or replay recording. No performance threshold or production capacity
 is implied, and defaults are not changed. Do not overlap package builds.
+
+## Query API reference and generated types
+
+`api generate` updates the committed type artifact from
+`docs/api/analytics.openapi.json` using the pinned development generator.
+`api check` is read-only and fails on drift; it is also included in analytics lint,
+so normal checks and CI catch stale types. Never edit the generated artifact by
+hand or format it independently; the exact file is excluded from Prettier to
+preserve byte-for-byte generator checks. The separate `api-types` package subpath
+exports types only and does not configure a runtime client or session provider.
+Analytics units validate the OpenAPI document with external references disabled,
+and check response shapes with development-only AJV. The combined owned-storage
+probe applies those schemas to real wire responses, including adaptive large
+pages. These checks do not replace runtime byte/UInt64/calendar validation or
+production authentication. The documented bearer binding remains fixture-only.

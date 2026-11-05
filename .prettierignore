@@ -11,3 +11,6 @@ pnpm-lock.yaml
 playwright-report
 test-results
 .pnpm-store
+
+# Keep the OpenAPI generator output byte-identical for drift checks.
+packages/analytics/src/generated/query-api.ts

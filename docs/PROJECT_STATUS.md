@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-11-03
+Last updated: 2026-11-05
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -15,7 +15,7 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-11-03
+## Current checkpoint — 2026-11-05
 
 The analytics path now works through the low-level browser SDK, HTTP ingestion,
 Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
@@ -28,6 +28,20 @@ Autonomous development resumed on November 3. Event-name filtering from
 healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
+
+### November 5 — generated query API types
+
+- Added committed OpenAPI-generated query types and an explicit type-only
+  `@signaltrail/analytics/api-types` export. Counts/sequences remain strings and
+  `hasMore` narrows cursor presence. The standard runner now provides `api generate`
+  and `api check`; analytics lint/CI checks drift. A deliberate generated-file edit
+  was rejected, then regeneration restored the artifact. The generator is a
+  development dependency only; no service/authentication behavior changes.
+- Public declaration consumption is checked during builds with DOM libraries and
+  Node ambient types disabled. API types produce a zero-byte JavaScript artifact;
+  callers must use `import type`, not a runtime import. All 154 analytics tests,
+  lint, drift check, typecheck, JavaScript/declaration builds and the public
+  declaration consumer passed. Full-repository formatting passed.
 
 ### November 3 — startup readiness and filtering verification
 
@@ -319,7 +333,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
-| Analytics reader and query boundary unit tests |                           152 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Analytics reader and query boundary unit tests |                           154 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -388,9 +402,11 @@ Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
 recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
-add generated dashboard client types from the new OpenAPI reference, preserving
-the explicit fixture-only session binding. Response-conformance checks are now
-implemented; confirm the recorded real HTTP/storage probe before repeating it. The production identity provider/transport remains a user decision. Large-page reduction and cursor byte
+add a bounded dashboard query client consuming the generated types, with required
+injected session-aware fetch and runtime response validation. Do not choose a
+production provider or silently attach ingestion keys. Generated types, drift
+checks and response conformance are implemented; reuse the recorded real storage
+evidence for unchanged read behavior. The production identity provider/transport remains a user decision. Large-page reduction and cursor byte
 encoding are locally verified; do not repeat them as unfinished work. Session verification remains injectable;
 production identity-provider/credentials and public deployment remain pending.
 Continue the explorer/product work after
