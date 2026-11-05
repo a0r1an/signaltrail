@@ -8,8 +8,12 @@ Entries are questions, not approvals or completed work.
 - **Project membership policy:** the new private membership foundation uses UUID
   projects and verified issuer/subject identities. Its reversible default grants
   owner/admin/member roles read access to all projects in their organization.
-  Confirm organization-wide versus project-specific visibility, account linking,
-  invitations, and last-owner protection before exposing administrative APIs.
+  Organization-wide visibility is now confirmed by the user. Account linking,
+  invitations, and last-owner protection remain to be specified before exposing
+  administrative APIs.
+  Clerk is selected, with invite-only registration, a manually created email/
+  password account, and server-side access restricted to the owner Clerk user ID
+  for the first 90 days. Configuration and integration remain pending.
   Session verification, a read-only database identity, TLS/CA provisioning, and
   deployment migration application remain unconfigured. A bounded real PostgreSQL
   adapter is now locally verified; its pool/query limits still need representative
@@ -30,9 +34,20 @@ Entries are questions, not approvals or completed work.
 - **Public SDK capture API:** the package currently exposes queue/transport APIs
   that accept complete typed events. A higher-level `init`/`track`/`identify` API,
   generated session/visitor identities, and runtime validation/error reporting for
-  JavaScript callers are not implemented. Decide those semantics before presenting
-  the SDK as a drop-in analytics integration. Keep the low-level APIs stable during
-  infrastructure verification.
+  JavaScript callers are not implemented. User decisions: generate anonymous
+  visitor IDs; support `identify(userId)` and link earlier anonymous activity
+  within the same project; expire sessions after 30 minutes without captured
+  activity, retaining the session on tab reopen within that window. URL navigation
+  and query/UTM changes must not independently rotate the session.
+  Working attribution proposal: capture allowlisted campaign parameters separately
+  from session identity at session entry; retain entry attribution through later
+  navigation, with event-level campaign observations available separately.
+  Confirm attribution precedence, parameter allowlist and URL privacy rules before
+  implementation; never use query parameters as identity or copy arbitrary query
+  strings into attribution. Logout/shared-device reset and cross-tab identity
+  persistence remain to be specified. Keep the low-level APIs stable.
+  An uncommitted capture-client stub/test exists; it is unfinished, not a usable
+  API or verified implementation.
 - **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
   Invalid messages within the cap retain original bytes as base64 in DLQ records;
   oversized messages retain only source coordinates, byte count, and SHA-256.
