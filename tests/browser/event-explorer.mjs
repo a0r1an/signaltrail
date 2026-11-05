@@ -100,6 +100,7 @@ const handler = createAnalyticsQueryHandler({
       !/(?:^|;\s*)fixture-session=a(?:;|$)/.test(request.headers.get('cookie') ?? '')
     )
       return { status: 'unauthenticated' };
+    if (config.status === 'forbidden') return { status: 'forbidden' };
     return ['project-a', 'project-b'].includes(projectId)
       ? { status: 'authorized', projectId }
       : { status: 'forbidden' };
@@ -270,6 +271,59 @@ try {
       await expect(page.getByRole('cell', { name: 'slow', exact: true })).toHaveCount(0);
       await expect(page.getByRole('cell', { name: 'product_viewed', exact: true })).toHaveCount(0);
       result.cases.projectSwitch = true;
+      await page.getByLabel('Event name', { exact: true }).fill('slow');
+      await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+      await page.getByRole('button', { name: 'Replace session', exact: true }).click();
+      await expect(page.getByLabel('Event name', { exact: true })).toHaveValue('');
+      await expect(
+        page.getByRole('cell', { name: 'purchase_completed', exact: true }),
+      ).toBeVisible();
+      await delay(800);
+      await expect(page.getByRole('cell', { name: 'slow', exact: true })).toHaveCount(0);
+      result.cases.sessionScopeReset = true;
+      await page.getByLabel('Session ID', { exact: true }).fill('missing-session');
+      await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+      await expect(page.getByText('No events match these filters.', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Unique events', { exact: true })).toHaveText('0');
+      await expect(page.getByRole('button', { name: 'Next page', exact: true })).toBeDisabled();
+      result.cases.emptyResults = true;
+      await page.getByLabel('Session ID', { exact: true }).fill('');
+      await page.getByLabel('From (UTC)', { exact: true }).fill('2026-11-03T00:00');
+      await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('Check your filters');
+      await expect(page.getByRole('cell', { name: 'purchase_completed', exact: true })).toHaveCount(
+        0,
+      );
+      result.cases.invalidRange = true;
+      await page.getByLabel('From (UTC)', { exact: true }).fill('2026-11-01T00:00');
+      await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+      await expect(
+        page.getByRole('cell', { name: 'purchase_completed', exact: true }),
+      ).toBeVisible();
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        true,
+      );
+      await page.screenshot({
+        path: resolve(directory, 'event-explorer-mobile.png'),
+        fullPage: true,
+      });
+      result.cases.narrowViewport = true;
+      await configure({ status: 'forbidden' });
+      await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+      await expect(page.getByRole('alert')).toHaveText(
+        'You no longer have access to this project.',
+      );
+      await expect(page.getByRole('cell', { name: 'purchase_completed', exact: true })).toHaveCount(
+        0,
+      );
+      result.cases.revokedMembership = true;
+      await configure({ status: 'ok' });
+      await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+      await expect(
+        page.getByRole('cell', { name: 'purchase_completed', exact: true }),
+      ).toBeVisible();
       await configure({ eventsUnauthorized: true, countDelayMs: 700 });
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Sign in again', exact: true })).toBeVisible();

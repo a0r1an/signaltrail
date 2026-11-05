@@ -45,7 +45,12 @@ performed. Historical sections below preserve evidence from their recorded dates
   unverified. No live route or production session provider is supplied.
 - Recorded the user-approved FSL-to-Apache platform / MIT SDK-and-contracts
   licensing decision in the question log. Applying licenses remains pending.
-- Next: native session-scope reset, empty/error and responsive checks, then
+- Follow-up native coverage passed all 12 scenario groups, adding session-scope
+  replacement during a slow read, empty results, invalid UTC ranges, revoked
+  membership and a 390px layout without document overflow. Mobile screenshot
+  reviewed; owned resources closed. Evidence:
+  `test-results/event-explorer-browser/2026-11-05T19-15-11.224Z/report.json`.
+- Next:
   licensing implementation and public SDK ergonomics while auth decisions remain
   pending.
 
