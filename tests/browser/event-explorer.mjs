@@ -302,6 +302,10 @@ try {
       ).toBeVisible();
       await page.setViewportSize({ width: 390, height: 844 });
       assert.equal(
+        await page.locator('table').evaluate((node) => node.getBoundingClientRect().width >= 900),
+        true,
+      );
+      assert.equal(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
         true,
       );
@@ -310,6 +314,11 @@ try {
         fullPage: true,
       });
       result.cases.narrowViewport = true;
+      const resultsRegion = page.getByRole('region', { name: 'Event results', exact: true });
+      await resultsRegion.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => resultsRegion.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+      result.cases.keyboardTableScroll = true;
       await configure({ status: 'forbidden' });
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await expect(page.getByRole('alert')).toHaveText(

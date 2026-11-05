@@ -100,9 +100,14 @@
 .tableWrap {
   overflow-x: auto;
 }
+.tableWrap:focus-visible {
+  outline: 3px solid #93b4fc;
+  outline-offset: -3px;
+}
 .results table {
   border-collapse: collapse;
   width: 100%;
+  min-width: 900px;
   font-size: 13px;
   text-align: left;
 }

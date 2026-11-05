@@ -136,7 +136,7 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
         </div>
       )}
       <div className={styles.results}>
-        <div className={styles.tableWrap}>
+        <div className={styles.tableWrap} role="region" aria-label="Event results" tabIndex={0}>
           <table>
             <thead>
               <tr>

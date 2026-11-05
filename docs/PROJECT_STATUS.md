@@ -50,6 +50,9 @@ performed. Historical sections below preserve evidence from their recorded dates
   membership and a 390px layout without document overflow. Mobile screenshot
   reviewed; owned resources closed. Evidence:
   `test-results/event-explorer-browser/2026-11-05T19-15-11.224Z/report.json`.
+- Mobile table now retains readable columns within a keyboard-focusable horizontal
+  scroll region. All 13 Chromium scenarios pass with cleanup in
+  `test-results/event-explorer-browser/2026-11-05T19-16-20.427Z/report.json`.
 - Next:
   licensing implementation and public SDK ergonomics while auth decisions remain
   pending.
