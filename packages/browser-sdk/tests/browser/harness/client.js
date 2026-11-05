@@ -1,9 +1,10 @@
-import { openAutomaticDelivery, createPageContextCapture } from '/sdk.js';
+import { openAutomaticDelivery, createPageContextCapture, openAnalyticsClient } from '/sdk.js';
 import { openIdentityStore } from '/identity.js';
 
 // Internal test entry, separate from the package's built public SDK entry.
 window.openIdentityStore = openIdentityStore;
 window.capturePageContext = createPageContextCapture();
+window.openAnalyticsClient = openAnalyticsClient;
 
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') || crypto.randomUUID();

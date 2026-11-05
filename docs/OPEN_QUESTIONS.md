@@ -37,10 +37,10 @@ Entries are questions, not approvals or completed work.
 - **SDK telemetry consent:** aggregate health reporting is opt-in and sampled.
   Keep those defaults; decide product-facing consent and documentation before
   enabling it in a deployed application.
-- **Public SDK capture API:** the package currently exposes queue/transport APIs
-  that accept complete typed events. A higher-level `init`/`track`/`identify` API,
-  generated session/visitor identities, and runtime validation/error reporting for
-  JavaScript callers are not implemented. User decisions: generate anonymous
+- **Public SDK capture API:** `openAnalyticsClient` now implements anonymous
+  `track`/`reset`, generated visitor/session/event IDs, validated inputs, private
+  URL/campaign capture and existing batching/retries. `identify` and durable
+  server-side identity linking remain unimplemented. User decisions: generate anonymous
   visitor IDs; support `identify(userId)` and link earlier anonymous activity
   within the same project; expire sessions after 30 minutes without captured
   activity, retaining the session on tab reopen within that window. URL navigation
@@ -53,8 +53,7 @@ Entries are questions, not approvals or completed work.
   parameters and fragments from recorded page URLs by default, separately
   capturing only `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, and
   `utm_content`. Applications may explicitly allow additional parameters. This
-  policy now has a tested public capture helper, but is not yet connected to a
-  high-level capture API; allowlisted values still
+  policy now drives the public anonymous capture API; allowlisted values still
   require bounds and must not be treated as inherently free of sensitive data. A campaign change does not independently rotate sessions under the
   current inactivity-based rule. Never use query parameters as identity or copy
   arbitrary query strings into attribution.
@@ -67,13 +66,11 @@ Entries are questions, not approvals or completed work.
   before `identify(B)` when A is currently identified: create a fresh anonymous
   identity context/session for B without linking A’s history to B. Previously
   queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
-  An internal durable anonymous/session store now verifies atomic sharing,
-  30-minute inactivity rotation and reset with fake IndexedDB and native Chromium,
-  but is not yet
-  connected to capture. Define high-level behavior when identity storage is
-  unavailable; never report a cross-tab reset as successful if its write fails.
-  The abandoned explicit-identity capture stub was removed after these identity
-  decisions; the public capture API remains pending implementation.
+  The durable anonymous/session store now drives capture, with fake IndexedDB
+  and native-browser coverage. Current high-level initialization requires
+  IndexedDB, and later identity-write failures return `identity_unavailable`.
+  Coordinated identity memory fallback remains future work; never claim a shared
+  reset succeeded if its write fails. Low-level queue memory fallback is unchanged.
 - **Analytics retention:** user approved a configurable 90-day default for raw
   analytics events. Retention enforcement is not implemented. Define late-event
   expiry and deletion across storage/backups before rollout; this is not a

@@ -26,3 +26,14 @@ response. The reader reduces oversized pages within one deadline and returns a
 cursor. Cursor wire encoding has its own independently verified bound.
 
 Run `./scripts/signaltrail-ops.mjs check contracts` for contract verification.
+
+## Campaign context
+
+Analytics events may include optional `context.campaign` with only the five
+standard UTM fields. Values are nonempty valid UTF-8 text of at most 1 KiB each,
+without control characters. Unknown keys and malformed values invalidate that
+event; batch siblings remain independently valid. Existing events without the
+field remain accepted. Update ingestion and processor contracts before using new
+SDK campaign capture: older readers can strip unrecognized optional context.
+Campaign context describes the captured event, not a visitor identity or a
+first/last-touch attribution decision.

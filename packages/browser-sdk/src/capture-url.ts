@@ -1,10 +1,7 @@
-const campaignNames = [
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
-] as const;
+import {
+  CAMPAIGN_PARAMETERS as campaignNames,
+  MAX_CAMPAIGN_VALUE_BYTES,
+} from '@signaltrail/contracts';
 export type CampaignParameter = (typeof campaignNames)[number];
 export interface PageContext {
   url: string;
@@ -77,7 +74,9 @@ export function createPageContextCapture(allowedQueryParameters: readonly string
       const value = decode(separator < 0 ? '' : pair.slice(separator + 1));
       values.set(
         name,
-        value && controlFree(value) && encoder.encode(value).byteLength <= 1024 ? value : undefined,
+        value && controlFree(value) && encoder.encode(value).byteLength <= MAX_CAMPAIGN_VALUE_BYTES
+          ? value
+          : undefined,
       );
     }
     const campaign: PageContext['campaign'] = {};

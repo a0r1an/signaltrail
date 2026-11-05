@@ -14,13 +14,14 @@ React event explorer are implemented. Owner-only Clerk sign-in routes and guards
 are implemented, but real account configuration/verification remain pending. The
 explorer is not mounted in a live route.
 
-Production authentication verification, a convenient `init`/`track` SDK API, session recording
+Production authentication verification, identified-user linking, session recording
 and replay playback, deployment, and backup/restore drills remain ahead.
 This is not a production-ready service or an availability guarantee.
 
 ## Architecture
 
-- **Browser SDK:** IndexedDB buffering, bounded batching, retries with stable IDs,
+- **Browser SDK:** anonymous `track`/`reset`, private URL/campaign capture, shared
+  sessions, IndexedDB buffering, bounded batching, retries with stable IDs,
   multi-tab coordination, and page-exit delivery attempts.
 - **Ingestion:** validates events independently, authorizes ingestion keys, bounds
   outstanding work, and waits for Redpanda acknowledgement before acceptance.

@@ -315,3 +315,27 @@ it('rejects unreadable identifiers individually while publishing valid batch sib
     expect.any(AbortSignal),
   );
 });
+it('preserves bounded campaign context while rejecting an invalid sibling', async () => {
+  const campaign = { utm_source: 'email', utm_campaign: 'launch' };
+  const valid = { ...event, context: { ...event.context, campaign } };
+  const publish = vi.fn().mockResolvedValue(undefined);
+  const handle = createIngestionHandler({ resolveProjectKey: () => 'project-1', publish });
+  const response = await handle(
+    request([
+      valid,
+      {
+        ...event,
+        eventId: 'bad-campaign',
+        context: { ...event.context, campaign: { unknown: 'private' } },
+      },
+    ]),
+  );
+  expect(await response.json()).toEqual({
+    results: [
+      { index: 0, eventId: valid.eventId, status: 'accepted' },
+      { index: 1, status: 'rejected', code: 'INVALID_EVENT' },
+    ],
+  });
+  expect(publish).toHaveBeenCalledOnce();
+  expect(publish.mock.calls[0]![0]).toMatchObject({ projectId: 'project-1', event: valid });
+});

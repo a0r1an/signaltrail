@@ -2,9 +2,49 @@
 
 This private pre-release package currently exposes persistent queue, transport,
 automatic delivery, health reporting, and page-context capture primitives.
-The higher-level anonymous visitor/session and `track`/`identify`/`reset` API is
-not implemented yet. Existing low-level enqueue methods accept complete typed
-analytics events and do not automatically sanitize caller-supplied URLs/properties.
+The public anonymous `openAnalyticsClient` API supports `track`, `reset`, batching
+and retries. `identify` and server-side linking remain unimplemented. Existing
+low-level enqueue methods still accept complete typed events and do not
+automatically sanitize caller-supplied URLs/properties.
+
+## Anonymous event capture
+
+```ts
+import { openAnalyticsClient } from '@signaltrail/browser-sdk';
+
+const analytics = await openAnalyticsClient({
+  projectKey: 'your-public-ingestion-key',
+  ingestionUrl: 'https://ingestion.example.com/v1/events',
+});
+
+const result = await analytics.track('product_viewed', { productId: '123' });
+await analytics.track('checkout_started', {}, { sendImmediately: true });
+
+// Await and check the result before capturing activity for a new browser user.
+const reset = await analytics.reset();
+analytics.close();
+```
+
+Initialization starts delivery of existing queued work, but does not record page
+views automatically or start replay. The application controls when to initialize
+and capture. Event properties and URL/campaign context are snapshotted before
+asynchronous storage. The client generates stable event IDs, timestamps, anonymous
+visitor IDs, shared sessions and sequences. Campaign changes do not rotate IDs.
+Campaign context is stored separately in `context.campaign` using the shared
+optional contract; application properties are not overwritten.
+
+`queued` means local enqueue succeeded, not that the server accepted the event.
+Even immediate sends use the queue and existing acknowledgement/retry rules.
+Inspect structured drop/storage/validation outcomes; invalid inputs do not enter
+the queue. Retries preserve the original payload and ID. `reset` rotates visitor
+and session for future captures across same-origin/project connections, without
+rewriting or deleting previously queued events. `close` stops this client only.
+
+This pre-release high-level API currently requires identity IndexedDB: opening
+fails if it is unavailable; later identity-write failures report
+`identity_unavailable`. It does not silently claim a cross-tab reset succeeded.
+The low-level delivery queue's existing memory fallback remains unchanged.
+Identified-user linking and a coordinated identity fallback are future work.
 
 ## URL and campaign capture
 
@@ -37,10 +77,10 @@ are omitted rather than guessed or truncated. Invalid URLs throw a generic
 
 ## Identity/session foundation
 
-An internal, not-yet-public IndexedDB store implements anonymous visitor identity,
+An internal IndexedDB store drives anonymous visitor identity,
 30-minute inactivity sessions, shared atomic sequence allocation and cross-tab
 reset visibility on the next operation. Unit and native Chromium tests cover it.
-It does not yet drive event capture or implement identified-user linking.
+It drives public anonymous capture but does not implement identified-user linking.
 Unavailable identity storage reports failure; existing queue memory fallback is
 unchanged. See the project question log for capture integration decisions.
 

@@ -32,3 +32,6 @@ export type { SdkHealthReport } from '@signaltrail/contracts';
 
 export { createPageContextCapture } from './capture-url.ts';
 export type { CampaignParameter, PageContext } from './capture-url.ts';
+
+export { openAnalyticsClient } from './analytics-client.ts';
+export type { AnalyticsClient, AnalyticsClientOptions, CaptureResult } from './analytics-client.ts';

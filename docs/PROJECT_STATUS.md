@@ -29,6 +29,33 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — public anonymous capture API
+
+- Added public `openAnalyticsClient` with validated `track`, shared anonymous
+  identity/session allocation, `reset`, immediate-send opt-in, flush/health and
+  disposal. Properties, URL and mode are snapshotted before storage. Existing
+  queue limits, batch retry/acknowledgement and stable event IDs are reused.
+  Reset preserves already queued event identities; campaign changes preserve
+  visitor/session IDs. Initialization does not auto-record pages or start replay.
+- Added optional bounded `context.campaign` to the shared event contract, using
+  the five UTM fields without overwriting application properties. Old events
+  remain valid. Ingestion/worker checks preserve this metadata through parsing
+  and ClickHouse serialization; invalid siblings are rejected independently.
+- Checks pass: contracts 103, ingestion 65, worker 108, SDK 293 tests, plus their
+  lint/type/build checks. All 16 Chromium tests pass, including a public capture
+  through real HTTP ingestion with generated IDs and sanitized campaign context.
+  This run does not prove new API delivery through real Redpanda/ClickHouse;
+  existing isolated pipeline evidence concerns earlier low-level delivery.
+- Current pre-release capture requires identity IndexedDB. Initialization fails
+  if unavailable; write failures return `identity_unavailable` instead of silently
+  claiming reset success. Low-level queue memory fallback is unchanged.
+  `queued` is local acceptance, not server acknowledgement. `identify`, durable
+  linking, identity fallback and event-time queries remain future work.
+- Updated SDK/contracts guides and rollout note: backend contracts must be
+  updated before new campaign-emitting SDKs, since older parsers strip the field.
+- Next: durable identify/link transitions and downstream identity resolution;
+  live Clerk configuration and authenticated analytics wiring also remain.
+
 ### November 5 — shared anonymous session foundation
 
 - Added an internal IndexedDB identity store scoped like the delivery queue by

@@ -290,3 +290,17 @@ it('reports failed storage attempts while preserving the generic unacknowledged 
   await expect(write([record])).rejects.toThrow('ClickHouse insert was not acknowledged');
   expect(onAttempt).toHaveBeenCalledWith('failed', expect.any(Number));
 });
+it('serializes campaign metadata into the existing context storage column', async () => {
+  const campaign = { utm_source: 'email', utm_campaign: 'launch' };
+  const context = { ...record.event.context, campaign };
+  const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 200 }));
+  const write = createClickHouseWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test',
+    fetch: send,
+  });
+  await write({ ...record, event: { ...record.event, context } });
+  const row = JSON.parse(send.mock.calls[0]![1]!.body as string) as { context_json: string };
+  expect(JSON.parse(row.context_json)).toEqual(context);
+});

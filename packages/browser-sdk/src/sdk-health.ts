@@ -1,3 +1,4 @@
+import { SDK_VERSION } from './version.ts';
 import type { SdkHealthCounter, SdkHealthReport } from '@signaltrail/contracts';
 import type { EventQueue } from './event-queue.ts';
 
@@ -55,7 +56,7 @@ export function createSdkHealth(
         : { status: 'storage_error', storageMode: queue.storageMode };
     return {
       schemaVersion: 1,
-      sdkVersion: '0.1.0',
+      sdkVersion: SDK_VERSION,
       intervalMs,
       counters: capturedCounters,
       timings: capturedTimings,

@@ -1,4 +1,4 @@
-import { test, expect, state, configure } from './fixtures.ts';
+import { test, expect, state, configure, open } from './fixtures.ts';
 
 test('the SDK crosses origins to the real ingestion handler and receives publication acknowledgment', async ({
   page,
@@ -67,4 +67,40 @@ test('opt-in SDK health reports cross origins without becoming analytics events'
   });
   expect(result.publications).toHaveLength(1);
   expect(JSON.stringify(result.healthReports)).not.toContain('harness-visitor');
+});
+
+test('public anonymous capture reaches ingestion with generated identity and private campaign context', async ({
+  page,
+  request,
+  scenario,
+}) => {
+  await open(page, scenario);
+  const captured = await page.evaluate(async (scenario) => {
+    history.replaceState(null, '', '/?utm_source=email&utm_campaign=launch&secret=private#token');
+    const client = await window.openAnalyticsClient(
+      { projectKey: `harness-real-${scenario}`, ingestionUrl: 'http://127.0.0.1:4178/v1/events' },
+      { flushIntervalMs: 60000 },
+    );
+    try {
+      return await client.track('public_capture', { productId: '123' }, { sendImmediately: true });
+    } finally {
+      client.close();
+    }
+  }, scenario);
+  expect(captured.status).toBe('queued');
+  expect(captured).toHaveProperty('eventId');
+  const observed = await state(request, scenario);
+  expect(observed.publications).toHaveLength(1);
+  const record = observed.publications[0]!;
+  expect(record.projectId).toBe(`project-${scenario}`);
+  expect(record.event).toMatchObject({
+    eventName: 'public_capture',
+    sequence: 0,
+    url: 'http://127.0.0.1:4177/',
+    properties: { productId: '123' },
+    context: { sdkVersion: '0.1.0', campaign: { utm_source: 'email', utm_campaign: 'launch' } },
+  });
+  expect(record.event.distinctId).toMatch(/^[a-f0-9-]{36}$/);
+  expect(record.event.sessionId).toMatch(/^[a-f0-9-]{36}$/);
+  expect(captured).toMatchObject({ eventId: record.event.eventId });
 });

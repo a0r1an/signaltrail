@@ -7,6 +7,7 @@ declare global {
   interface Window {
     openIdentityStore: typeof import('../../src/identity-store.ts').openIdentityStore;
     capturePageContext: ReturnType<typeof import('../../src/index.ts').createPageContextCapture>;
+    openAnalyticsClient: typeof import('../../src/index.ts').openAnalyticsClient;
     harness: {
       delivery: AutomaticDelivery;
       capture(options?: {

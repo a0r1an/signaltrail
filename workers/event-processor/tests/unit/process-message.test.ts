@@ -308,3 +308,22 @@ it('dead-letters legacy oversized identifiers before committing instead of poiso
   expect(operations[0]).toMatchObject({ reason: 'INVALID_RECORD', payloadBytes: value.length });
   expect(operations[1]).toEqual({ topic: 'analytics', partition: 0, offset: '9007199254740994' });
 });
+it('preserves campaign context through broker-record validation', async () => {
+  const campaign = { utm_source: 'email', utm_campaign: 'launch' };
+  const published = {
+    ...record,
+    event: { ...record.event, context: { ...record.event.context, campaign } },
+  };
+  const stored: unknown[] = [];
+  const handle = createEventProcessor({
+    writeEvent: async (value) => {
+      stored.push(value);
+    },
+    writeDeadLetter: async () => {
+      throw new Error('unexpected dead letter');
+    },
+    commit: async () => {},
+  });
+  await handle({ ...message, value: Buffer.from(JSON.stringify(published)) });
+  expect(stored).toEqual([published]);
+});
