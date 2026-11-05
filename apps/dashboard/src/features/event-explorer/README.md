@@ -11,7 +11,20 @@ work. A count-only failure can leave valid events usable. Private exception deta
 are reduced to display categories. `cancel()` supports React effect cleanup/replay;
 `close()` permanently disposes the model. Neither closes the shared query client.
 
-The React view and native fixture are the next slice. This feature is not mounted
+The React view supports UTC ranges, exact filters, counts, event summaries,
+paging, refresh, and denial/error states. Project/session scope changes remount
+the model and clear old data; hosts must rotate `scopeKey` when the verified
+principal or query-client lifetime changes. Initial query props initialize each
+scope only. React effect replay does not start abandoned requests.
+
+`./scripts/signaltrail-ops.mjs dashboard browser` runs an owned native Chromium
+fixture with the real query client and portable handler, synthetic data and a
+fixture-only HttpOnly cookie. It verifies rendering, paging, filters, partial
+failures, safe text, project switches and denial clearing. Reports/screenshots
+and failure traces live in ignored `test-results/event-explorer-browser/`.
+It does not supply production authentication or real database integration.
+
+This feature is not mounted
 on a live dashboard route and supplies no session provider or authorization default.
 Run `./scripts/signaltrail-ops.mjs check dashboard` for models, lint, route types,
 TypeScript and the optimized production build.

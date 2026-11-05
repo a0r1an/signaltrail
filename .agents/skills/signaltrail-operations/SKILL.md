@@ -338,3 +338,10 @@ benchmark, deployed session verification, or remote CI evidence.
 Vitest models, Next.js route type generation, TypeScript, and the optimized Next
 build. It does not run a server, mount an authentication provider, or deploy the
 application. UI-native probes, when present, are separate operations.
+
+`dashboard browser` builds the analytics client and dashboard fixture, then runs
+owned Chromium on an ephemeral loopback port. It verifies the explorer view with
+synthetic project data and fixture-only session transport. Reports, screenshots
+and failure traces are in `test-results/event-explorer-browser/`. Success is
+recorded only after browser/server cleanup. This is not a deployed route or
+production authentication proof; use `check dashboard` for Next build validation.

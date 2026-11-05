@@ -29,6 +29,26 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — event explorer view
+
+- Implemented the injected React explorer: UTC range/exact filters, precise
+  counts, summary table, cursor navigation, refresh, partial failure and
+  authorization-denial states. Scope changes remount and clear old results.
+- Chromium passed seven scenario groups including safe literal rendering,
+  project switching during slow reads, and immediate denial clearing. CSS module
+  loading is asserted and the styled screenshot was visually reviewed. Evidence:
+  `test-results/event-explorer-browser/2026-11-05T19-14-02.916Z/report.json`.
+  Owned browser/server cleanup completed. Initial red was a missing filter;
+  setup bundle-path/CSS-mapping issues and effect-replay admission were corrected.
+- Dashboard lint, 11 model tests, route types, TypeScript and optimized Next build
+  passed. The browser command and artifact upload are added to CI; remote CI is
+  unverified. No live route or production session provider is supplied.
+- Recorded the user-approved FSL-to-Apache platform / MIT SDK-and-contracts
+  licensing decision in the question log. Applying licenses remains pending.
+- Next: native session-scope reset, empty/error and responsive checks, then
+  licensing implementation and public SDK ergonomics while auth decisions remain
+  pending.
+
 ### November 5 — generated query API types and bounded client
 
 - Added the dashboard explorer state model with 11 test-first behaviors: fixed

@@ -86,6 +86,14 @@ Entries are questions, not approvals or completed work.
   overall deadline; this remains a provisional operational limit requiring
   representative workload measurement.
 
+## Licensing decision — November 5
+
+The user selected FSL 1.1 with Apache 2.0 conversion for the platform and MIT
+for the browser SDK and required shared contracts. Each published platform
+version converts after two years. Describe restricted releases as source-available.
+License files/package metadata and contributor-rights handling still need a
+separate implementation review; this decision alone does not apply a license.
+
 ## Reversible defaults during autonomous work
 
 - **Resolved November 3 — fixture follow-up:** a controlled bootstrap gate proved
