@@ -66,6 +66,11 @@ Entries are questions, not approvals or completed work.
   queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
   An uncommitted capture-client stub/test exists; it is unfinished, not a usable
   API or verified implementation.
+- **Analytics retention:** user approved a configurable 90-day default for raw
+  analytics events. Retention enforcement is not implemented. Define late-event
+  expiry and deletion across storage/backups before rollout; this is not a
+  promise that aggregates remain after raw-event deletion. Replay and dead-letter
+  retention are separate decisions.
 - **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
   Invalid messages within the cap retain original bytes as base64 in DLQ records;
   oversized messages retain only source coordinates, byte count, and SHA-256.
