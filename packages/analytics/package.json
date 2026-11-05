@@ -12,13 +12,17 @@
     },
     "./api-types": {
       "types": "./dist/api-types.d.ts"
+    },
+    "./client": {
+      "types": "./dist/query-client.d.ts",
+      "import": "./dist/query-client.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/api-types.ts --format esm --dts --clean && pnpm api:types",
+    "build": "tsup src/index.ts src/api-types.ts src/query-client.ts --format esm --dts --clean && pnpm api:types",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "pnpm api:check && eslint src tests --max-warnings 0",

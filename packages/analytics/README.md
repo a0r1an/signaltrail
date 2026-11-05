@@ -186,3 +186,50 @@ Browser-facing API models are available with
 That subpath exports types only, generated from the reference. It has no runtime
 client or authentication defaults. Builds verify a DOM-only consumer without
 Node ambient types; normal lint verifies generated-type drift.
+
+## Bounded browser query client
+
+```ts
+import { createQueryClient } from '@signaltrail/analytics/client';
+
+const client = createQueryClient({
+  endpoint: 'https://dashboard.invalid/api/',
+  fetch: sessionAwareFetch, // Required; your application owns session transport.
+});
+const { count } = await client.countReceivedEvents({
+  projectId: authorizedProjectId,
+  from: '2026-11-01T00:00:00Z',
+  to: '2026-11-02T00:00:00Z',
+});
+```
+
+The separate client entry contains no Node APIs or runtime dependencies. A
+DOM-only build checks its source and public declarations. No global fetch,
+ingestion key, cookie policy, or bearer credential is supplied by default. Your
+injected fetch owns the verified session transport and must honor the request's
+signal, no-cache, and no-redirect settings. Endpoint credentials, query strings,
+and fragments are rejected. An optional endpoint path prefix is preserved.
+
+`listReceivedEvents` returns the generated discriminated page type. Follow
+`hasMore`/`nextCursor` even when a page is smaller than the requested limit. Runtime
+validation preserves exact UInt64 strings, valid UTF-8 identifiers, UTC timestamps,
+unique summary IDs, and cursor shape, and rejects extra private fields. Responses
+must be JSON with `Cache-Control: no-store`. Count buffering is capped at 4 KiB;
+list buffering at 192 KiB, allowing the reader's 160-KiB storage page plus its
+cursor and serialization overhead. Invalid headers/bodies and redirected responses
+are discarded with generic errors; raw response or network-error details are not
+attached as causes.
+
+Defaults admit four underlying requests per client instance (configurable 1–32)
+and wait up to twelve seconds across fetch and body reads (configurable 1–30,000
+ms). A timeout or caller abort cancels the signal but keeps capacity reserved until
+an abort-ignoring fetch actually settles. `snapshot()` reports only admission
+counts, capacity, and closed state. `close()` stops admission and cancels active
+requests; it does not await dependencies that ignore cancellation.
+
+There are no automatic retries. `AnalyticsQueryClientError` provides a sanitized
+`code`, optional HTTP `status`, and a `retryable` hint. HTTP 401/403 let the owning
+application handle sign-in or denied membership; 429/5xx, network, timeout, and
+capacity errors can be retried by the caller. Abort/closed/invalid-response errors
+are not marked retryable. Production authentication and a dashboard route remain
+pending; the fixture's session-aware fetch is not a deployment fallback.

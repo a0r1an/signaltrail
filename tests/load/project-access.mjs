@@ -11,6 +11,7 @@ import {
   createAnalyticsHttpServer,
   createAnalyticsReader,
 } from '../../packages/analytics/dist/index.js';
+import { createQueryClient } from '../../packages/analytics/dist/query-client.js';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 import { readQueryReferenceResponse } from '../../packages/analytics/tests/query-reference.ts';
 import { exercisePostgresAdapter } from './postgres-adapter.mjs';
@@ -232,6 +233,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         origin: 'https://fixture.invalid',
         query: queryOptions,
       });
+      const clients = [];
       try {
         await new Promise((resolve) => http.server.listen(0, '127.0.0.1', resolve));
         const address = http.server.address();
@@ -289,7 +291,62 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
           ['a', '0'].map((prefix) => prefix + '\u0000'.repeat(4095)),
         );
         assert.equal(controlNext.hasMore, false);
+        const client = (key) => {
+          const instance = createQueryClient({
+            endpoint: `http://127.0.0.1:${address.port}`,
+            fetch: (input, options) => {
+              const headers = new Headers(options?.headers);
+              headers.set('Authorization', key);
+              return fetch(input, { ...options, headers });
+            },
+          });
+          clients.push(instance);
+          return instance;
+        };
+        const clientA = client('Bearer fixture-a');
+        const clientB = client('Bearer fixture-b');
+        const clientWindow = {
+          projectId: projectA,
+          from: '2026-11-01T00:00:00Z',
+          to: '2026-11-02T00:00:00Z',
+        };
+        assert.deepEqual(await clientA.countReceivedEvents(clientWindow), { count: '1' });
+        const clientPage = await clientA.listReceivedEvents(clientWindow);
+        assert.deepEqual(
+          clientPage.events.map((event) => event.eventId),
+          ['event-a'],
+        );
+        const beforeDeniedClient = reads;
+        await assert.rejects(
+          clientA.countReceivedEvents({ ...clientWindow, projectId: projectB }),
+          (error) => error.code === 'HTTP_ERROR' && error.status === 403 && !error.retryable,
+        );
+        await assert.rejects(
+          client('Bearer fixture-ingestion-key').countReceivedEvents(clientWindow),
+          (error) => error.code === 'HTTP_ERROR' && error.status === 401 && !error.retryable,
+        );
+        assert.equal(reads, beforeDeniedClient);
+        const largeWindow = {
+          projectId: projectB,
+          from: '2026-11-02T00:00:00Z',
+          to: '2026-11-03T00:00:00Z',
+        };
+        const clientFirst = await clientB.listReceivedEvents(largeWindow);
+        assert.equal(clientFirst.events.length, 1);
+        assert.equal(clientFirst.hasMore, true);
+        const clientNext = await clientB.listReceivedEvents({
+          ...largeWindow,
+          cursor: clientFirst.nextCursor,
+        });
+        assert.deepEqual(
+          clientNext.events.map((event) => event.eventId),
+          ['a', '0'].map((prefix) => prefix + '\u0000'.repeat(4095)),
+        );
+        assert.equal(clientNext.hasMore, false);
+        assert.equal(clientA.snapshot().inFlight, 0);
+        assert.equal(clientB.snapshot().inFlight, 0);
       } finally {
+        for (const client of clients) client.close();
         await http.close();
       }
       reads = 0;
@@ -396,6 +453,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
       maximumIdentifierCursorPaging: realAnalytics,
       adaptiveLargePages: realAnalytics,
       queryReferenceConformance: realAnalytics,
+      boundedQueryClient: realAnalytics,
       cursorScopeVerified: realAnalytics,
       adapter,
       limitations: [

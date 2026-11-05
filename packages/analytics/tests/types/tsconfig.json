@@ -6,7 +6,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "skipLibCheck": false
+    "skipLibCheck": false,
+    "allowImportingTsExtensions": true
   },
-  "include": ["public-api.ts"]
+  "include": ["public-api.ts", "../../src/query-client.ts", "../../src/query-response.ts"]
 }

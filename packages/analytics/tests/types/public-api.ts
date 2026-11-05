@@ -1,3 +1,4 @@
+import { createQueryClient } from '@signaltrail/analytics/client';
 import type {
   AnalyticsCountRequest,
   AnalyticsCountResponse,
@@ -17,3 +18,5 @@ export function nextCursor(page: AnalyticsEventPage): string | undefined {
 export const numericCount: AnalyticsCountResponse = { count: 7 };
 // @ts-expect-error A non-final page must include a cursor.
 export const missingCursor: AnalyticsEventPage = { events: [], hasMore: true };
+
+export const clientFactory = createQueryClient;

@@ -29,7 +29,19 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
-### November 5 — generated query API types
+### November 5 — generated query API types and bounded client
+
+- Added `@signaltrail/analytics/client`, a separate browser-safe query client with
+  mandatory session-aware fetch injection, generated request/page types, strict
+  runtime response checks, bounded buffering, cancellation/disposal, admission
+  retained for unsettled fetches, generic errors and no automatic retries.
+  Fifty-four client regressions and all 208 analytics tests/package checks pass;
+  DOM-only source/public-declaration compilation also passes. The client entry is
+  8.94 KiB unminified with no runtime dependencies; this is not a transfer-size
+  budget or native-browser performance measurement. Real HTTP client checks passed against PostgreSQL and ClickHouse with full
+  cleanup in `test-results/load/2026-11-05T17-41-32.913Z-authorized-analytics/`,
+  including authorization denial, ingestion-key denial, and maximum-field paging.
+  Native browser proof remains the next slice.
 
 - Added committed OpenAPI-generated query types and an explicit type-only
   `@signaltrail/analytics/api-types` export. Counts/sequences remain strings and
@@ -333,7 +345,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Browser SDK unit tests                         |                           252 | Includes IndexedDB lifecycle/fallback work                                |
 | Chromium browser tests                         |                            13 | Includes native database upgrade cooperation                              |
 | Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
-| Analytics reader and query boundary unit tests |                           154 | Includes query-bound cursors, input snapshots, filters, and authorization |
+| Analytics reader and query boundary unit tests |                           208 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -402,9 +414,10 @@ Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
 recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
-add a bounded dashboard query client consuming the generated types, with required
-injected session-aware fetch and runtime response validation. Do not choose a
-production provider or silently attach ingestion keys. Generated types, drift
+verify the bounded query client in native Chromium against an owned same-origin
+fixture, then progress toward dashboard integration without choosing a production
+identity provider. The client is implemented; do not repeat it as unfinished work.
+Do not silently attach ingestion keys. Generated types, drift
 checks and response conformance are implemented; reuse the recorded real storage
 evidence for unchanged read behavior. The production identity provider/transport remains a user decision. Large-page reduction and cursor byte
 encoding are locally verified; do not repeat them as unfinished work. Session verification remains injectable;
