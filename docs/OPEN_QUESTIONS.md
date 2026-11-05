@@ -91,8 +91,11 @@ Entries are questions, not approvals or completed work.
 The user selected FSL 1.1 with Apache 2.0 conversion for the platform and MIT
 for the browser SDK and required shared contracts. Each published platform
 version converts after two years. Describe restricted releases as source-available.
-License files/package metadata and contributor-rights handling still need a
-separate implementation review; this decision alone does not apply a license.
+License files and package metadata now apply this split. Notices use repository
+author Adrian Eufracio; confirm the preferred copyright holder before public
+release. Contributor intake/signoff policy and a complete third-party notice
+audit remain pending; no copyright assignment or commercial relicensing rights
+from outside contributors should be assumed. See `LICENSING.md`.
 
 ## Reversible defaults during autonomous work
 

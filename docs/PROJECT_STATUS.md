@@ -43,8 +43,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 - Dashboard lint, 11 model tests, route types, TypeScript and optimized Next build
   passed. The browser command and artifact upload are added to CI; remote CI is
   unverified. No live route or production session provider is supplied.
-- Recorded the user-approved FSL-to-Apache platform / MIT SDK-and-contracts
-  licensing decision in the question log. Applying licenses remains pending.
+- Applied the user-approved licensing split: official FSL 1.1 / Apache 2.0
+  future license for the platform, MIT for SDK/contracts. Every workspace has a
+  local license and matching package metadata; private flags remain unchanged.
+  Offline npm dry-run previews include MIT notices in both SDK and contracts.
+  Verified FSL files match the official template after placeholder substitution.
+  `docs/LICENSING.md` explains scope, per-version conversion and third-party
+  boundaries. Holder confirmation, contributor policy and a full provenance
+  audit remain pre-release items. Nothing was published.
 - Follow-up native coverage passed all 12 scenario groups, adding session-scope
   replacement during a slow read, empty results, invalid UTC ranges, revoked
   membership and a 390px layout without document overflow. Mobile screenshot
@@ -53,9 +59,8 @@ performed. Historical sections below preserve evidence from their recorded dates
 - Mobile table now retains readable columns within a keyboard-focusable horizontal
   scroll region. All 13 Chromium scenarios pass with cleanup in
   `test-results/event-explorer-browser/2026-11-05T19-16-20.427Z/report.json`.
-- Next:
-  licensing implementation and public SDK ergonomics while auth decisions remain
-  pending.
+- Next: public SDK ergonomics and production-session integration planning;
+  provider/capture-identity semantics remain in the question log.
 
 ### November 5 — generated query API types and bounded client
 

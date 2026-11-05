@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Privacy first product analytics and session replay platform",
-  "license": "UNLICENSED",
+  "license": "FSL-1.1-ALv2",
   "type": "module",
   "packageManager": "pnpm@10.27.0",
   "engines": {

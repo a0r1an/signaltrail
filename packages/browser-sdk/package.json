@@ -35,5 +35,6 @@
     "typescript": "^5.9.3",
     "vitest": "^5.0.3",
     "@signaltrail/ingestion": "workspace:*"
-  }
+  },
+  "license": "MIT"
 }
