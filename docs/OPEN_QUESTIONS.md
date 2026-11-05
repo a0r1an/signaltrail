@@ -39,12 +39,14 @@ Entries are questions, not approvals or completed work.
   within the same project; expire sessions after 30 minutes without captured
   activity, retaining the session on tab reopen within that window. URL navigation
   and query/UTM changes must not independently rotate the session.
-  Working attribution proposal: capture allowlisted campaign parameters separately
-  from session identity at session entry; retain entry attribution through later
-  navigation, with event-level campaign observations available separately.
-  Confirm attribution precedence, parameter allowlist and URL privacy rules before
-  implementation; never use query parameters as identity or copy arbitrary query
-  strings into attribution. Logout/shared-device reset and cross-tab identity
+  User agreed to stable visitor identity across campaign changes and preserving
+  campaign context with events, rather than overwriting a visitor-level current
+  campaign. Campaign changes do not create new anonymous IDs. First-touch,
+  last-touch and session-entry dashboard attribution remain distinct models;
+  their precedence, parameter allowlist and URL privacy rules remain to be
+  specified. A campaign change does not independently rotate sessions under the
+  current inactivity-based rule. Never use query parameters as identity or copy
+  arbitrary query strings into attribution. Logout/shared-device reset and cross-tab identity
   persistence remain to be specified. Keep the low-level APIs stable.
   An uncommitted capture-client stub/test exists; it is unfinished, not a usable
   API or verified implementation.
