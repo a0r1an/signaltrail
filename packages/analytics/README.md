@@ -274,6 +274,13 @@ Malformed or out-of-range stored strings are excluded from event-time counts,
 while remaining available through received-time diagnostics. Conversion uses
 [ClickHouse's nullable parser](https://clickhouse.com/docs/reference/functions/regular-functions/type-conversion-functions#parseDateTime64BestEffortOrNull).
 This prevents one legacy value from poisoning a query. It does not establish
-clock accuracy, clamp future events, or enforce a clock-skew policy. No event-time
-HTTP route, listing or dashboard has been wired yet. The isolated storage probe
+clock accuracy, clamp future events, or enforce a clock-skew policy. Event-time listing is available through `listOccurredEvents`; HTTP routes and
+dashboard wiring remain pending. The isolated storage probe
 verifies late arrival, replay, time boundaries and invalid/extreme legacy values.
+
+`listOccurredEvents` returns `occurredAt` plus the existing `receivedAt` diagnostic
+field. Sort order and keyset position use occurrence time, then event ID. Its
+cursor scope includes the date basis; received-time cursors are rejected before
+reads. The existing byte limit, adaptive page shrinking, cancellation and overall
+query deadline apply to both listing methods. A list is not a snapshot under
+concurrent writes or later corrected payloads.

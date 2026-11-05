@@ -29,6 +29,20 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — event-time listing foundation
+
+- Added `listOccurredEvents`, returning occurrence time and receipt diagnostics,
+  sorted/paged by occurrence time plus event ID. Received-time list behavior
+  remains available. Cursor scope binds the time basis, project, filters and
+  window; cross-basis reuse is rejected before storage. Both paths share adaptive
+  page sizing, byte bounds, cancellation and one overall deadline.
+- All 220 analytics tests and lint/type/build checks pass. Real disposable
+  ClickHouse paging passed with cleanup:
+  `test-results/load/2026-11-05T23-41-07.858Z-analytics-read/analytics-read.json`.
+  It verifies late receipt diagnostics, occurrence order and cursor continuation.
+- Next: expose the event-time read methods through the authenticated API/client
+  boundary and dashboard. Existing HTTP/browser API still uses received time.
+
 ### November 5 — event-time count foundation
 
 - Added server-only `countOccurredEvents` / `countOccurredVisitors` alongside

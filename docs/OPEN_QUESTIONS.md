@@ -112,7 +112,7 @@ Entries are questions, not approvals or completed work.
   User decision: product dashboard dates must use when the event happened
   (client event time), with received time retained for delivery diagnostics.
   Server-only event-time count methods now exist and exclude malformed/extreme
-  stored dates; existing API/UI/listing still use received time. Listing/API
+  stored dates; server listing also supports event time, while existing API/UI still use received time. API/UI
   migration and unreasonable client-clock handling remain to be implemented
   before exposing event-time totals. Do not claim current reads meet this decision. A server must authorize project membership before calling the reader;
   public ingestion keys must never grant read access. Production read-only

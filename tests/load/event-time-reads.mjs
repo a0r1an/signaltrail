@@ -41,6 +41,28 @@ export async function exerciseEventTimeReads(connection, reader, window) {
   assert.deepEqual(occurred, { count: '3' });
   assert.deepEqual(await reader.countOccurredVisitors(scope), { count: '1' });
   assert.deepEqual(await reader.countReceivedEvents(scope), { count: '5' });
+  const listed = [];
+  let cursor;
+  do {
+    const page = await reader.listOccurredEvents({
+      ...scope,
+      limit: 1,
+      ...(cursor ? { cursor } : {}),
+    });
+    listed.push(...page.events);
+    cursor = page.nextCursor;
+    if (cursor)
+      await assert.rejects(
+        reader.listReceivedEvents({ ...scope, cursor }),
+        /does not match query scope/,
+      );
+  } while (cursor);
+  assert.deepEqual(
+    listed.map((event) => event.eventId),
+    ['replayed', 'late', 'start'],
+  );
+  assert.equal(listed[0].occurredAt, '2026-10-01T13:00:00.000Z');
+  assert.equal(listed[0].receivedAt, '2026-10-03T12:00:00.000Z');
   assert.deepEqual(await reader.countOccurredEvents({ ...scope, eventName: 'missing' }), {
     count: '0',
   });
@@ -49,6 +71,8 @@ export async function exerciseEventTimeReads(connection, reader, window) {
     occurred,
     received: { count: '5' },
     lateArrivalUsesClientTime: true,
+    occurrencePagingWithReceivedDiagnostics: true,
+    crossBasisCursorRejected: true,
     stableEventTimeAcrossRetry: true,
     halfOpenBoundary: true,
     invalidAndOutOfRangeStringsExcluded: true,

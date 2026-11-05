@@ -31,6 +31,9 @@ export interface EventSummary {
   sequence: string;
   receivedAt: string;
 }
+export interface OccurredEventSummary extends EventSummary {
+  occurredAt: string;
+}
 export interface EventListWindow extends ReceivedEventWindow {
   limit?: number;
   cursor?: string;
@@ -50,9 +53,11 @@ function timestamp(value: string) {
   return milliseconds;
 }
 
-function cursorScope(window: ReceivedEventWindow) {
+function cursorScope(window: ReceivedEventWindow, basis: 'received' | 'occurred' = 'received') {
   return createHash('sha256')
-    .update('signaltrail:event-list:v1\n')
+    .update(
+      basis === 'occurred' ? 'signaltrail:occurred-event-list:v1\n' : 'signaltrail:event-list:v1\n',
+    )
     .update(
       JSON.stringify([
         window.projectId,
@@ -154,6 +159,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     limit?: number,
     cursor?: EventCursor,
     propagateOversize = false,
+    basis: 'received' | 'occurred' = 'received',
   ): Promise<T> {
     if (signal?.aborted) throw new Error('Analytics query was not confirmed');
     if (
@@ -199,7 +205,7 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     }
     if (limit !== undefined) target.searchParams.set('param_limit', String(limit));
     if (cursor) {
-      if (cursor.scope !== cursorScope(window))
+      if (cursor.scope !== cursorScope(window, basis))
         throw new TypeError('Event cursor does not match query scope');
       target.searchParams.set('param_before', cursor.receivedAt);
       target.searchParams.set('param_before_id_hex', Buffer.from(cursor.eventId).toString('hex'));
@@ -255,119 +261,148 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       signal?.removeEventListener('abort', cancel);
     }
   }
+  async function listEvents(
+    window: EventListWindow,
+    signal: AbortSignal | undefined,
+    basis: 'received' | 'occurred',
+  ): Promise<{
+    events: (EventSummary & { occurredAt?: string })[];
+    hasMore: boolean;
+    nextCursor?: string;
+  }> {
+    window = { ...window };
+    const time = basis === 'occurred' ? EVENT_TIME_SQL : 'received_at';
+    const limit = window.limit ?? 50;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+      throw new RangeError('Event list limit must be between 1 and 100');
+    const cursor = window.cursor === undefined ? undefined : decodeEventCursor(window.cursor);
+    if (cursor) {
+      const position = timestamp(cursor.receivedAt);
+      if (position < timestamp(window.from) || position >= timestamp(window.to))
+        throw new RangeError('Event cursor is outside the requested window');
+      cursor.receivedAt = new Date(position).toISOString();
+    }
+    const cursorFilter = cursor
+      ? ` AND (${time}, event_id) < (parseDateTime64BestEffort({before:String}, 3, 'UTC'), unhex({before_id_hex:String}))`
+      : '';
+    const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs ${basis === 'occurred' ? `, toString(toUnixTimestamp64Milli(${time})) AS occurredAtMs` : ''} FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND ${time} >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND ${time} < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY ${time} DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
+    // One timer covers all complete-query attempts, not a fresh budget per retry.
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const timer = setTimeout(cancel, timeoutMs);
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+    let pageLimit = limit;
+    try {
+      while (true) {
+        try {
+          return await execute(
+            window,
+            controller.signal,
+            160 * 1024,
+            (body) => {
+              const rows = body.trim()
+                ? body
+                    .trim()
+                    .split('\n')
+                    .map((line) => JSON.parse(line) as Record<string, string>)
+                : [];
+              if (rows.length > pageLimit + 1) throw new Error('Too many event rows');
+              const ids = new Set<string>();
+              for (const row of rows) {
+                if (
+                  !row ||
+                  Object.keys(row).length !== (basis === 'occurred' ? 6 : 5) ||
+                  !['eventId', 'eventName', 'sessionId'].every(
+                    (key) =>
+                      typeof row[key] === 'string' &&
+                      /\S/.test(row[key]!) &&
+                      Buffer.from(row[key]!).toString('utf8') === row[key] &&
+                      Buffer.byteLength(row[key]!) <= 4096,
+                  ) ||
+                  typeof row.sequence !== 'string' ||
+                  !/^(0|[1-9]\d{0,19})$/.test(row.sequence) ||
+                  BigInt(row.sequence) > 18446744073709551615n ||
+                  typeof row.receivedAtMs !== 'string' ||
+                  !/^-?(0|[1-9]\d{0,15})$/.test(row.receivedAtMs) ||
+                  !Number.isSafeInteger(Number(row.receivedAtMs)) ||
+                  !Number.isFinite(new Date(Number(row.receivedAtMs)).getTime()) ||
+                  (basis === 'occurred' &&
+                    (typeof row.occurredAtMs !== 'string' ||
+                      !/^-?(0|[1-9]\d{0,15})$/.test(row.occurredAtMs) ||
+                      !Number.isSafeInteger(Number(row.occurredAtMs)) ||
+                      !Number.isFinite(new Date(Number(row.occurredAtMs)).getTime()))) ||
+                  ids.has(row.eventId!)
+                )
+                  throw new Error('Invalid event row');
+                ids.add(row.eventId!);
+              }
+              const events = rows.slice(0, pageLimit).map((row) => ({
+                eventId: row.eventId!,
+                eventName: row.eventName!,
+                sessionId: row.sessionId!,
+                sequence: row.sequence!,
+                receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
+                ...(basis === 'occurred'
+                  ? { occurredAt: new Date(Number(row.occurredAtMs)).toISOString() }
+                  : {}),
+              }));
+              const hasMore = rows.length > pageLimit;
+              const last = events.at(-1);
+              const nextCursor =
+                hasMore && last
+                  ? encodeEventCursor({
+                      version: 1,
+                      scope: cursorScope(window, basis),
+                      receivedAt: basis === 'occurred' ? last.occurredAt! : last.receivedAt,
+                      eventId: last.eventId,
+                    })
+                  : undefined;
+              if (nextCursor && nextCursor.length > 8192)
+                throw new Error('Event cursor exceeded its bound');
+              return { events, hasMore, ...(nextCursor ? { nextCursor } : {}) };
+            },
+            query,
+            pageLimit + 1,
+            cursor,
+            true,
+            basis,
+          );
+        } catch (error) {
+          if (
+            error instanceof OversizedQueryResult &&
+            pageLimit > 1 &&
+            !controller.signal.aborted
+          ) {
+            pageLimit = Math.floor(pageLimit / 2);
+            continue;
+          }
+          if (error instanceof OversizedQueryResult) {
+            // eslint-disable-next-line preserve-caught-error -- Keep internal response-size diagnostics private.
+            throw new Error('Analytics query was not confirmed');
+          }
+          throw error;
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', cancel);
+    }
+  }
   return {
-    async listReceivedEvents(
+    listReceivedEvents(window: EventListWindow, signal?: AbortSignal) {
+      return listEvents(window, signal, 'received');
+    },
+    async listOccurredEvents(
       window: EventListWindow,
       signal?: AbortSignal,
-    ): Promise<{ events: EventSummary[]; hasMore: boolean; nextCursor?: string }> {
-      window = { ...window };
-      const limit = window.limit ?? 50;
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
-        throw new RangeError('Event list limit must be between 1 and 100');
-      const cursor = window.cursor === undefined ? undefined : decodeEventCursor(window.cursor);
-      if (cursor) {
-        const position = timestamp(cursor.receivedAt);
-        if (position < timestamp(window.from) || position >= timestamp(window.to))
-          throw new RangeError('Event cursor is outside the requested window');
-        cursor.receivedAt = new Date(position).toISOString();
-      }
-      const cursorFilter = cursor
-        ? " AND (received_at, event_id) < (parseDateTime64BestEffort({before:String}, 3, 'UTC'), unhex({before_id_hex:String}))"
-        : '';
-      const query = `SELECT event_id AS eventId, event_name AS eventName, session_id AS sessionId, toString(sequence) AS sequence, toString(toUnixTimestamp64Milli(received_at)) AS receivedAtMs FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND received_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND received_at < parseDateTime64BestEffort({to:String}, 3, 'UTC') ${cursorFilter} ORDER BY received_at DESC, event_id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`;
-      // One timer covers all complete-query attempts, not a fresh budget per retry.
-      const controller = new AbortController();
-      const cancel = () => controller.abort();
-      const timer = setTimeout(cancel, timeoutMs);
-      signal?.addEventListener('abort', cancel, { once: true });
-      if (signal?.aborted) cancel();
-      let pageLimit = limit;
-      try {
-        while (true) {
-          try {
-            return await execute(
-              window,
-              controller.signal,
-              160 * 1024,
-              (body) => {
-                const rows = body.trim()
-                  ? body
-                      .trim()
-                      .split('\n')
-                      .map((line) => JSON.parse(line) as Record<string, string>)
-                  : [];
-                if (rows.length > pageLimit + 1) throw new Error('Too many event rows');
-                const ids = new Set<string>();
-                for (const row of rows) {
-                  if (
-                    !row ||
-                    Object.keys(row).length !== 5 ||
-                    !['eventId', 'eventName', 'sessionId'].every(
-                      (key) =>
-                        typeof row[key] === 'string' &&
-                        /\S/.test(row[key]!) &&
-                        Buffer.from(row[key]!).toString('utf8') === row[key] &&
-                        Buffer.byteLength(row[key]!) <= 4096,
-                    ) ||
-                    typeof row.sequence !== 'string' ||
-                    !/^(0|[1-9]\d{0,19})$/.test(row.sequence) ||
-                    BigInt(row.sequence) > 18446744073709551615n ||
-                    typeof row.receivedAtMs !== 'string' ||
-                    !/^-?(0|[1-9]\d{0,15})$/.test(row.receivedAtMs) ||
-                    !Number.isSafeInteger(Number(row.receivedAtMs)) ||
-                    !Number.isFinite(new Date(Number(row.receivedAtMs)).getTime()) ||
-                    ids.has(row.eventId!)
-                  )
-                    throw new Error('Invalid event row');
-                  ids.add(row.eventId!);
-                }
-                const events = rows.slice(0, pageLimit).map((row) => ({
-                  eventId: row.eventId!,
-                  eventName: row.eventName!,
-                  sessionId: row.sessionId!,
-                  sequence: row.sequence!,
-                  receivedAt: new Date(Number(row.receivedAtMs)).toISOString(),
-                }));
-                const hasMore = rows.length > pageLimit;
-                const last = events.at(-1);
-                const nextCursor =
-                  hasMore && last
-                    ? encodeEventCursor({
-                        version: 1,
-                        scope: cursorScope(window),
-                        receivedAt: last.receivedAt,
-                        eventId: last.eventId,
-                      })
-                    : undefined;
-                if (nextCursor && nextCursor.length > 8192)
-                  throw new Error('Event cursor exceeded its bound');
-                return { events, hasMore, ...(nextCursor ? { nextCursor } : {}) };
-              },
-              query,
-              pageLimit + 1,
-              cursor,
-              true,
-            );
-          } catch (error) {
-            if (
-              error instanceof OversizedQueryResult &&
-              pageLimit > 1 &&
-              !controller.signal.aborted
-            ) {
-              pageLimit = Math.floor(pageLimit / 2);
-              continue;
-            }
-            if (error instanceof OversizedQueryResult) {
-              // eslint-disable-next-line preserve-caught-error -- Keep internal response-size diagnostics private.
-              throw new Error('Analytics query was not confirmed');
-            }
-            throw error;
-          }
-        }
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', cancel);
-      }
+    ): Promise<{ events: OccurredEventSummary[]; hasMore: boolean; nextCursor?: string }> {
+      validateEventTimeWindow(window);
+      const result = await listEvents(window, signal, 'occurred');
+      return {
+        ...result,
+        events: result.events.map((event) => ({ ...event, occurredAt: event.occurredAt! })),
+      };
     },
     countOccurredEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
       validateEventTimeWindow(window);
