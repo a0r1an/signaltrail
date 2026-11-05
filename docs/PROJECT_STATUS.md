@@ -29,6 +29,21 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — capture URL/campaign foundation
+
+- Added public `createPageContextCapture` with default credential/query/fragment
+  removal, separate five-field UTM capture, and explicit extra query allowlisting.
+  Duplicate/invalid values are omitted, input/value bounds are provisional, and
+  errors do not include raw input. Configuration is snapshotted.
+- All 15 new behaviors failed against the initial stub, then passed; all 267 SDK
+  units, lint, source/browser types and ESM/declaration builds pass. No native
+  browser proof is claimed for this helper yet. Existing queue/transport behavior
+  is unchanged and low-level caller-supplied event URLs are not auto-sanitized.
+- Added the SDK guide. This implements a capture primitive, not the forthcoming
+  automatic identity/session API or dashboard attribution model.
+- Next: project-scoped atomic shared visitor/session state, then connect identity
+  and page context to the public capture API; live Clerk setup remains pending.
+
 ### November 5 — owner-only Clerk integration
 
 - Added Clerk Next.js 7.9.25, sign-in/dashboard routes, session-only server

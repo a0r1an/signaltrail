@@ -29,3 +29,6 @@ export type {
 
 export type { SdkTelemetryOptions } from './sdk-health.ts';
 export type { SdkHealthReport } from '@signaltrail/contracts';
+
+export { createPageContextCapture } from './capture-url.ts';
+export type { CampaignParameter, PageContext } from './capture-url.ts';
