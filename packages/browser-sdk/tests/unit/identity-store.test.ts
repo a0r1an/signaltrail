@@ -315,3 +315,19 @@ it('rejects an identity transition at outbox capacity without changing the curre
     store.close();
   }
 });
+it('expires pending links at the raw-history boundary and rejects invalid clocks before pruning', async () => {
+  let time = 1000;
+  const store = await openIdentityStore(config, { now: () => time });
+  try {
+    await store.identify('user-a', page);
+    time += 90 * 86400000 - 1;
+    expect(await store.pendingLinks()).toHaveLength(1);
+    time = NaN;
+    await expect(store.pendingLinks()).rejects.toThrow('Invalid capture clock');
+    time = 1000 + 90 * 86400000;
+    expect(await store.pendingLinks()).toEqual([]);
+    expect((await store.allocate()).identifiedId).toBe('user-a');
+  } finally {
+    store.close();
+  }
+});

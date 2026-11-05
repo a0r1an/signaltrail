@@ -29,6 +29,19 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — full public identity pipeline proof
+
+- Extended the native-browser recovery probe with public `track` / `identify`
+  capture through real HTTP ingestion, Redpanda, the worker and ClickHouse. Two
+  activity events plus one link resolve to one visitor; stored identity context
+  matches the original anonymous visitor. Existing offline/page-close, broker
+  outage and worker/storage recovery checks also pass.
+- Evidence: `test-results/load/2026-11-05T23-34-41.414Z-browser-pipeline/pipeline.json`.
+  The owned stack, volumes, browser and fixture were cleaned up. This is local
+  correctness/recovery evidence, not production sizing or availability proof.
+- An additional identity-store expiry/invalid-clock behavior passes (19 focused
+  identity-store tests). Event-time read implementation is next.
+
 ### November 5 — project-scoped visitor resolution
 
 - Added server-only `countReceivedVisitors` using exact counts, latest-row dedupe,

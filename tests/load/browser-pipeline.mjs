@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createAnalyticsReader } from '../../packages/analytics/dist/index.js';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -11,13 +12,20 @@ const { chromium } = createRequire(
 const origin = 'http://127.0.0.1:4179';
 const html = `<!doctype html><title>SignalTrail native pipeline probe</title><p>Native IndexedDB recovery probe</p>
 <script type="module">
-import { openAutomaticDelivery } from '/sdk.js';
+import { openAutomaticDelivery, openAnalyticsClient } from '/sdk.js';
 const params = new URLSearchParams(location.search);
 window.delivery = await openAutomaticDelivery({projectKey:'load-test-key', ingestionUrl:params.get('ingestion')}, {flushIntervalMs:Number(params.get('interval')||200)});
 window.capture = async () => {
  const eventId = crypto.randomUUID();
  const result = await window.delivery.enqueue({schemaVersion:1,eventId,eventName:'browser_pipeline',distinctId:'browser-probe-visitor',sessionId:'browser-probe-session',sequence:0,clientTimestamp:new Date().toISOString(),url:location.href,properties:{},context:{sdkVersion:'browser-pipeline'}});
  return {eventId,result};
+};
+window.captureIdentity = async () => {
+ window.identityClient = await openAnalyticsClient({projectKey:'load-test-key', ingestionUrl:params.get('ingestion')}, {flushIntervalMs:100});
+ const before = await window.identityClient.track('public_identity', {phase:'before'}, {sendImmediately:true});
+ const identified = await window.identityClient.identify('pipeline-customer');
+ const after = await window.identityClient.track('public_identity', {phase:'after'}, {sendImmediately:true});
+ return {before, identified, after};
 };
 window.ready = true;
 </script>`;
@@ -117,10 +125,63 @@ export async function exerciseBrowserPipeline({ url, docker, query, directory })
       );
     }
     assert.equal(stored, 1);
+    const identity = await page.evaluate(() => window.captureIdentity());
+    assert.equal(identity.before.status, 'queued');
+    assert.equal(identity.identified.status, 'identified');
+    assert.equal(identity.after.status, 'queued');
+    let identityRows = [];
+    const identityDeadline = Date.now() + 30000;
+    while (Date.now() < identityDeadline) {
+      identityRows = JSON.parse(
+        await query(
+          `SELECT event_id, event_name, distinct_id, context_json FROM signaltrail.analytics_events FINAL WHERE project_id = 'load-project' AND event_name IN ('public_identity', '$identify') FORMAT JSON`,
+        ),
+      ).data;
+      if (identityRows.length === 3) break;
+      await new Promise((done) => setTimeout(done, 100));
+    }
+    assert.equal(identityRows.length, 3);
+    const anonymous = identityRows.find((row) => row.event_id === identity.before.eventId);
+    const identified = identityRows.find((row) => row.event_id === identity.after.eventId);
+    const link = identityRows.find((row) => row.event_name === '$identify');
+    assert.ok(anonymous);
+    assert.ok(identified);
+    assert.ok(link);
+    assert.equal(identified.distinct_id, 'pipeline-customer');
+    assert.deepEqual(JSON.parse(link.context_json).identity, {
+      kind: 'link',
+      anonymousId: anonymous.distinct_id,
+      userId: 'pipeline-customer',
+    });
+    assert.deepEqual(JSON.parse(identified.context_json).identity, {
+      kind: 'identified',
+      anonymousId: anonymous.distinct_id,
+      userId: 'pipeline-customer',
+    });
+    const reader = createAnalyticsReader({
+      endpoint: 'http://127.0.0.1:38123',
+      username: 'signaltrail',
+      password: 'signaltrail_local',
+    });
+    const identityWindow = {
+      projectId: 'load-project',
+      from: new Date(Date.now() - 86400000).toISOString(),
+      to: new Date(Date.now() + 86400000).toISOString(),
+      eventName: 'public_identity',
+    };
+    assert.deepEqual(await reader.countReceivedEvents(identityWindow), { count: '2' });
+    assert.deepEqual(await reader.countReceivedVisitors(identityWindow), { count: '1' });
+    await page.evaluate(() => window.identityClient.close());
     assert.deepEqual(errors, []);
     await page.evaluate(() => window.delivery.close());
     failed = false;
     return {
+      identifiedVisitor: {
+        anonymousAndIdentifiedEvents: 2,
+        resolvedVisitors: 1,
+        durableLinkStored: true,
+        fullPublicPipeline: true,
+      },
       storageMode: 'indexeddb',
       eventId: captured.eventId,
       survivedPageClose: true,
