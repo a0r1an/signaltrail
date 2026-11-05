@@ -31,6 +31,14 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### November 5 — generated query API types and bounded client
 
+- Added the dashboard explorer state model with 11 test-first behaviors: fixed
+  project scope, exact count/page loading, cursor/first-page navigation, stale
+  request suppression, immediate denial clearing, partial count failure handling,
+  cancellation/reload for React effect replay, and shared-client ownership.
+  Dashboard lint, units, route type generation, types, and optimized Next.js build
+  passed through the new `check dashboard` runner operation. The model is not
+  mounted in a live route; the React view/native fixture remain next.
+
 - Native Chromium verified the built public query client through an owned
   same-origin fixture: HttpOnly session fetch, exact values, reduced-page cursors,
   project/ingestion-key denial before reads, offline recovery, malformed response
@@ -358,6 +366,7 @@ claim that the entire workspace or remote CI ran at final HEAD.
 | Event processor unit tests                     |                           106 | November 3 legacy identifier dead-letter checks                           |
 | Analytics reader and query boundary unit tests |                           208 | Includes query-bound cursors, input snapshots, filters, and authorization |
 | Native query-client browser probe              |             7 scenario groups | November 5 owned same-origin fixture, Chromium 156; cleanup confirmed     |
+| Dashboard explorer model                       |                            11 | November 5 lint, route types, TypeScript and production build passed      |
 | Project access unit tests                      |                            42 | Membership, migration input, and database admission/config checks         |
 | Load harness unit tests                        |                            25 | Includes measurements, reports, and safe storage interruption             |
 
@@ -426,9 +435,9 @@ Initial metadata migration replay and change detection are also verified.
 The bounded PostgreSQL adapter and Node HTTP bridge are now verified, including
 real wire authorization/storage reads, disconnects, bounded shutdown, and overload
 recovery. Identifier validation now matches existing read-side UTF-8/4-KiB bounds. Next,
-review the completed query-client boundary for remaining correctness gaps, then
-progress toward dashboard integration without choosing a production identity
-provider. The bounded client, generated types, real HTTP/storage probe and native
+build the accessible event-explorer React view and native browser fixture around
+the verified state model, with required selected-project/session scope and injected
+client inputs. Keep production route mounting dependent on session integration. The bounded client, generated types, real HTTP/storage probe and native
 Chromium proof are implemented; do not repeat their setup as unfinished work.
 Do not silently attach ingestion keys. Generated types, drift
 checks and response conformance are implemented; reuse the recorded real storage

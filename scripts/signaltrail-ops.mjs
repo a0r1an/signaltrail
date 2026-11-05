@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
-  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics|access
+  ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics|access|dashboard
   ./scripts/signaltrail-ops.mjs api generate|check|browser
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
@@ -46,6 +46,7 @@ const packages = {
   processor: '@signaltrail/event-processor',
   analytics: '@signaltrail/analytics',
   access: '@signaltrail/project-access',
+  dashboard: '@signaltrail/dashboard',
 };
 function invalid() {
   throw new Error(`Unknown operation.\n${help}`);
@@ -54,8 +55,9 @@ try {
   if (args.length !== (group === 'install' ? 1 : 2)) invalid();
   if (group === 'check' && Object.hasOwn(packages, action)) {
     // Browser typechecks import ingestion declarations; build dependencies first.
-    if (!['contracts', 'analytics', 'access'].includes(action))
+    if (!['contracts', 'analytics', 'access', 'dashboard'].includes(action))
       pnpm('--filter', '@signaltrail/contracts', 'build');
+    if (action === 'dashboard') pnpm('--filter', '@signaltrail/analytics', 'build');
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
       pnpm('--filter', packages[action], script);

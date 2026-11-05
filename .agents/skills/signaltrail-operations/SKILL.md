@@ -22,33 +22,34 @@ Preview an operation without side effects:
 ./scripts/signaltrail-ops.mjs --dry-run load baseline
 ```
 
-| Need                                 | Command                                                               |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| Contracts lint, units, types, build  | `./scripts/signaltrail-ops.mjs check contracts`                       |
-| Ingestion lint, units, types, build  | `./scripts/signaltrail-ops.mjs check ingestion`                       |
-| Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
-| SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
-| Native Chromium query-client probe   | `./scripts/signaltrail-ops.mjs api browser`                           |
-| Generate / check query API types     | `./scripts/signaltrail-ops.mjs api generate` / `api check`            |
-| Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
-| Measure native IndexedDB queue cost  | `./scripts/signaltrail-ops.mjs browser benchmark`                     |
-| Measure minified SDK transfer sizes  | `./scripts/signaltrail-ops.mjs browser size`                          |
-| Install pinned Chromium              | `./scripts/signaltrail-ops.mjs browser install`                       |
-| Real-broker integration suite        | `./scripts/signaltrail-ops.mjs broker test`                           |
-| Development broker status            | `./scripts/signaltrail-ops.mjs broker status`                         |
-| Development broker public metrics    | `./scripts/signaltrail-ops.mjs broker metrics`                        |
-| Load-harness unit checks             | `./scripts/signaltrail-ops.mjs load check`                            |
-| Native Chromium-to-storage recovery  | `./scripts/signaltrail-ops.mjs load browser-pipeline`                 |
-| Isolated event-to-ClickHouse probe   | `./scripts/signaltrail-ops.mjs load pipeline`                         |
-| Isolated broker outage and SDK retry | `./scripts/signaltrail-ops.mjs load recovery`                         |
-| Baseline / burst and recovery        | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
-| Count / byte budget saturation       | `./scripts/signaltrail-ops.mjs load saturation` / `load bytes`        |
-| Validate Compose files               | `./scripts/signaltrail-ops.mjs compose validate`                      |
-| Validate monitoring configuration    | `./scripts/signaltrail-ops.mjs monitoring validate`                   |
-| Start / stop monitoring              | `./scripts/signaltrail-ops.mjs monitoring up` / `monitoring down`     |
-| Monitoring status / recent logs      | `./scripts/signaltrail-ops.mjs monitoring status` / `monitoring logs` |
-| Filtered collector delivery counters | `./scripts/signaltrail-ops.mjs monitoring delivery`                   |
-| Install committed dependencies       | `./scripts/signaltrail-ops.mjs install`                               |
+| Need                                       | Command                                                               |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| Contracts lint, units, types, build        | `./scripts/signaltrail-ops.mjs check contracts`                       |
+| Ingestion lint, units, types, build        | `./scripts/signaltrail-ops.mjs check ingestion`                       |
+| Processor lint, units, types, build        | `./scripts/signaltrail-ops.mjs check processor`                       |
+| Dashboard models, lint, route types, build | `./scripts/signaltrail-ops.mjs check dashboard`                       |
+| SDK lint, units, types, build              | `./scripts/signaltrail-ops.mjs check sdk`                             |
+| Native Chromium query-client probe         | `./scripts/signaltrail-ops.mjs api browser`                           |
+| Generate / check query API types           | `./scripts/signaltrail-ops.mjs api generate` / `api check`            |
+| Chromium integration suite                 | `./scripts/signaltrail-ops.mjs browser test`                          |
+| Measure native IndexedDB queue cost        | `./scripts/signaltrail-ops.mjs browser benchmark`                     |
+| Measure minified SDK transfer sizes        | `./scripts/signaltrail-ops.mjs browser size`                          |
+| Install pinned Chromium                    | `./scripts/signaltrail-ops.mjs browser install`                       |
+| Real-broker integration suite              | `./scripts/signaltrail-ops.mjs broker test`                           |
+| Development broker status                  | `./scripts/signaltrail-ops.mjs broker status`                         |
+| Development broker public metrics          | `./scripts/signaltrail-ops.mjs broker metrics`                        |
+| Load-harness unit checks                   | `./scripts/signaltrail-ops.mjs load check`                            |
+| Native Chromium-to-storage recovery        | `./scripts/signaltrail-ops.mjs load browser-pipeline`                 |
+| Isolated event-to-ClickHouse probe         | `./scripts/signaltrail-ops.mjs load pipeline`                         |
+| Isolated broker outage and SDK retry       | `./scripts/signaltrail-ops.mjs load recovery`                         |
+| Baseline / burst and recovery              | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
+| Count / byte budget saturation             | `./scripts/signaltrail-ops.mjs load saturation` / `load bytes`        |
+| Validate Compose files                     | `./scripts/signaltrail-ops.mjs compose validate`                      |
+| Validate monitoring configuration          | `./scripts/signaltrail-ops.mjs monitoring validate`                   |
+| Start / stop monitoring                    | `./scripts/signaltrail-ops.mjs monitoring up` / `monitoring down`     |
+| Monitoring status / recent logs            | `./scripts/signaltrail-ops.mjs monitoring status` / `monitoring logs` |
+| Filtered collector delivery counters       | `./scripts/signaltrail-ops.mjs monitoring delivery`                   |
+| Install committed dependencies             | `./scripts/signaltrail-ops.mjs install`                               |
 
 The check operations build required workspace dependencies first. Do not run
 operations that clean/rebuild the same `dist/` directories concurrently. For one
@@ -332,3 +333,8 @@ Artifacts go to `test-results/query-client-browser/<run>/report.json`; failure
 traces are retained. A pass is recorded only after owned contexts, Chromium and
 the fixture close. Do not confuse browser correctness with a sizing or latency
 benchmark, deployed session verification, or remote CI evidence.
+
+`check dashboard` builds analytics declarations first, then runs dashboard lint,
+Vitest models, Next.js route type generation, TypeScript, and the optimized Next
+build. It does not run a server, mount an authentication provider, or deploy the
+application. UI-native probes, when present, are separate operations.
