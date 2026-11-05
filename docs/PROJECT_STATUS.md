@@ -46,6 +46,13 @@ performed. Historical sections below preserve evidence from their recorded dates
   Internal operations report unavailable storage instead of silently claiming a
   shared reset succeeded. Public capture fallback policy remains to be integrated;
   existing delivery queue memory fallback is unchanged.
+- Native Chromium now verifies shared identity/sequence, inactivity expiry,
+  cross-tab reset visibility, page-close/reopen persistence, and project scope;
+  a second test verifies the built public URL/campaign helper. All 15 browser
+  tests pass, including the existing delivery/ingestion scenarios. Initial
+  multi-entry bundling emitted an unserved shared chunk; self-contained fixture
+  entries corrected that setup failure. Native tests are in the standard browser
+  operation and existing CI job. This is not public `identify()` or server linking.
 - Next: connect validated page/event capture to this store and automatic delivery,
   then implement explicit identify transitions and durable linking.
 

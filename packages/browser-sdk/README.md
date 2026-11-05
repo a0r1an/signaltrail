@@ -35,6 +35,15 @@ captured value. Duplicate, empty, malformed-encoded and control-character values
 are omitted rather than guessed or truncated. Invalid URLs throw a generic
 `TypeError` without including raw input. No production workload limit is implied.
 
+## Identity/session foundation
+
+An internal, not-yet-public IndexedDB store implements anonymous visitor identity,
+30-minute inactivity sessions, shared atomic sequence allocation and cross-tab
+reset visibility on the next operation. Unit and native Chromium tests cover it.
+It does not yet drive event capture or implement identified-user linking.
+Unavailable identity storage reports failure; existing queue memory fallback is
+unchanged. See the project question log for capture integration decisions.
+
 ## Checks
 
 ```sh

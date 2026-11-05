@@ -54,6 +54,10 @@ const assets = new Map<string, readonly [URL, string]>([
   ['/', [new URL('./fixture.html', import.meta.url), 'text/html']],
   ['/client.js', [new URL('./client.js', import.meta.url), 'text/javascript']],
   ['/sdk.js', [new URL('../../../.browser-harness/sdk.js', import.meta.url), 'text/javascript']],
+  [
+    '/identity.js',
+    [new URL('../../../.browser-harness/identity.js', import.meta.url), 'text/javascript'],
+  ],
 ]);
 const server = createServer((request, response) => {
   void (async () => {

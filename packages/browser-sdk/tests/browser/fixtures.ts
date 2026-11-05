@@ -5,6 +5,8 @@ import type { Scenario } from './harness/server.ts';
 
 declare global {
   interface Window {
+    openIdentityStore: typeof import('../../src/identity-store.ts').openIdentityStore;
+    capturePageContext: ReturnType<typeof import('../../src/index.ts').createPageContextCapture>;
     harness: {
       delivery: AutomaticDelivery;
       capture(options?: {
