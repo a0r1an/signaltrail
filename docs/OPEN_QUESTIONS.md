@@ -52,8 +52,10 @@ Entries are questions, not approvals or completed work.
   events retain their captured identities; reset must not reattribute them.
   User approved shared visitor/session state across tabs on the same origin and
   SignalTrail project, including propagation of logout/reset to other tabs.
-  Cross-origin synchronization is not implied. Direct account switching remains
-  to be specified. Keep the low-level APIs stable.
+  Cross-origin synchronization is not implied. User approved automatic reset
+  before `identify(B)` when A is currently identified: create a fresh anonymous
+  identity context/session for B without linking A’s history to B. Previously
+  queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
   An uncommitted capture-client stub/test exists; it is unfinished, not a usable
   API or verified implementation.
 - **Dead-letter policy:** the processor core caps input parsing at 512 KiB.
