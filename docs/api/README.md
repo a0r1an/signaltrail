@@ -34,8 +34,7 @@ same response checks over real HTTP and storage. JSON Schema date-time format
 validation is disabled in this helper; UTC patterns, shapes, and types are checked,
 while byte limits, UInt64 numeric bounds, calendar validity, and scope invariants
 remain covered by the runtime reader tests. This is not exhaustive request/response
-or production session-provider validation. Generated dashboard types are described below; a runtime client remains
-follow-up work. Both validators are development dependencies only.
+or production session-provider validation. Generated dashboard types are described below; a bounded runtime client is available at the package's `/client` subpath. Both validators are development dependencies only.
 
 Reference: [OpenAPI 3.1.1 specification](https://spec.openapis.org/oas/v3.1.1.html).
 
@@ -71,3 +70,14 @@ The subpath has a TypeScript `types` export only; do not import it as a runtime
 module. Package builds compile a DOM-only consumer against the emitted public
 declarations with Node ambient types disabled. No browser code needs to import
 the server reader or HTTP bridge.
+
+## Native query client verification
+
+`./scripts/signaltrail-ops.mjs api browser` builds the separate browser client and
+runs an owned same-origin Chromium fixture using the workspace's pinned Playwright.
+Install Chromium using the existing `browser install` operation when needed.
+Artifacts under `test-results/query-client-browser/` include runtime versions,
+bundle bytes/hash, semantic checks and final cleanup status; failure traces are
+retained. It tests cookie-backed session transport without selecting a production
+provider. The combined `load authorized-analytics` probe separately exercises
+real PostgreSQL/ClickHouse responses with the same client and reference schemas.

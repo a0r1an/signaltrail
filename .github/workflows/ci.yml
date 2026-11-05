@@ -82,6 +82,9 @@ jobs:
       - name: Test browser SDK in Chromium
         run: ./scripts/signaltrail-ops.mjs browser test
 
+      - name: Test bounded query client in native Chromium
+        run: ./scripts/signaltrail-ops.mjs api browser
+
       - name: Upload browser test report and failure traces
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -92,6 +95,7 @@ jobs:
             packages/browser-sdk/test-results/
             test-results/sdk-size/
             test-results/queue-benchmark/
+            test-results/query-client-browser/
           retention-days: 7
           if-no-files-found: ignore
 

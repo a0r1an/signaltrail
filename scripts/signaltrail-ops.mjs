@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs check contracts|ingestion|sdk|processor|analytics|access
-  ./scripts/signaltrail-ops.mjs api generate|check
+  ./scripts/signaltrail-ops.mjs api generate|check|browser
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
@@ -59,6 +59,9 @@ try {
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
       pnpm('--filter', packages[action], script);
+  } else if (group === 'api' && action === 'browser') {
+    pnpm('--filter', '@signaltrail/analytics', 'build');
+    tasks.push({ command: 'node', args: ['tests/browser/query-client.mjs'] });
   } else if (group === 'api' && ['generate', 'check'].includes(action))
     pnpm('--filter', '@signaltrail/analytics', `api:${action}`);
   else if (group === 'browser' && action === 'test')

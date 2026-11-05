@@ -28,6 +28,7 @@ Preview an operation without side effects:
 | Ingestion lint, units, types, build  | `./scripts/signaltrail-ops.mjs check ingestion`                       |
 | Processor lint, units, types, build  | `./scripts/signaltrail-ops.mjs check processor`                       |
 | SDK lint, units, types, build        | `./scripts/signaltrail-ops.mjs check sdk`                             |
+| Native Chromium query-client probe   | `./scripts/signaltrail-ops.mjs api browser`                           |
 | Generate / check query API types     | `./scripts/signaltrail-ops.mjs api generate` / `api check`            |
 | Chromium integration suite           | `./scripts/signaltrail-ops.mjs browser test`                          |
 | Measure native IndexedDB queue cost  | `./scripts/signaltrail-ops.mjs browser benchmark`                     |
@@ -317,3 +318,17 @@ and check response shapes with development-only AJV. The combined owned-storage
 probe applies those schemas to real wire responses, including adaptive large
 pages. These checks do not replace runtime byte/UInt64/calendar validation or
 production authentication. The documented bearer binding remains fixture-only.
+
+`api browser` builds the public query-client entry and opens its native Chromium
+probe on an owned ephemeral loopback port. It reuses the workspace's installed
+Playwright/Chromium through the SDK test dependency; install Chromium with the
+existing browser operation if missing. The fixture verifies HttpOnly same-origin
+session transport, exact values and cursor continuation, rejection before reads,
+offline recovery, invalid response rejection, stalled-body cancellation, and
+client disposal without Node globals. It has no PostgreSQL/ClickHouse backend or
+production authentication. The existing authorized-analytics probe separately
+verifies those real databases and the same query client over HTTP.
+Artifacts go to `test-results/query-client-browser/<run>/report.json`; failure
+traces are retained. A pass is recorded only after owned contexts, Chromium and
+the fixture close. Do not confuse browser correctness with a sizing or latency
+benchmark, deployed session verification, or remote CI evidence.

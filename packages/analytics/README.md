@@ -1,7 +1,9 @@
 # Server-side analytics reads
 
 `@signaltrail/analytics` provides a bounded ClickHouse read foundation. It is a
-private server package, not a browser SDK API or a deployed query service.
+private package whose default entry is server-only. Dashboard browser code uses
+the separate `/client` and type-only `/api-types` subpaths; this is not a deployed
+query service or the event-capture browser SDK.
 
 A caller must authenticate the dashboard user and authorize project membership
 before supplying `projectId`. Public ingestion keys must never authorize reads.
@@ -233,3 +235,11 @@ application handle sign-in or denied membership; 429/5xx, network, timeout, and
 capacity errors can be retried by the caller. Abort/closed/invalid-response errors
 are not marked retryable. Production authentication and a dashboard route remain
 pending; the fixture's session-aware fetch is not a deployment fallback.
+
+Native Chromium verification uses `./scripts/signaltrail-ops.mjs api browser`.
+It imports the built client directly, with no Node globals or polyfills, and
+checks cookie-backed session fetch, exact values/paging, denied reads, offline
+recovery, response validation, stalled-body cancellation and disposal. Reports
+are saved only after owned resources close. This fixture is separate from the
+real PostgreSQL/ClickHouse HTTP client probe and does not configure production
+authentication. CI runs the native probe; local evidence is not a remote CI pass.
