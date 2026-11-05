@@ -5,6 +5,7 @@ import styles from './event-explorer.module.css';
 
 export interface EventExplorerProps {
   project: { id: string; name: string };
+  timeBasis?: 'received' | 'occurred';
   /** Rotate when the verified principal or query-client lifetime changes. */
   scopeKey: string;
   initialQuery: ExplorerQuery;
@@ -12,9 +13,20 @@ export interface EventExplorerProps {
   onSignIn(): void;
 }
 export function EventExplorer(props: EventExplorerProps) {
-  return <ScopedExplorer key={JSON.stringify([props.scopeKey, props.project.id])} {...props} />;
+  return (
+    <ScopedExplorer
+      key={JSON.stringify([props.scopeKey, props.project.id, props.timeBasis ?? 'received'])}
+      {...props}
+    />
+  );
 }
-function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplorerProps) {
+function ScopedExplorer({
+  project,
+  initialQuery,
+  client,
+  onSignIn,
+  timeBasis = 'received',
+}: EventExplorerProps) {
   const [initial] = useState(() => ({ ...initialQuery }));
   const [model] = useState(() =>
     createEventExplorerModel({ projectId: project.id, initialQuery: initial, client }),
@@ -44,7 +56,11 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
             SIGNALTRAIL / <span>{project.name}</span>
           </p>
           <h1>Event explorer</h1>
-          <p>Explore activity received from your application.</p>
+          <p>
+            {timeBasis === 'occurred'
+              ? 'Explore activity captured by your application.'
+              : 'Explore activity received from your application.'}
+          </p>
         </div>
         <button disabled={state.loading} onClick={() => void model.refresh()}>
           Refresh
@@ -115,7 +131,7 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
           </strong>
         </div>
         <p>
-          Received time · UTC
+          {timeBasis === 'occurred' ? 'Event time' : 'Received time'} · UTC
           <br />
           Exact event and session filters
         </p>
@@ -144,6 +160,7 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
                 <th>Event ID</th>
                 <th>Session</th>
                 <th>Sequence</th>
+                {timeBasis === 'occurred' && <th>Event time (UTC)</th>}
                 <th>Received at (UTC)</th>
               </tr>
             </thead>
@@ -154,6 +171,13 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
                   <td>{event.eventId}</td>
                   <td>{event.sessionId}</td>
                   <td>{event.sequence}</td>
+                  {timeBasis === 'occurred' && (
+                    <td>
+                      {'occurredAt' in event && typeof event.occurredAt === 'string'
+                        ? event.occurredAt
+                        : '—'}
+                    </td>
+                  )}
                   <td>{event.receivedAt}</td>
                 </tr>
               ))}
@@ -182,7 +206,9 @@ function ScopedExplorer({ project, initialQuery, client, onSignIn }: EventExplor
         </footer>
       </div>
       <p className={styles.note}>
-        Newest received events first. Totals and pages may change as events arrive or are retried.
+        {timeBasis === 'occurred'
+          ? 'Newest captured events first. Late arrivals may update totals and pages.'
+          : 'Newest received events first. Totals and pages may change as events arrive or are retried.'}
       </p>
     </section>
   );

@@ -13,7 +13,8 @@ Authorized count and paged event queries, a browser query client, and an injecte
 React event explorer are implemented. Owner-only Clerk sign-in routes and guards
 and the membership-protected analytics resource are implemented; real account
 configuration/verification remain pending. The
-explorer is not mounted in a live route.
+explorer is mounted on the protected dashboard route; real login/data setup
+remains unverified.
 
 Production authentication verification, session recording
 and replay playback, deployment, and backup/restore drills remain ahead.

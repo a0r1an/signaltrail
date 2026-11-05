@@ -301,3 +301,9 @@ and reject received-only or malformed responses. Generated OpenAPI types include
 `AnalyticsOccurredEventSummary` / `AnalyticsOccurredEventPage`. Identity fields,
 URLs and raw event properties remain absent from summaries. These library routes
 are not a deployed service or a substitute for real session verification.
+
+For same-origin application mounting, the browser client's optional `pathPrefix`
+can select validated relative path segments such as `api/analytics/`. Its default
+remains `v1/analytics/`. Absolute URLs, traversal, encoded segments and excessive
+segment depth are rejected before requests; endpoint origin and fetch credentials
+remain explicitly owned by the caller.

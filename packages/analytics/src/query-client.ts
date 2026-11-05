@@ -20,6 +20,8 @@ const listing = (operation: Operation) => operation.endsWith('events');
 
 export interface QueryClientOptions {
   endpoint: string;
+  /** Relative path segments within the configured endpoint; no traversal or absolute URLs. */
+  pathPrefix?: string;
   /** Required: caller owns session credentials, cookies, and their verification boundary. */
   fetch: typeof fetch;
   timeoutMs?: number;
@@ -48,6 +50,7 @@ export class AnalyticsQueryClientError extends Error {
 
 export function createQueryClient(options: QueryClientOptions) {
   const send = options.fetch;
+  const pathPrefix = options.pathPrefix ?? 'v1/analytics/';
   let endpoint: URL;
   try {
     endpoint = new URL(options.endpoint);
@@ -58,6 +61,8 @@ export function createQueryClient(options: QueryClientOptions) {
   const capacity = options.maxConcurrentRequests ?? 4;
   if (
     typeof send !== 'function' ||
+    typeof pathPrefix !== 'string' ||
+    !/^(?:[A-Za-z0-9_-]+\/){1,8}$/.test(pathPrefix) ||
     !['http:', 'https:'].includes(endpoint.protocol) ||
     endpoint.username ||
     endpoint.password ||
@@ -112,7 +117,7 @@ export function createQueryClient(options: QueryClientOptions) {
           !/^[A-Za-z0-9_-]+$/.test(query.cursor)))
     )
       throw new TypeError('Invalid analytics query');
-    const url = new URL('v1/analytics/' + operation, base);
+    const url = new URL(pathPrefix + operation, base);
     for (const key of allowed) {
       const value = (query as unknown as Record<string, unknown>)[key];
       if (value !== undefined) url.searchParams.set(key, String(value));

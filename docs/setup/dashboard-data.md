@@ -33,10 +33,14 @@ or public ingestion key grants no access. Missing membership returns 403 before
 ClickHouse. Database/auth failures return generic 503 responses without connection
 details. These endpoints are server routes, not a published standalone service.
 
-The browser query client can use an endpoint of `${location.origin}/api/analytics/`
-only through an adapter that maps its `/v1/analytics/` library paths to this Next.js
-resource. The connected dashboard UI has not been mounted yet; do not assume the
-standalone query client's base-path setting performs that mapping automatically.
+The protected `/dashboard` page mounts the occurrence-time explorer after a
+project UUID is selected. Selection does not authorize reads; each API request
+still checks membership. An organization/project picker remains future work.
+The browser client uses `endpoint: location.origin`, `pathPrefix: 'api/analytics/'`
+and an explicit same-origin fetch adapter. It passes no service credentials to
+the browser. Both occurrence and received timestamps are displayed; the default
+window covers the previous 24 hours. Principal/session changes remount private
+client state using a server-derived scope hash.
 
 Verification:
 
@@ -53,6 +57,6 @@ cross-organization denial and revocation. It is not a production session proof.
 
 Before live use, finish Clerk invite-only/owner setup, provision restricted roles
 and owner metadata, verify real sign-in/sign-out and authorized/denied reads, then
-connect the explorer. Vercel warm-process pool defaults are provisional (four
+validate the connected explorer with real data. Vercel warm-process pool defaults are provisional (four
 connections, sixteen in-flight membership queries); connection budgets across
 concurrent function instances require deployment validation.

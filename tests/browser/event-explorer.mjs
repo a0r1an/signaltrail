@@ -105,6 +105,16 @@ const handler = createAnalyticsQueryHandler({
       ? { status: 'authorized', projectId }
       : { status: 'forbidden' };
   },
+  countOccurredEvents: async (query) => ({
+    count: String((await data(query, { ...config })).length),
+  }),
+  listOccurredEvents: async (query) => ({
+    events: (await data(query, { ...config })).map((event) => ({
+      ...event,
+      occurredAt: '2026-11-01T11:00:00.000Z',
+    })),
+    hasMore: false,
+  }),
   countReceivedEvents: async (query) => {
     reads++;
     const mode = { ...config };
@@ -158,6 +168,8 @@ const server = createServer((incoming, outgoing) => {
     }
     const headers = new Headers();
     if (typeof incoming.headers.cookie === 'string') headers.set('cookie', incoming.headers.cookie);
+    if (url.pathname.startsWith('/api/analytics/'))
+      url.pathname = '/v1/analytics/' + url.pathname.slice('/api/analytics/'.length);
     const response = await handler(new Request(url, { headers }));
     const body = new Uint8Array(await response.arrayBuffer());
     if (outgoing.destroyed) return;
@@ -342,6 +354,37 @@ try {
       await page.getByRole('button', { name: 'Sign in again', exact: true }).click();
       await expect(page.getByText('Sign-in requested', { exact: true })).toBeVisible();
       result.cases.immediateDenialClearing = true;
+      await configure({ status: 'ok', eventsUnauthorized: false, countDelayMs: 0 });
+      await page.goto(origin + '/?basis=occurred');
+      await expect(
+        page.getByRole('columnheader', { name: 'Event time (UTC)', exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText('Event time · UTC', { exact: false })).toBeVisible();
+      result.cases.eventTimeView = true;
+      const connectedRequest = page.waitForRequest(
+        (request) => new URL(request.url()).pathname === '/api/analytics/occurred/events',
+      );
+      await page.goto(origin + '/?basis=connected');
+      await connectedRequest;
+      await expect(
+        page.getByRole('columnheader', { name: 'Event time (UTC)', exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('cell', { name: '2026-11-01T11:00:00.000Z', exact: true }),
+      ).toHaveCount(3);
+      await expect(
+        page.getByRole('cell', { name: '2026-11-01T12:03:00.000Z', exact: true }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: resolve(directory, 'event-time-connected.png'),
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.screenshot({
+        path: resolve(directory, 'event-time-connected-desktop.png'),
+        fullPage: true,
+      });
+      result.cases.connectedSameOriginOccurrenceView = true;
       assert.deepEqual(errors, []);
       result.passed = true;
     })(),

@@ -15,10 +15,10 @@ const event = {
 const page = { events: [event], hasMore: true as const, nextCursor: 'next-cursor' };
 function fixture() {
   const client = {
-    countReceivedEvents: vi.fn<ExplorerClient['countReceivedEvents']>(async () => ({
+    countEvents: vi.fn<ExplorerClient['countEvents']>(async () => ({
       count: '18446744073709551615',
     })),
-    listReceivedEvents: vi.fn<ExplorerClient['listReceivedEvents']>(async () => page),
+    listEvents: vi.fn<ExplorerClient['listEvents']>(async () => page),
   };
   return {
     client,
@@ -35,11 +35,11 @@ it('loads an exact count and first page under the fixed authorized project', asy
     pageIndex: 1,
     loading: false,
   });
-  expect(client.countReceivedEvents).toHaveBeenCalledWith(
+  expect(client.countEvents).toHaveBeenCalledWith(
     { ...query, projectId: 'trusted-project' },
     expect.any(AbortSignal),
   );
-  expect(client.listReceivedEvents).toHaveBeenCalledWith(
+  expect(client.listEvents).toHaveBeenCalledWith(
     { ...query, projectId: 'trusted-project', limit: 50 },
     expect.any(AbortSignal),
   );
@@ -48,7 +48,7 @@ it('loads an exact count and first page under the fixed authorized project', asy
 it('pages with opaque cursors and resets to first without recounting', async () => {
   const { client, model } = fixture();
   await model.apply(query);
-  client.listReceivedEvents.mockResolvedValueOnce({
+  client.listEvents.mockResolvedValueOnce({
     events: [{ ...event, eventId: 'event-a' }],
     hasMore: false,
   });
@@ -58,21 +58,21 @@ it('pages with opaque cursors and resets to first without recounting', async () 
     cursor: 'next-cursor',
     page: { hasMore: false },
   });
-  expect(client.listReceivedEvents.mock.calls[1]![0]).toMatchObject({
+  expect(client.listEvents.mock.calls[1]![0]).toMatchObject({
     cursor: 'next-cursor',
     projectId: 'trusted-project',
   });
   await model.next();
-  expect(client.listReceivedEvents).toHaveBeenCalledTimes(2);
+  expect(client.listEvents).toHaveBeenCalledTimes(2);
   await model.first();
   expect(model.getSnapshot()).toMatchObject({ pageIndex: 1, cursor: undefined });
-  expect(client.countReceivedEvents).toHaveBeenCalledTimes(1);
+  expect(client.countEvents).toHaveBeenCalledTimes(1);
 });
 
 it('clears existing data after session or membership denial on refresh', async () => {
   const { client, model } = fixture();
   await model.apply(query);
-  client.countReceivedEvents.mockRejectedValueOnce({ status: 403, message: 'private' });
+  client.countEvents.mockRejectedValueOnce({ status: 403, message: 'private' });
   await model.refresh();
   expect(model.getSnapshot()).toMatchObject({
     page: undefined,
@@ -84,7 +84,7 @@ it('clears existing data after session or membership denial on refresh', async (
 
 it('keeps valid events available when only the count fails', async () => {
   const { client, model } = fixture();
-  client.countReceivedEvents.mockRejectedValueOnce(new Error('private error'));
+  client.countEvents.mockRejectedValueOnce(new Error('private error'));
   await model.apply(query);
   expect(model.getSnapshot()).toMatchObject({
     page,
@@ -98,13 +98,13 @@ it('ignores stale results and aborts old work when filters change', async () => 
   const { client, model } = fixture();
   let finishPage!: (value: typeof page) => void;
   let finishCount!: (value: { count: string }) => void;
-  client.listReceivedEvents.mockImplementationOnce(
+  client.listEvents.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finishPage = resolve;
       }),
   );
-  client.countReceivedEvents.mockImplementationOnce(
+  client.countEvents.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finishCount = resolve;
@@ -113,7 +113,7 @@ it('ignores stale results and aborts old work when filters change', async () => 
   const old = model.apply(query);
   const newQuery = { ...query, eventName: 'new-event' };
   await model.apply(newQuery);
-  expect(client.listReceivedEvents.mock.calls[0]![1]!.aborted).toBe(true);
+  expect(client.listEvents.mock.calls[0]![1]!.aborted).toBe(true);
   finishPage({ ...page, events: [{ ...event, eventId: 'old-event' }] });
   finishCount({ count: '1' });
   await old;
@@ -127,7 +127,7 @@ it('ignores stale results and aborts old work when filters change', async () => 
 it('retains the current page and position when a later page fails', async () => {
   const { client, model } = fixture();
   await model.apply(query);
-  client.listReceivedEvents.mockRejectedValueOnce(new Error('private storage detail'));
+  client.listEvents.mockRejectedValueOnce(new Error('private storage detail'));
   await model.next();
   expect(model.getSnapshot()).toMatchObject({
     page,
@@ -145,7 +145,7 @@ it('disposes owned requests and subscriptions without closing the shared client'
   Object.assign(client, { close: sharedClose });
   model.subscribe(listener);
   let finish!: (value: typeof page) => void;
-  client.listReceivedEvents.mockImplementationOnce(
+  client.listEvents.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finish = resolve;
@@ -156,7 +156,7 @@ it('disposes owned requests and subscriptions without closing the shared client'
   const notifications = listener.mock.calls.length;
   finish(page);
   await pending;
-  expect(client.listReceivedEvents.mock.calls[0]![1]!.aborted).toBe(true);
+  expect(client.listEvents.mock.calls[0]![1]!.aborted).toBe(true);
   expect(listener).toHaveBeenCalledTimes(notifications);
   expect(sharedClose).not.toHaveBeenCalled();
   expect(model.getSnapshot()).toMatchObject({
@@ -166,7 +166,7 @@ it('disposes owned requests and subscriptions without closing the shared client'
     loading: false,
   });
   await model.apply(query);
-  expect(client.listReceivedEvents).toHaveBeenCalledTimes(1);
+  expect(client.listEvents).toHaveBeenCalledTimes(1);
 });
 
 it('snapshots filter values and excludes caller-supplied project or cursor overrides', async () => {
@@ -181,13 +181,13 @@ it('snapshots filter values and excludes caller-supplied project or cursor overr
   const loading = model.apply(mutable);
   mutable.eventName = 'changed';
   await loading;
-  expect(client.listReceivedEvents.mock.calls[0]![0]).toEqual({
+  expect(client.listEvents.mock.calls[0]![0]).toEqual({
     ...query,
     eventName: ' original ',
     projectId: 'trusted-project',
     limit: 50,
   });
-  expect(client.countReceivedEvents.mock.calls[0]![0]).toEqual({
+  expect(client.countEvents.mock.calls[0]![0]).toEqual({
     ...query,
     eventName: ' original ',
     projectId: 'trusted-project',
@@ -199,8 +199,8 @@ it('clears data immediately after authorization denial while a sibling request i
   const { client, model } = fixture();
   await model.apply(query);
   let finish!: (value: { count: string }) => void;
-  client.listReceivedEvents.mockRejectedValueOnce({ status: 401 });
-  client.countReceivedEvents.mockImplementationOnce(
+  client.listEvents.mockRejectedValueOnce({ status: 401 });
+  client.countEvents.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finish = resolve;
@@ -228,20 +228,20 @@ it('can cancel and reload the same model for React effect replay', async () => {
   expect(model.getSnapshot()).toMatchObject({ closed: false, loading: false, page: undefined });
   await model.apply(query);
   expect(model.getSnapshot()).toMatchObject({ page, loading: false, closed: false });
-  expect(client.listReceivedEvents).toHaveBeenCalledTimes(2);
+  expect(client.listEvents).toHaveBeenCalledTimes(2);
 });
 
 it('ignores authorization failures from an obsolete filter request', async () => {
   const { client, model } = fixture();
   let finishPage!: (value: typeof page) => void;
   let rejectCount!: (reason: unknown) => void;
-  client.listReceivedEvents.mockImplementationOnce(
+  client.listEvents.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finishPage = resolve;
       }),
   );
-  client.countReceivedEvents.mockImplementationOnce(
+  client.countEvents.mockImplementationOnce(
     () =>
       new Promise((_resolve, reject) => {
         rejectCount = reject;

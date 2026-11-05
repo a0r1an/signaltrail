@@ -3,23 +3,21 @@ import type {
   AnalyticsCountResponse,
   AnalyticsEventListRequest,
   AnalyticsEventPage,
+  AnalyticsOccurredEventPage,
 } from '@signaltrail/analytics/api-types';
 
 export type ExplorerQuery = Omit<AnalyticsCountRequest, 'projectId'>;
 export type ExplorerError = 'sign_in' | 'forbidden' | 'invalid_query' | 'unavailable';
 export interface ExplorerClient {
-  countReceivedEvents(
-    query: AnalyticsCountRequest,
-    signal?: AbortSignal,
-  ): Promise<AnalyticsCountResponse>;
-  listReceivedEvents(
+  countEvents(query: AnalyticsCountRequest, signal?: AbortSignal): Promise<AnalyticsCountResponse>;
+  listEvents(
     query: AnalyticsEventListRequest,
     signal?: AbortSignal,
-  ): Promise<AnalyticsEventPage>;
+  ): Promise<AnalyticsEventPage | AnalyticsOccurredEventPage>;
 }
 export interface ExplorerState {
   query: ExplorerQuery;
-  page: AnalyticsEventPage | undefined;
+  page: AnalyticsEventPage | AnalyticsOccurredEventPage | undefined;
   count: string | undefined;
   cursor: string | undefined;
   pageIndex: number;
@@ -123,16 +121,14 @@ export function createEventExplorerModel(options: ExplorerOptions) {
     }
     const pagePromise = watch(
       (async () =>
-        client.listReceivedEvents(
+        client.listEvents(
           { ...query, projectId, limit: 50, ...(cursor === undefined ? {} : { cursor }) },
           controller.signal,
         ))(),
     );
     const countPromise = watch(
       (async () =>
-        recount
-          ? client.countReceivedEvents({ ...query, projectId }, controller.signal)
-          : undefined)(),
+        recount ? client.countEvents({ ...query, projectId }, controller.signal) : undefined)(),
     );
     const [events, count] = await Promise.allSettled([pagePromise, countPromise]);
     if (state.closed || requestId !== revision) return;

@@ -1,3 +1,4 @@
+import { ConnectedExplorer } from '../../src/features/event-explorer/connected-explorer';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createQueryClient } from '@signaltrail/analytics/client';
@@ -7,6 +8,12 @@ const client = createQueryClient({
   endpoint: location.origin,
   fetch: (input, options) => fetch(input, { ...options, credentials: 'same-origin' }),
 });
+const connected = new URLSearchParams(location.search).get('basis') === 'connected';
+const occurred = new URLSearchParams(location.search).get('basis') === 'occurred';
+const explorerClient = {
+  countEvents: occurred ? client.countOccurredEvents : client.countReceivedEvents,
+  listEvents: occurred ? client.listOccurredEvents : client.listReceivedEvents,
+};
 function Fixture() {
   const [project, setProject] = useState({ id: 'project-a', name: 'Demo store' });
   const [scope, setScope] = useState('fixture-session-a');
@@ -19,13 +26,22 @@ function Fixture() {
         </button>
         <button onClick={() => setScope('fixture-session-b')}>Replace session</button>
       </aside>
-      <EventExplorer
-        project={project}
-        scopeKey={scope}
-        initialQuery={{ from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' }}
-        client={client}
-        onSignIn={() => setMessage('Sign-in requested')}
-      />
+      {connected ? (
+        <ConnectedExplorer
+          project={project}
+          scopeKey={scope}
+          initialQuery={{ from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' }}
+        />
+      ) : (
+        <EventExplorer
+          project={project}
+          scopeKey={scope}
+          initialQuery={{ from: '2026-11-01T00:00:00Z', to: '2026-11-02T00:00:00Z' }}
+          client={explorerClient}
+          timeBasis={occurred ? 'occurred' : 'received'}
+          onSignIn={() => setMessage('Sign-in requested')}
+        />
+      )}
       {message && <p role="status">{message}</p>}
     </>
   );

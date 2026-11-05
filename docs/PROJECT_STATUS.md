@@ -29,6 +29,25 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — connected occurrence-time explorer
+
+- Mounted the explorer on the protected `/dashboard` page after UUID project
+  selection. The selected ID never grants access. Server-derived principal/
+  session scope hashes isolate private client state. Default range: previous
+  24 hours. Organization/project discovery remains a follow-up.
+- Added browser-client `pathPrefix` validation and connected same-origin fetch
+  binding to `/api/analytics/`. The explorer model has date-neutral reader
+  methods; occurrence views show event time plus receipt diagnostics. Diagnostic
+  received-time fixtures continue to work. Date-basis changes remount state.
+- All 65 dashboard and 237 analytics tests, lint/types/build checks pass. Native
+  explorer passes 15 groups including connected route paths, both clocks, mobile
+  layout, paging, denial and scope reset. Screenshots reviewed:
+  `test-results/event-explorer-browser/2026-11-05T23-57-45.370Z/`. This fixture uses
+  synthetic data/session; live Clerk plus provisioned service roles remain unverified.
+- No deployment or credential changes. Next: expose identified visitor totals
+  in the connected view; complete operator setup/live login verification before
+  claiming a usable configured deployment.
+
 ### November 5 — dashboard analytics server binding
 
 - Added the Node-runtime Next resource `/api/analytics/[...path]`. Every request

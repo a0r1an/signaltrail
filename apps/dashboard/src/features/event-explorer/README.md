@@ -24,7 +24,14 @@ failures, safe text, project switches and denial clearing. Reports/screenshots
 and failure traces live in ignored `test-results/event-explorer-browser/`.
 It does not supply production authentication or real database integration.
 
-This feature is not mounted
-on a live dashboard route and supplies no session provider or authorization default.
+The protected `/dashboard` server page now mounts `ConnectedExplorer` for a
+selected project UUID. Its client uses same-origin occurrence-time API methods;
+owner/session verification and fresh membership checks live on the server.
+`ExplorerClient` uses date-basis-neutral `countEvents` / `listEvents` methods.
+The injected component defaults to received-time diagnostics; the connected app
+explicitly uses event time and displays receipt diagnostics alongside it. Date
+basis, project and session scope changes remount private state. Live Clerk login
+and provisioned data credentials remain unverified; the fixture supplies no
+production authentication or fallback.
 Run `./scripts/signaltrail-ops.mjs check dashboard` for models, lint, route types,
 TypeScript and the optimized production build.
