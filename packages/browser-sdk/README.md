@@ -3,7 +3,7 @@
 This private pre-release package currently exposes persistent queue, transport,
 automatic delivery, health reporting, and page-context capture primitives.
 The public `openAnalyticsClient` API supports `track`, `identify`, `reset`, batching
-and retries. Server-side visitor resolution remains unimplemented. Existing
+and retries. Server-side visitor counts resolve retained project links. Existing
 low-level enqueue methods still accept complete typed events and do not
 automatically sanitize caller-supplied URLs/properties.
 
@@ -44,7 +44,7 @@ This pre-release high-level API currently requires identity IndexedDB: opening
 fails if it is unavailable; later identity-write failures report
 `identity_unavailable`. It does not silently claim a cross-tab reset succeeded.
 The low-level delivery queue's existing memory fallback remains unchanged.
-Server-side visitor resolution and a coordinated identity fallback are future work.
+Dashboard identity views and a coordinated identity fallback are future work.
 
 ## URL and campaign capture
 
@@ -104,7 +104,7 @@ New events carry the user ID plus their anonymous identity context. A separate
 `$identify` control record retains its event ID across retries and reopening; it
 is removed from the identity outbox only after validated server acceptance.
 These records are excluded from ordinary analytics event counts and lists.
-Visitor-history resolution in the reader is still pending. Identity metadata is
+The server reader can resolve retained links for visitor counts; dashboard wiring is pending. Identity metadata is
 client asserted and must never authorize access.
 
 Repeating the same user ID is idempotent. Switching users creates fresh anonymous

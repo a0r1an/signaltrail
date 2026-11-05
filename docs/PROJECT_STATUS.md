@@ -29,6 +29,24 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — project-scoped visitor resolution
+
+- Added server-only `countReceivedVisitors` using exact counts, latest-row dedupe,
+  namespaced one-hop identity resolution and retained project links outside the
+  requested activity window. Conflicting links preserve anonymous history rather
+  than merging user accounts. Existing event/session filters apply only to
+  activity, not the link index. No new HTTP route/widget is exposed.
+- All 211 analytics tests and lint/type/build checks pass. The first sandbox run
+  could not bind HTTP test ports; the standard check passed with listener access.
+  Real disposable ClickHouse verification passed and cleaned up owned resources:
+  `test-results/load/2026-11-05T23-31-30.239Z-analytics-read/analytics-read.json`.
+  It proves duplicate replay, cross-project isolation, conflicts, namespace
+  collisions, outside-window links and control-record exclusion. No representative
+  sizing or deployed guarantees are implied.
+- Reads still use received time. Event-time migration and authenticated dashboard
+  route wiring remain next; full public SDK-to-broker-to-storage identity proof
+  also remains separate from this writer/reader fixture.
+
 ### November 5 — durable client identification
 
 - Added `identify(userId)` with atomic identity/outbox writes, idempotent same-user

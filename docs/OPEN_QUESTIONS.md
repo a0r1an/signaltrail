@@ -40,7 +40,7 @@ Entries are questions, not approvals or completed work.
 - **Public SDK capture API:** `openAnalyticsClient` now implements anonymous
   `track`/`reset`, generated visitor/session/event IDs, validated inputs, private
   URL/campaign capture and existing batching/retries. `identify` now stores local transitions and durable link records atomically;
-  server-side visitor-history resolution remains unimplemented. User decisions: generate anonymous
+  server-side visitor counts now resolve retained project links; dashboard wiring remains pending. User decisions: generate anonymous
   visitor IDs; support `identify(userId)` and link earlier anonymous activity
   within the same project; expire sessions after 30 minutes without captured
   activity, retaining the session on tab reopen within that window. URL navigation

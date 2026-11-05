@@ -22,8 +22,8 @@ const { count } = await reader.countReceivedEvents({
 The window is UTC and half-open (`from <= received_at < to`), with a maximum span
 of 31 days. Counts use `FINAL` and the latest replacement row's receive timestamp.
 A later retry can move an event between receive-time windows. This is not a
-client-event-time analytics definition; settle product semantics before exposing
-dashboard totals. Counts remain decimal strings to preserve UInt64 precision.
+client-event-time analytics definition; migrate to the recorded event-time decision
+before exposing dashboard totals. Counts remain decimal strings to preserve UInt64 precision.
 
 The reader uses a fixed parameterized query over configured identifiers. Project
 IDs bind as exact UTF-8 bytes, avoiding ClickHouse HTTP escaped-string ambiguity.
@@ -243,3 +243,21 @@ recovery, response validation, stalled-body cancellation and disposal. Reports
 are saved only after owned resources close. This fixture is separate from the
 real PostgreSQL/ClickHouse HTTP client probe and does not configure production
 authentication. CI runs the native probe; local evidence is not a remote CI pass.
+
+## Identified visitor counts
+
+The server-only `countReceivedVisitors(window, signal?)` returns an exact decimal
+count using the same received-time window and optional event/session filters.
+Current retained project identity assertions resolve anonymous history
+retroactively, including links outside the queried window. Duplicate event/link
+IDs use `FINAL`; control records never count as activity. Multiple anonymous IDs
+can resolve to one user. Conflicting targets leave the anonymous history unmerged.
+User and anonymous IDs occupy separate namespaces and resolution is one hop, so
+matching ID strings cannot transitively merge users.
+
+This is client-asserted analytics identity, never an authorization signal. The
+query has the reader's execution/memory/body bounds but scans retained project
+identity data; representative performance is unmeasured. It has no HTTP route or
+dashboard widget yet. Retention/deletion can change retroactive resolution.
+The disposable ClickHouse probe verifies merge, conflicts, namespace collisions,
+project isolation, replayed data and outside-window links.

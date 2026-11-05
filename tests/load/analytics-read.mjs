@@ -1,3 +1,4 @@
+import { exerciseVisitorReads } from './visitor-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import {
@@ -301,6 +302,7 @@ export async function exerciseAnalyticsReads({ directory }) {
   assert.deepEqual(await missingSessionResponse.json(), { events: [], hasMore: false });
   return {
     passed: true,
+    visitorResolution: await exerciseVisitorReads(connection, reader, window),
     counts,
     halfOpenWindow: true,
     latestVersionBeforeTimeFilter: true,

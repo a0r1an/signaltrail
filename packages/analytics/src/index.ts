@@ -1,3 +1,4 @@
+import { visitorCountQuery } from './visitor-count-query.ts';
 import { createHash } from 'node:crypto';
 import { decodeEventCursor, encodeEventCursor, type EventCursor } from './event-cursor.ts';
 export { createAnalyticsQueryHandler } from './query-handler.ts';
@@ -184,7 +185,14 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         'query',
         target.searchParams
           .get('query')!
-          .replace(' WHERE ', ` WHERE ${column} = unhex({${parameter}:String}) AND `),
+          .replace(
+            target.searchParams.get('query')!.includes('/* event filters */')
+              ? '/* event filters */'
+              : ' WHERE ',
+            target.searchParams.get('query')!.includes('/* event filters */')
+              ? `/* event filters */ ${column} = unhex({${parameter}:String}) AND `
+              : ` WHERE ${column} = unhex({${parameter}:String}) AND `,
+          ),
       );
       target.searchParams.set(`param_${parameter}`, Buffer.from(value).toString('hex'));
     }
@@ -360,21 +368,25 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         signal?.removeEventListener('abort', cancel);
       }
     },
+    /** Server-only read: current retained project links resolve history retroactively. */
+    countReceivedVisitors(window: ReceivedEventWindow, signal?: AbortSignal) {
+      return execute(window, signal, 4096, decodeCount, visitorCountQuery(database, table));
+    },
     countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
-      return execute(window, signal, 4096, (body) => {
-        const result = JSON.parse(body) as {
-          count?: unknown;
-        } | null;
-        if (
-          !result ||
-          Object.keys(result).length !== 1 ||
-          typeof result.count !== 'string' ||
-          !/^(0|[1-9]\d{0,19})$/.test(result.count) ||
-          BigInt(result.count) > 18446744073709551615n
-        )
-          throw new Error('Invalid query count');
-        return { count: result.count };
-      });
+      return execute(window, signal, 4096, decodeCount);
     },
   };
+}
+
+function decodeCount(body: string): { count: string } {
+  const result = JSON.parse(body) as { count?: unknown } | null;
+  if (
+    !result ||
+    Object.keys(result).length !== 1 ||
+    typeof result.count !== 'string' ||
+    !/^(0|[1-9]\d{0,19})$/.test(result.count) ||
+    BigInt(result.count) > 18446744073709551615n
+  )
+    throw new Error('Invalid query count');
+  return { count: result.count };
 }
