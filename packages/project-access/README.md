@@ -139,7 +139,8 @@ fail closed; no development project mapping is substituted.
 Browser keys are exposed to the client and cannot prove an end user's identity
 or grant private analytics reads. Revocation affects the next lookup, not a batch
 already authorized/publishing. Rotation needs a deliberate overlap policy for
-old SDK queues; no rotate-key administration endpoint exists. Production entrypoint
-binding, operator migration/bootstrap tooling and real role provisioning remain
-separate work. The disposable PostgreSQL probe verifies upgrades, rollback,
+old SDK queues; no rotate-key administration endpoint exists. The production
+ingestion entrypoint now binds this resolver and verifies table access before
+opening listeners; see `docs/setup/ingestion-data.md`. Operator migration/bootstrap
+tooling and deployed role provisioning remain separate work. The disposable PostgreSQL probe verifies upgrades, rollback,
 concurrent replay, lookup, revocation, uniqueness and project deletion.

@@ -81,10 +81,29 @@ export async function exerciseIngestionKeys({
   assert.equal(await resolve(c), id(41));
   await sql(`DELETE FROM signaltrail_control.projects WHERE id='${id(41)}'`);
   assert.equal(await resolve(c), undefined);
+  // This role belongs only to the disposable fixture database.
+  await sql(`CREATE ROLE ingestion_fixture_reader LOGIN PASSWORD 'fixture_reader_only';
+    GRANT CONNECT ON DATABASE signaltrail TO ingestion_fixture_reader;
+    GRANT USAGE ON SCHEMA signaltrail_control TO ingestion_fixture_reader;
+    GRANT SELECT(project_id,key_hash,revoked_at) ON signaltrail_control.ingestion_keys TO ingestion_fixture_reader;`);
+  for (const forbidden of [
+    'SELECT * FROM signaltrail_control.organization_memberships',
+    'UPDATE signaltrail_control.ingestion_keys SET revoked_at=CURRENT_TIMESTAMP',
+    'CREATE TABLE signaltrail_control.forbidden_fixture(id integer)',
+  ]) {
+    await assert.rejects(
+      sql(
+        `SET ROLE ingestion_fixture_reader; ${forbidden}`,
+        AbortSignal.timeout(10000),
+        'combined',
+      ),
+      failsWith('permission denied'),
+    );
+  }
   const runtime = createProjectRuntime({
     NODE_ENV: 'production',
     SIGNALTRAIL_INGESTION_DATABASE_URL:
-      'postgres://signaltrail:signaltrail_local@127.0.0.1:35433/signaltrail',
+      'postgres://ingestion_fixture_reader:fixture_reader_only@127.0.0.1:35433/signaltrail',
     SIGNALTRAIL_INGESTION_DATABASE_TLS: 'false',
   });
   const published = [];
@@ -125,6 +144,15 @@ export async function exerciseIngestionKeys({
       assert.equal((await handle(request(denied))).status, 401);
     }
     assert.equal(published.length, 1);
+    await sql(
+      'REVOKE SELECT(project_id,key_hash,revoked_at) ON signaltrail_control.ingestion_keys FROM ingestion_fixture_reader',
+    );
+    await assert.rejects(
+      runtime.verify(),
+      /^Error: Ingestion project database readiness was not confirmed$/,
+    );
+    assert.equal((await handle(request(b))).status, 503);
+    assert.equal(published.length, 1);
   } finally {
     await runtime.close();
   }
@@ -141,6 +169,8 @@ export async function exerciseIngestionKeys({
     productionRuntimeReadiness: true,
     storedKeyHandlerProjectIsolation: true,
     revokedAndUnknownKeysDeniedBeforePublication: true,
+    restrictedReaderPrivileges: true,
+    lostReadPermissionFailsClosed: true,
     limitation:
       'Isolated production resolver/handler with simulated publication; operator provisioning, live broker startup and production database roles remain separate.',
   };

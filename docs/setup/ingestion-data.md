@@ -15,8 +15,10 @@ Configure these server-only environment variables:
 
 Provision a separate read-only database identity with database connection, schema
 usage on `signaltrail_control`, and SELECT on `ingestion_keys`. Ingestion does not
-need membership-table writes, key creation, or migration privileges. The current
-local probe uses an isolated fixture identity; production roles are not provisioned.
+need membership-table writes, key creation, or migration privileges. The isolated
+local probe verifies a role with SELECT on only `project_id`, `key_hash`, and
+`revoked_at`, plus denial after those privileges are removed. Production roles
+are not provisioned.
 
 Apply the full tracked migration set (001 and 002) through a separate operator
 identity before startup. See `packages/project-access/README.md` for the migration

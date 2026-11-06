@@ -29,6 +29,17 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — restricted ingestion reader proof
+
+- The isolated PostgreSQL probe now provisions a fixture-only reader with SELECT
+  on just `project_id`, `key_hash`, and `revoked_at`. Runtime readiness and stored
+  key authentication succeed without administrator privileges. Membership reads,
+  key updates and schema creation fail at the database permission boundary.
+- Revoking column SELECT makes runtime readiness fail and valid-key ingestion
+  return 503 without additional publication. Probe and cleanup pass:
+  `test-results/load/2026-11-06T05-17-25.942Z-project-access/project-access.json`.
+  Production roles/credentials have not been created or changed.
+
 ### November 5 — production ingestion project runtime
 
 - The ingestion entrypoint now selects the stored key resolver in production,
