@@ -17,7 +17,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/browser/tsconfig.json",
     "lint": "eslint src tests *.config.ts --max-warnings 0",
-    "harness:build": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/ingestion build && pnpm build && tsup --config tests/browser/harness/bundle.config.ts",
+    "harness:build": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/project-access build && pnpm --filter @signaltrail/ingestion build && pnpm build && tsup --config tests/browser/harness/bundle.config.ts",
     "harness:serve": "node tests/browser/harness/server.ts",
     "harness": "pnpm harness:build && pnpm harness:serve",
     "test:browser": "pnpm harness:build && playwright test"

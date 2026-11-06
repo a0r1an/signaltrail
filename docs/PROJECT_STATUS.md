@@ -29,6 +29,25 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — production ingestion project runtime
+
+- The ingestion entrypoint now selects the stored key resolver in production,
+  checks metadata table access before opening listeners, and closes its pool on
+  shutdown. Development fixture mappings are rejected in production. Database
+  credentials/TLS configuration fail closed; remote plaintext is rejected.
+- All 77 ingestion tests, lint, types and build pass. The isolated PostgreSQL
+  probe passes with cleanup:
+  `test-results/load/2026-11-06T05-16-22.027Z-project-access/project-access.json`.
+  It exercises production runtime readiness and the ingestion handler: a valid
+  stored key selects its project despite a forged event project ID; revoked,
+  unknown and malformed keys are denied before publication. Publication is a
+  simulated callback in this probe, not a production broker startup proof.
+- Updated workspace build prerequisites for the server-side access dependency.
+  Configuration and privilege boundaries are in `setup/ingestion-data.md`.
+  Next: operator migration/bootstrap tooling and verification with a restricted
+  database identity. Live Clerk configuration, production credentials and
+  deployment remain unverified; no existing databases were modified.
+
 ### November 5 — tracked key schema and stored project resolver
 
 - Added immutable migration 002 for project-bound ingestion-key hashes/revocation.

@@ -62,6 +62,8 @@ try {
       pnpm('--filter', '@signaltrail/analytics', 'build');
       pnpm('--filter', '@signaltrail/project-access', 'build');
     }
+    if (['sdk', 'ingestion'].includes(action))
+      pnpm('--filter', '@signaltrail/project-access', 'build');
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
       pnpm('--filter', packages[action], script);

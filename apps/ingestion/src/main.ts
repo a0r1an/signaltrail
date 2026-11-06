@@ -1,13 +1,10 @@
 import { createIngestionMetrics } from './metrics.ts';
 import { createIngestionServer } from './server.ts';
-import { createDevelopmentProjectResolver } from './development-projects.ts';
+import { createProjectRuntime } from './project-runtime.ts';
 import { createRedpandaPublisher } from './redpanda-publisher.ts';
 
-if (process.env.NODE_ENV === 'production')
-  throw new Error('A production project resolver must be configured before production use');
-const resolveProjectKey = createDevelopmentProjectResolver(
-  JSON.parse(process.env.SIGNALTRAIL_DEV_PROJECTS ?? '[]') as unknown,
-);
+const projects = createProjectRuntime(process.env);
+const resolveProjectKey = projects.resolveProjectKey;
 const port = Number(process.env.PORT ?? 4100);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new RangeError('PORT must be from 1 to 65535');
@@ -64,8 +61,12 @@ function shutdown() {
         );
       await publisher.close();
     } finally {
-      metrics.close();
-      clearTimeout(deadline);
+      try {
+        await projects.close();
+      } finally {
+        metrics.close();
+        clearTimeout(deadline);
+      }
     }
   })();
   return stopping;
@@ -78,7 +79,8 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const)
     });
   });
 try {
-  await publisher.connect();
+  await projects.verify();
+  if (!stopping) await publisher.connect();
   if (!stopping)
     await new Promise<void>((resolve, reject) => {
       metrics.server.once('error', reject);
@@ -99,7 +101,7 @@ try {
         resolve();
       });
     });
-    console.info(`Development ingestion listening on http://127.0.0.1:${port}`);
+    console.info(`Ingestion listening on http://127.0.0.1:${port}`);
   }
 } catch (error) {
   if (!stopping) {

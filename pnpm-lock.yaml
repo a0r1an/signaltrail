@@ -127,6 +127,9 @@ importers:
       '@signaltrail/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@signaltrail/project-access':
+        specifier: workspace:*
+        version: link:../../packages/project-access
       kafkajs:
         specifier: ^2.2.4
         version: 2.2.4

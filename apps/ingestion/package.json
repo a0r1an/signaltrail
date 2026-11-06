@@ -16,12 +16,13 @@
     "test": "vitest run",
     "lint": "eslint src tests --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test:integration": "pnpm --filter @signaltrail/contracts build && vitest run --config vitest.integration.config.ts"
+    "test:integration": "pnpm --filter @signaltrail/contracts build && pnpm --filter @signaltrail/project-access build && vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@prometheus-io/client": "^0.16.1",
     "@signaltrail/contracts": "workspace:*",
-    "kafkajs": "^2.2.4"
+    "kafkajs": "^2.2.4",
+    "@signaltrail/project-access": "workspace:*"
   },
   "devDependencies": {
     "@signaltrail/typescript-config": "workspace:*",

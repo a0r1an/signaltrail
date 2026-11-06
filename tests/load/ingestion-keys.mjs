@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { createProjectRuntime, createIngestionHandler } from '../../apps/ingestion/dist/index.js';
 import {
   createControlPlaneMigrationStatement,
   createStoredProjectResolver,
@@ -80,6 +81,53 @@ export async function exerciseIngestionKeys({
   assert.equal(await resolve(c), id(41));
   await sql(`DELETE FROM signaltrail_control.projects WHERE id='${id(41)}'`);
   assert.equal(await resolve(c), undefined);
+  const runtime = createProjectRuntime({
+    NODE_ENV: 'production',
+    SIGNALTRAIL_INGESTION_DATABASE_URL:
+      'postgres://signaltrail:signaltrail_local@127.0.0.1:35433/signaltrail',
+    SIGNALTRAIL_INGESTION_DATABASE_TLS: 'false',
+  });
+  const published = [];
+  try {
+    await runtime.verify();
+    const handle = createIngestionHandler({
+      resolveProjectKey: runtime.resolveProjectKey,
+      publish: async (record) => {
+        published.push(record);
+      },
+    });
+    const request = (key) =>
+      new Request('http://localhost/v1/events', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          events: [
+            {
+              schemaVersion: 1,
+              eventId: 'stored-key-runtime',
+              eventName: 'view',
+              distinctId: 'visitor',
+              sessionId: 'session',
+              sequence: 0,
+              clientTimestamp: '2026-11-05T00:00:00.000Z',
+              url: 'https://example.com',
+              context: { sdkVersion: '0.1.0' },
+              properties: {},
+              projectId: projectA,
+            },
+          ],
+        }),
+      });
+    assert.equal((await handle(request(b))).status, 200);
+    assert.equal(published.length, 1);
+    assert.equal(published[0].projectId, projectB);
+    for (const denied of [a, createIngestionKey(), 'malformed']) {
+      assert.equal((await handle(request(denied))).status, 401);
+    }
+    assert.equal(published.length, 1);
+  } finally {
+    await runtime.close();
+  }
   return {
     passed: true,
     trackedVersionTwoUpgrade: true,
@@ -90,7 +138,10 @@ export async function exerciseIngestionKeys({
     hashOnlyLookup: true,
     revokedKeyDeniedOnNextLookup: true,
     deletedProjectKeyInvalidated: true,
+    productionRuntimeReadiness: true,
+    storedKeyHandlerProjectIsolation: true,
+    revokedAndUnknownKeysDeniedBeforePublication: true,
     limitation:
-      'Isolated migration/key-reader proof; ingestion production runtime and operator provisioning remain separate.',
+      'Isolated production resolver/handler with simulated publication; operator provisioning, live broker startup and production database roles remain separate.',
   };
 }
