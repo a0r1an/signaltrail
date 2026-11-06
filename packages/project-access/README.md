@@ -117,3 +117,29 @@ page rechecks current membership. Inputs use bound SQL parameters and the same
 bounded PostgreSQL adapter. Inconsistent, duplicate or unsorted storage rows fail
 without returning partial project data. Project names retain valid Unicode up to
 the schema's 200-character limit. No invitations or membership grants are created.
+
+## Tracked upgrades and public ingestion keys
+
+`createControlPlaneMigrationStatement([{ version, source }, ...])` applies a
+contiguous repository-owned migration set under the existing transaction advisory
+lock, five-second lock budget and ten-second statement budget. Known checksums
+are verified, missing history and unsupported newer versions are refused, and
+all changes in the supplied plan roll back on failure. The initial-only helper
+remains available for version-one fixtures; use the complete tracked set after
+upgrading. Applied source SQL must remain immutable.
+
+`002-ingestion-keys.sql` adds project-bound key hashes and revocation timestamps.
+`createIngestionKey` generates a canonical public SDK credential;
+`hashIngestionKey` yields its SHA-256 hash. `createStoredProjectResolver(query)`
+looks up only the hash, rejects malformed keys before storage, rechecks revocation
+without a cache, and returns only a canonical project UUID. Use the bounded
+read-only PostgreSQL adapter and a restricted ingestion identity. Database errors
+fail closed; no development project mapping is substituted.
+
+Browser keys are exposed to the client and cannot prove an end user's identity
+or grant private analytics reads. Revocation affects the next lookup, not a batch
+already authorized/publishing. Rotation needs a deliberate overlap policy for
+old SDK queues; no rotate-key administration endpoint exists. Production entrypoint
+binding, operator migration/bootstrap tooling and real role provisioning remain
+separate work. The disposable PostgreSQL probe verifies upgrades, rollback,
+concurrent replay, lookup, revocation, uniqueness and project deletion.

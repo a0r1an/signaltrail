@@ -29,6 +29,27 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — tracked key schema and stored project resolver
+
+- Added immutable migration 002 for project-bound ingestion-key hashes/revocation.
+  A full-set tracked migration helper preserves version-one checksums, rejects
+  gaps/newer history and serializes concurrent replays in one transaction. The
+  initial-only helper remains unchanged for version-one fixtures.
+- Added canonical public-key generation/hash helpers and a read-only stored
+  project resolver. Malformed keys avoid storage; lookups bind only SHA-256 hashes
+  and fail closed on inconsistent results/cancellation/errors. No read permission
+  or end-user identity is derived from these public browser credentials.
+- All 70 project-access tests and lint/types/build checks pass. Real PostgreSQL
+  verification passes with cleanup:
+  `test-results/load/2026-11-06T00-20-32.214Z-project-access/project-access.json`.
+  It proves failed-upgrade rollback, concurrent replay, checksum/gap rejection,
+  hash lookup, duplicate rejection, next-lookup revocation and project cascade.
+  The first probe's duplicate-rejection diagnostic assertion lacked stderr
+  capture; correcting the fixture allowed the full probe to complete.
+- Existing development databases/credentials were not changed. Next: production
+  ingestion runtime binding and operator migration/bootstrap workflow. Key rotation
+  grace for existing client queues is recorded as an unresolved release decision.
+
 ### November 5 — bounded owner verification
 
 - Added a five-second owner-verification response deadline and a provisional

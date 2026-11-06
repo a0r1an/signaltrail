@@ -281,3 +281,10 @@ and the point at which an answer becomes necessary.
   Clerk login remain unconfigured/unverified. Never replace these checks with
   fixture access to make the page work. Server connection limits must also be
   validated across Vercel function instances.
+
+- **Public ingestion-key rotation:** hashed key lookup and revocation are being
+  implemented without a cache. A revoked key is denied on its next lookup; batches
+  already authorized/publishing are not undone. SDK queues are scoped by public
+  key and are never silently reassigned to another key/project. Decide the
+  rotation overlap/grace policy before exposing a rotate-key operation so older
+  queued events have a deliberate delivery/expiry path.

@@ -1,3 +1,4 @@
+import { exerciseIngestionKeys } from './ingestion-keys.mjs';
 import { exerciseDashboardReads } from './dashboard-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -483,6 +484,16 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     EXCEPTION WHEN check_violation THEN RETURN; END;
     RAISE EXCEPTION 'Invalid membership role was accepted';
     END $body$;`);
+    const ingestionKeys = await exerciseIngestionKeys({
+      initialSource: migrationSource,
+      migrate,
+      sql,
+      database,
+      projectA,
+      projectB,
+      orgA,
+      failsWith,
+    });
     const adapter = await exercisePostgresAdapter({
       database,
       sql,
@@ -490,6 +501,7 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     });
     return {
       passed: true,
+      ingestionKeys,
       ...(dashboard ? { dashboard } : {}),
       membershipScopedProjectPaging: true,
       projectCursorPrincipalBinding: true,
