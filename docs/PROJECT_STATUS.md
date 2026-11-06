@@ -29,6 +29,34 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 6 — real local Clerk and dashboard data setup
+
+- User completed development Clerk application, invite-only email/password,
+  owner creation and local keys/issuer setup. Secret-safe configuration checks
+  confirmed matching development issuer/key and localhost origin. User reports
+  `/api/session` returns authorized when signed in and unauthenticated after
+  sign-out. Agent browser discovery works, but page inspection fails in the
+  browser integration; no agent-observed signed-in UI result is claimed.
+- Added standard `metadata status`, `metadata migrate-local`, and
+  `metadata configure-local` operations. The existing local Compose database was
+  inspected as empty, then tracked versions 1/2 were applied. A Personal
+  organization, SignalTrail project, owner membership and browser key were
+  provisioned for the configured Clerk owner. No existing volumes were removed.
+- Created generated local PostgreSQL/ClickHouse reader users. Real owner project
+  listing and event-time analytics reads pass; PostgreSQL write/key permissions
+  are absent. A repeat run reuses IDs/credentials and succeeds. Only service
+  variables in dashboard `.env.local` were updated, with private backups; Clerk
+  settings were preserved and no credentials printed. Ignored stable setup state
+  is in `.local-data/dashboard-local-setup.json` (0600).
+- All 30 CLI/harness tests pass, including migration status handling and
+  environment preservation/duplicate removal. `AGENTS.md` now explicitly forbids
+  stopping to announce next actions or reopening recorded decisions and requires
+  independent work before declaring a blocker.
+- Next: confirm the refreshed signed-in dashboard displays the provisioned
+  project, then verify real dashboard activity. A manual refresh/result request
+  is pending because the browser integration cannot inspect pages. Production
+  configuration and production migration/role setup remain separate.
+
 ### November 6 — local operator provisioning artifact
 
 - Added `metadata bootstrap-plan` to the standard runner. It reads the explicit

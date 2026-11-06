@@ -9,6 +9,38 @@ connections are reused within a warm process; authorization grants are not cache
 Configure the ignored `apps/dashboard/.env.local` from `.env.example` locally.
 Do not paste keys, passwords or connection URLs into chat or commit them.
 
+## Local Compose setup
+
+Once the development Clerk owner configuration is complete:
+
+```sh
+./scripts/signaltrail-ops.mjs metadata status
+./scripts/signaltrail-ops.mjs metadata migrate-local
+./scripts/signaltrail-ops.mjs metadata configure-local
+```
+
+`status` uses read-only transactions and reports registered migration checksums
+and schema presence without reading identities or keys. `migrate-local` applies
+the complete tracked migration set only to the repository's Compose PostgreSQL.
+Neither accepts an arbitrary database target.
+
+`configure-local` requires development Clerk keys and `http://localhost:3000`.
+It uses the configured owner issuer/ID to create a personal organization and
+SignalTrail project with an owner membership. It creates separate restricted
+PostgreSQL/ClickHouse readers with generated local passwords, verifies membership
+and analytics reads, then replaces only service fields in `.env.local`. It keeps
+a private backup and preserves Clerk settings. PostgreSQL key access and write
+privileges are checked as denied. No test events or destructive writes are used.
+
+Stable IDs/credentials/public browser key are retained in ignored
+`.local-data/dashboard-local-setup.json` (0600). Do not delete that state to retry:
+the command reuses it and refuses an owner identity mismatch or conflicting rows.
+Never commit or serve the state/environment/backups. Fresh generated role names
+avoid adopting a shared existing role. The CLI prints booleans only.
+The local admin credentials come from committed Compose fixture configuration;
+these commands are not a production provisioning mechanism. Restart the dashboard
+if its running process has not picked up the changed environment.
+
 - `SIGNALTRAIL_CLICKHOUSE_READ_URL`, `SIGNALTRAIL_CLICKHOUSE_READ_USER`, and
   `SIGNALTRAIL_CLICKHOUSE_READ_PASSWORD` select a restricted ClickHouse read user.
 - `SIGNALTRAIL_MEMBERSHIP_DATABASE_URL` selects a restricted PostgreSQL identity

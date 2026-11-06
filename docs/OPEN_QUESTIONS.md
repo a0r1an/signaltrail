@@ -15,6 +15,14 @@ Entries are questions, not approvals or completed work.
   to apply a plan, create a live membership or deploy anything; no live metadata
   has been provisioned. Existing principal reuse/extra projects need separate
   operations; this initial workflow intentionally rejects conflicts.
+  Local development is now explicitly the existing Compose PostgreSQL/ClickHouse.
+  Development Clerk invite-only/email-password/user setup is user-reported complete;
+  local configuration checks confirm matching development issuer/key and app origin.
+  The user verified owner authorization and signed-out denial. Local migrations,
+  owner/project provisioning and restricted reader configuration now succeed;
+  production target/operator setup remains outstanding. Browser integration errors
+  prevent agent-controlled signed-in UI verification; record manual results
+  separately from automated service-read evidence.
 
 - **Project membership policy:** the new private membership foundation uses UUID
   projects and verified issuer/subject identities. Its reversible default grants

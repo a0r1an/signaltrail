@@ -15,7 +15,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
-  ./scripts/signaltrail-ops.mjs metadata plan|bootstrap-plan
+  ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
   ./scripts/signaltrail-ops.mjs install
   ./scripts/signaltrail-ops.mjs --dry-run <operation>
 
@@ -183,6 +183,16 @@ try {
       docker(...monitoring, 'logs', '--tail', '30', '--no-color', 'alloy');
     else if (action === 'delivery') tasks.push({ url: 'http://127.0.0.1:12345/metrics' });
     else invalid();
+  } else if (group === 'metadata' && action === 'status') {
+    pnpm('--filter', '@signaltrail/project-access', 'build');
+    tasks.push({ command: 'node', args: ['scripts/metadata-status.mjs'] });
+  } else if (group === 'metadata' && action === 'migrate-local') {
+    pnpm('--filter', '@signaltrail/project-access', 'build');
+    tasks.push({ command: 'node', args: ['scripts/metadata-migrate-local.mjs'] });
+  } else if (group === 'metadata' && action === 'configure-local') {
+    pnpm('--filter', '@signaltrail/project-access', 'build');
+    pnpm('--filter', '@signaltrail/analytics', 'build');
+    tasks.push({ command: 'node', args: ['scripts/metadata-configure-local.mjs'] });
   } else if (group === 'metadata' && action === 'plan') {
     pnpm('--filter', '@signaltrail/project-access', 'build');
     tasks.push({ command: 'node', args: ['scripts/control-plane-plan.mjs'] });

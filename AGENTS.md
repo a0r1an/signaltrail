@@ -26,6 +26,12 @@ Keep project changes within this repository.
   next useful slice. A passing check or completed commit is a checkpoint, not a
   reason to stop. Continue while useful authorized work and usage remain, unless
   the user asks to stop or a genuine blocker prevents further progress.
+- Do not end a turn merely to announce the next action, request a routine
+  “continue,” or reopen a recorded decision. Execute the next authorized step.
+  Before declaring a blocker, inspect available configuration and evidence,
+  attempt safe alternatives, and continue independent work. Stop only when no
+  useful authorized work can proceed without a specific required user input,
+  external change, or permission; state that exact dependency and record it.
 - Make regular local commits after verified slices. Stage only relevant files;
   preserve unrelated user changes. Do not claim unrun checks or incomplete work
   as passing or completed.
