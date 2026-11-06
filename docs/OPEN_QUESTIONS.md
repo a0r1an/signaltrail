@@ -54,6 +54,13 @@ Entries are questions, not approvals or completed work.
   analytics with Hobby, or $55–75 with one Vercel Pro seat; these are planning
   allowances, not approved spending. OVH's advertised starting price/term and
   candidate-host benchmarks must be checked before purchase or capacity claims.
+  Latest clarification: the VPS budget is at most $50/month, with an initial
+  target of 10–50 active users. Four-GiB local feasibility testing is authorized;
+  no host purchase is authorized. Whether the $50 ceiling includes taxes,
+  backups and the other cloud services remains unclear. Cloudflare
+  Workers/D1/Basin/R2 and AWS serverless alternatives were explored; replacing
+  the existing backend is not decided. Pricing estimates do not establish
+  equivalent acknowledgment, freshness, deduplication or query behavior.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.

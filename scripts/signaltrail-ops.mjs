@@ -13,6 +13,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
+  ./scripts/signaltrail-ops.mjs load memory-4gb
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
@@ -118,7 +119,11 @@ try {
       '-fsS',
       'http://127.0.0.1:9644/public_metrics',
     );
-  else if (group === 'load' && action === 'check') pnpm('test:load:unit');
+  else if (group === 'load' && action === 'memory-4gb') {
+    for (const name of ['contracts', 'project-access', 'ingestion', 'event-processor'])
+      pnpm('--filter', `@signaltrail/${name}`, 'build');
+    tasks.push({ command: 'node', args: ['tests/load/memory-run.mjs'] });
+  } else if (group === 'load' && action === 'check') pnpm('test:load:unit');
   else if (group === 'load' && action === 'storage-image')
     docker(
       'run',

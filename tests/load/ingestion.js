@@ -16,7 +16,7 @@ export const options = {
     traffic: {
       executor: 'constant-arrival-rate',
       rate,
-      timeUnit: '1s',
+      timeUnit: __ENV.TIME_UNIT || '1s',
       duration: __ENV.DURATION || '15s',
       preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS || 250),
       maxVUs: Number(__ENV.MAX_VUS || 500),
@@ -47,7 +47,10 @@ export default function () {
     context: { sdkVersion: 'load-test' },
   }));
   const response = http.post(__ENV.TARGET, JSON.stringify({ events }), {
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer load-test-key' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${__ENV.PROJECT_KEY || 'load-test-key'}`,
+    },
     timeout: '10s',
   });
   let valid = false;

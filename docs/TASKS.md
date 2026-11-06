@@ -54,6 +54,14 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 
 ## Production reliability and operations
 
+- [x] First four-GiB local memory screen: 10/25/50 session pools at 1/2.5/5 EPS,
+      seeded rows, concurrent SQL and accepted/stored reconciliation pass under
+      hard service caps. No target-host or endurance capacity claim.
+- [ ] Qualify a low-cost host after the local four-GiB memory screen. User set a
+      maximum $50/month VPS budget and an initial 10–50 active-user target.
+      `load memory-4gb` and its limitations are documented in
+      [local feasibility](performance/4gb-local-feasibility.md). Cloudflare
+      Workers/D1/Basin is an alternative under discussion, not an approved rewrite.
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
       Current proposal and launch workload are in
       [launch cost/capacity](performance/launch-cost-and-capacity.md). Benchmark the

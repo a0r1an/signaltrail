@@ -1,0 +1,71 @@
+name: signaltrail-memory
+services:
+  postgres:
+    extends:
+      file: ../../compose.yaml
+      service: postgres
+    mem_limit: 256m
+    memswap_limit: 256m
+    ports: !override
+      - '127.0.0.1:34104:4104'
+    command: ['postgres', '-c', 'shared_buffers=64MB', '-c', 'max_connections=30']
+  redpanda:
+    extends:
+      file: ../../compose.yaml
+      service: redpanda
+    mem_limit: 1280m
+    memswap_limit: 1280m
+    ports: !override []
+  init:
+    extends:
+      file: ../../compose.yaml
+      service: redpanda-init
+    mem_limit: 128m
+    memswap_limit: 128m
+  clickhouse:
+    extends:
+      file: ../../compose.yaml
+      service: clickhouse
+    mem_limit: 1280m
+    memswap_limit: 1280m
+    ports: !override
+      - '127.0.0.1:38124:8123'
+  valkey:
+    extends:
+      file: ../../compose.yaml
+      service: valkey
+    mem_limit: 128m
+    memswap_limit: 128m
+    ports: !override []
+  app:
+    image: node:24.21.0-bookworm-slim
+    mem_limit: 512m
+    memswap_limit: 512m
+    network_mode: service:postgres
+    working_dir: /workspace
+    volumes:
+      - ../../:/workspace:ro
+    command: ['node', '--max-old-space-size=128', 'tests/load/memory-app.mjs']
+    environment:
+      NODE_OPTIONS: --max-old-space-size=128
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:4104/health").then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 25
+      start_period: 15s
+  k6:
+    image: grafana/k6:1.6.0
+    profiles: ['tools']
+    volumes:
+      - ./:/scripts:ro
+volumes:
+  postgres_data:
+  redpanda_data:
+  clickhouse_data:

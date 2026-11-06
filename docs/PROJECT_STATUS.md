@@ -19,6 +19,29 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-06
 
+### November 6 — four-GiB local feasibility screen
+
+- User set a maximum $50/month VPS budget and initial 10–50 active-user target.
+  Added `load memory-4gb`: isolated Redpanda/ClickHouse/PostgreSQL/Valkey plus
+  containerized ingestion/processor, with enforced hard limits totaling 3456 MiB,
+  no container swap and a 640-MiB host allowance. Development services were not
+  restarted or reset. Fixtures exercise real stored-key lookup, 100000 seeded
+  historical rows, singleton event requests and concurrent analytical SQL.
+- Complete three-stage run and cleanup passed at
+  `test-results/load/2026-11-06T19-42-33.537Z-memory-4gb/result.json`:
+  1/2.5/5 events per second for 60 seconds each, 61/150/300 accepted and matching
+  unique stored rows. HTTP p95 was 46.05/29.13/22.93 ms. No retries, rejections,
+  malformed outcomes, generator drops, detected OOM termination or restart.
+- Largest sampled simultaneous Docker-displayed service memory: 778.94 MiB,
+  excluding some cache and not whole-host memory. This is not a four-GiB guest VM,
+  two-vCPU restriction, target disk benchmark, full retention dataset, backup,
+  replay, monitoring collector or endurance qualification. See
+  `performance/4gb-local-feasibility.md` for exact scope and failed fixture attempts.
+- Load harness units pass (32 tests); relevant packages build. Four GiB is a
+  plausible trial size, not a supported production capacity guarantee. Next:
+  retention-scale/endurance and background-backup testing, then qualify the chosen
+  candidate host. No provider purchase or Cloudflare rewrite is approved.
+
 The analytics path now works through the low-level browser SDK, HTTP ingestion,
 Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
 outage recovery, worker crash/restart, downstream deduplication, and dead-letter

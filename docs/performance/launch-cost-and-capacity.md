@@ -4,6 +4,14 @@ Prepared 2026-11-06. Proposal only: no provider, budget, instance or supported
 capacity is approved by this document. No purchase or deployment was performed.
 Prices are USD before tax; advertised starting prices are not checkout quotes.
 
+Later clarification: the owner set a **$50/month maximum VPS budget** and wants
+to start by testing **10–50 active users**. The larger burst scenarios below are
+future qualification goals, not launch requirements. See the
+[four-GiB local screen](4gb-local-feasibility.md). Cloudflare Workers/D1/Basin and
+AWS serverless were discussed as alternative architectures; neither a rewrite nor
+a provider purchase is approved. The original candidate recommendation below is
+historical planning, not a measured minimum machine size.
+
 ## Scope and assumptions
 
 SignalTrail initially collects analytics only from software built by its owner.
