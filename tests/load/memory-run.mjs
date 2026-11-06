@@ -2,13 +2,18 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
-import { memoryPlan, verifyMemoryLimits } from './memory-budget.mjs';
+import { memoryPlans, verifyMemoryLimits } from './memory-budget.mjs';
 import { acquireRunLock } from './run-lock.mjs';
 import { finishRun } from './run-result.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { teardownIsolatedRun } from './teardown.mjs';
 
-const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-memory-4gb`;
+const profile = process.argv[2] ?? 'memory-4gb';
+assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
+const memoryPlan = memoryPlans[profile];
+const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
+const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
+const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
 await mkdir(directory, { recursive: true });
 const release = await acquireRunLock('test-results/load.lock');
 let cancelled = false;
@@ -38,7 +43,15 @@ function docker(args, timeout = 180000) {
   });
 }
 const compose = (...args) =>
-  docker(['compose', '--profile', '*', '-f', 'tests/load/compose.memory.yaml', ...args]);
+  docker([
+    'compose',
+    '--profile',
+    '*',
+    '-f',
+    'tests/load/compose.memory.yaml',
+    ...(profile === 'memory-2gb' ? ['-f', 'tests/load/compose.memory-2gb.yaml'] : []),
+    ...args,
+  ]);
 const services = Object.keys(memoryPlan.services);
 const save = (name, value) =>
   writeFile(
@@ -52,7 +65,7 @@ async function inspect() {
   const ids = (await compose('ps', '-q', ...services)).trim().split(/\s+/).filter(Boolean);
   assert.equal(ids.length, services.length);
   const values = JSON.parse(await docker(['inspect', ...ids]));
-  verifyMemoryLimits(values);
+  verifyMemoryLimits(values, memoryPlan);
   // Do not persist expanded container environments or mounts.
   return values.map((v) => ({
     service: v.Config.Labels['com.docker.compose.service'],
@@ -78,12 +91,13 @@ async function query(sql) {
 }
 let result = {
   passed: false,
+  profile,
   memoryPlan,
   stages,
   directory,
   limitations: [
-    'Per-service hard memory caps sum to 3456 MiB; 640 MiB is reserved, not allocated to a real guest OS.',
-    'Not a 4 GiB VM: separate cgroups, shared host CPU/disk, Docker kernel and host caches differ.',
+    `Per-service hard memory caps sum to ${serviceMiB} MiB; ${memoryPlan.hostReserveMiB} MiB is reserved, not allocated to a real guest OS.`,
+    `Not a ${totalGiB} GiB VM: separate cgroups, shared host CPU/disk, Docker kernel and host caches differ.`,
     '100000 historical fixture rows; short runs do not qualify retention-scale, backups, replay or production endurance.',
     'PostgreSQL stored-key lookup is real; synthetic fixture role/schema is not production authorization provisioning.',
     'Valkey runs idle; dashboard query load is direct SQL, not the Clerk/Next.js UI.',
@@ -99,7 +113,7 @@ try {
   );
   await compose('config', '--quiet');
   ownsInfrastructure = true;
-  console.log('Starting isolated services under the 4 GiB memory plan');
+  console.log(`Starting isolated services under the ${totalGiB} GiB memory plan`);
   await compose(
     'up',
     '-d',
@@ -246,6 +260,24 @@ await finishRun({
       await release();
       return;
     }
+    try {
+      const ids = (await compose('ps', '-aq', ...services)).trim().split(/\s+/).filter(Boolean);
+      if (ids.length) {
+        const values = JSON.parse(await docker(['inspect', ...ids]));
+        await save(
+          'lifecycle.json',
+          values.map((v) => ({
+            service: v.Config.Labels['com.docker.compose.service'],
+            memoryLimit: v.HostConfig.Memory,
+            swapLimit: v.HostConfig.MemorySwap,
+            status: v.State.Status,
+            oomKilled: v.State.OOMKilled,
+            exitCode: v.State.ExitCode,
+            restarts: v.RestartCount,
+          })),
+        );
+      }
+    } catch {}
     try {
       await save('services.log', await compose('logs', '--no-color', '--tail', '100'));
     } catch {}

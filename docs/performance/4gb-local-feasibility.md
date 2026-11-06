@@ -1,6 +1,31 @@
-# Local four-GiB feasibility probe
+# Local memory feasibility probes
 
-## Result — 2026-11-06
+## Result — two GiB, 2026-11-06
+
+The same workload passed under the smaller profile:
+`test-results/load/2026-11-06T19-51-47.894Z-memory-2gb/result.json`.
+
+| Session pool | Events/second | Accepted / unique stored | HTTP p95, ms |
+| ------------ | ------------: | -----------------------: | -----------: |
+| 10           |             1 |                  61 / 61 |        64.69 |
+| 25           |           2.5 |                150 / 150 |        40.13 |
+| 50           |             5 |                301 / 301 |        18.40 |
+
+Each stage ran for 60 seconds, with no retries, rejections, malformed outcomes,
+generator drops, detected OOM termination or restart. All accepted events were
+uniquely stored; teardown and lock release passed. Across 38 samples, the largest
+simultaneous sum of Docker-displayed service memory was 730.12 MiB. Individual
+maxima: ClickHouse 446.4 MiB (512-MiB cap), combined Node services 133.3 MiB,
+Redpanda 113.2 MiB, PostgreSQL 24.3 MiB and Valkey 14.27 MiB.
+
+Two GiB therefore passes this first screen, with the same limitations below.
+ClickHouse has relatively little room within its assigned cap, and Docker's
+display excludes some cache; these numbers do not establish available guest RAM.
+Prefer longer retention-scale, background-maintenance and backup tests before
+choosing this as a production size. This one trial does not establish relative
+performance between memory profiles.
+
+## Result — four GiB, 2026-11-06
 
 The first complete run passed all three stages and teardown:
 `test-results/load/2026-11-06T19-42-33.537Z-memory-4gb/result.json`.
@@ -39,6 +64,8 @@ Run from the repository root:
 
 ```sh
 ./scripts/signaltrail-ops.mjs load memory-4gb
+# Same workload with the smaller, separately tuned memory profile:
+./scripts/signaltrail-ops.mjs load memory-2gb
 ```
 
 The runner builds the application dependencies and creates only the isolated
@@ -47,8 +74,31 @@ probes. Existing test containers cause refusal; normal development containers an
 volumes are never reset. Only the owned test project's volumes are removed during
 cleanup. Reports are written under `test-results/load/<timestamp>-memory-4gb/`;
 `result.json` is authoritative and can pass only after successful cleanup.
+Two-GiB reports use the `-memory-2gb` suffix. Both profiles use the same isolated
+project, ports and lock; never run them concurrently.
 
-## Memory allocation
+## Two-GiB allocation
+
+| Service                          | Hard limit, MiB |
+| -------------------------------- | --------------: |
+| Redpanda                         |             640 |
+| ClickHouse                       |             512 |
+| PostgreSQL                       |             128 |
+| Valkey                           |              64 |
+| Ingestion and processor combined |             320 |
+| Reserved for host/operations     |             384 |
+| Total                            |           2,048 |
+
+The two-GiB override reduces Redpanda's internal memory setting from 1 GiB to
+512 MiB, PostgreSQL shared buffers from 64 to 32 MB and Valkey's cache limit
+from 128 to 32 MB. Fsync remains enabled, swap remains disabled, and the Node heap
+settings, seed rows, traffic stages and analytical queries are unchanged. This is
+an experimental low-memory fixture, not a vendor-supported production sizing
+claim. The host reserve is smaller and still not a measured operating-system or
+monitoring allowance. Lifecycle diagnostics are retained when available, including
+startup failures before traffic can begin.
+
+## Four-GiB allocation
 
 | Service                          | Hard limit, MiB |
 | -------------------------------- | --------------: |

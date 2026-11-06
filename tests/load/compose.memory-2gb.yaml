@@ -1,0 +1,41 @@
+services:
+  postgres:
+    mem_limit: 128m
+    memswap_limit: 128m
+    command: ['postgres', '-c', 'shared_buffers=32MB', '-c', 'max_connections=30']
+  redpanda:
+    mem_limit: 640m
+    memswap_limit: 640m
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --unsafe-bypass-fsync=false
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+  clickhouse:
+    mem_limit: 512m
+    memswap_limit: 512m
+  valkey:
+    mem_limit: 64m
+    memswap_limit: 64m
+    command:
+      [
+        'valkey-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '32mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+  app:
+    mem_limit: 320m
+    memswap_limit: 320m

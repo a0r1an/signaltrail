@@ -19,6 +19,25 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-06
 
+### November 6 — two-GiB local feasibility comparison
+
+- Added `load memory-2gb`, reusing the isolated workload and verification with
+  profile-aware limit validation. Service caps total 1664 MiB with a 384-MiB host
+  allowance. Redpanda internal memory is 512 MiB, PostgreSQL shared buffers 32 MB,
+  and Valkey cache 32 MB; fsync remains enabled and swap disabled. Development
+  configuration and services were preserved.
+- Complete run and cleanup passed at
+  `test-results/load/2026-11-06T19-51-47.894Z-memory-2gb/result.json`:
+  61/150/301 accepted events at 1/2.5/5 EPS all matched unique ClickHouse rows;
+  HTTP p95 64.69/40.13/18.40 ms. No retry/rejection/malformed outcomes, generator
+  drops, detected OOM termination or restart. All 33 harness tests pass.
+- Largest sampled sum of Docker-displayed service memory was 730.12 MiB;
+  ClickHouse individually reached 446.4 MiB against its 512-MiB cap. This is an
+  experimental low-memory fixture, not a production recommendation, measured
+  guest OS footprint, CPU/disk qualification or vendor sizing endorsement.
+  Longer retention-scale/maintenance/backup tests and a real-host trial remain
+  necessary. Comparison details are in `performance/4gb-local-feasibility.md`.
+
 ### November 6 — four-GiB local feasibility screen
 
 - User set a maximum $50/month VPS budget and initial 10–50 active-user target.

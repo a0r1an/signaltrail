@@ -54,6 +54,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 
 ## Production reliability and operations
 
+- [x] First two-GiB comparison: same three stages and concurrent SQL pass under
+      1664-MiB service caps plus host allowance. ClickHouse cap headroom is narrow;
+      this does not qualify production memory, CPU, disk or endurance.
 - [x] First four-GiB local memory screen: 10/25/50 session pools at 1/2.5/5 EPS,
       seeded rows, concurrent SQL and accepted/stored reconciliation pass under
       hard service caps. No target-host or endurance capacity claim.

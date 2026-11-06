@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { memoryPlan, verifyMemoryLimits } from './memory-budget.mjs';
+import { memoryPlan, memoryPlans, verifyMemoryLimits } from './memory-budget.mjs';
+
+test('two GiB plan reserves host memory and validates its own smaller limits', () => {
+  const plan = memoryPlans['memory-2gb'];
+  assert.ok(plan);
+  assert.equal(
+    Object.values(plan.services).reduce((sum, n) => sum + n, 0) + plan.hostReserveMiB,
+    2048,
+  );
+  const containers = Object.entries(plan.services).map(([service, mib]) => ({
+    Config: { Labels: { 'com.docker.compose.service': service } },
+    HostConfig: { Memory: mib * 1048576, MemorySwap: mib * 1048576 },
+    State: { Running: true, OOMKilled: false },
+    RestartCount: 0,
+  }));
+  assert.doesNotThrow(() => verifyMemoryLimits(containers, plan));
+  assert.throws(() => verifyMemoryLimits(containers));
+});
 
 test('reserves host memory within a four GiB total and refuses unenforced limits', () => {
   assert.equal(
