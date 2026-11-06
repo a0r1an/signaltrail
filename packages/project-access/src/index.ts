@@ -82,3 +82,5 @@ export function createProjectAccessResolver(options: AccessOptions) {
     }
   };
 }
+export { createInitialProjectStatement } from './bootstrap-project.ts';
+export type { InitialProjectInput } from './bootstrap-project.ts';

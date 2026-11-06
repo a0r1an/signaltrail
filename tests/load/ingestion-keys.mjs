@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { exerciseInitialProject } from './bootstrap-project.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createProjectRuntime, createIngestionHandler } from '../../apps/ingestion/dist/index.js';
@@ -158,6 +159,7 @@ export async function exerciseIngestionKeys({
   }
   return {
     passed: true,
+    initialProject: await exerciseInitialProject(database, sql),
     trackedVersionTwoUpgrade: true,
     failedUpgradeRollback: true,
     concurrentReplay: true,

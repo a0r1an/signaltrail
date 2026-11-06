@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-11-05
+Last updated: 2026-11-06
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
@@ -28,6 +28,21 @@ Autonomous development resumed on November 3. Event-name filtering from
 healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
+
+### November 6 — atomic initial owner/project provisioning
+
+- Added `createInitialProjectStatement` for explicit new principal, organization,
+  project, owner membership and hashed public key rows in one parameterized SQL
+  statement. Inputs are bounded; raw public keys are absent from SQL/parameters.
+  Conflicts fail instead of adopting or updating existing identities/projects.
+- Test-first behavior and all 78 access tests, lint/types/build pass. Disposable
+  PostgreSQL verification and cleanup pass:
+  `test-results/load/2026-11-06T14-04-00.914Z-project-access/project-access.json`.
+  It proves owner-scoped listing, stored-key resolution, replay rejection and
+  rollback of every attempted row after a late duplicate-key conflict.
+- This is a trusted operator statement builder, not a public administrative API.
+  No live Clerk identity or existing database was modified. Next: a reviewable
+  operator provisioning artifact and live setup once target/identity are supplied.
 
 ### November 5 — reviewable migration plan command
 

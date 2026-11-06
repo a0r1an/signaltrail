@@ -24,6 +24,11 @@ Apply the full tracked migration set (001 and 002) through a separate operator
 identity before startup. See `packages/project-access/README.md` for the migration
 foundation. The deployment migration and initial organization/project/key
 provisioning workflow remains pending; do not run fixture SQL against live data.
+The access package now provides `createInitialProjectStatement` for atomic
+creation of explicit new owner/organization/project/key rows through a trusted
+operator connection. It rejects conflicts rather than adopting existing rows;
+see the package README. Live Clerk identity selection and execution against a
+chosen database still require operator configuration.
 
 Generate the complete tracked SQL plan with:
 

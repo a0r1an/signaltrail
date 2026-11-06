@@ -1,5 +1,27 @@
 # Server-side project membership
 
+## Initial owner/project provisioning
+
+`createInitialProjectStatement(input)` returns one parameterized PostgreSQL
+statement for a new principal, organization, project, owner membership and public
+key hash. Execute it through a separate trusted operator connection after applying
+the tracked migrations. It is not an HTTP endpoint or part of sign-in.
+
+Supply explicit canonical UUIDs (`principalId`, `organizationId`, `projectId`,
+`keyId`), the verified Clerk `issuer`/`subject`, organization/project/key names,
+and a public key from `createIngestionKey()`. Only its hash enters statement
+parameters. Retain the raw public key separately for SDK configuration; this
+function does not print or persist it. Names are bounded at 200 Unicode code
+points, identity fields at 1 KiB, with invalid UTF-8/NUL/blank values rejected.
+
+All inserts form one atomic statement. Existing IDs, an existing issuer/subject
+or duplicate key hashes cause failure; no existing owner, project, name or key
+is updated or reassigned. Retrying after an uncertain response requires inspecting
+the intended IDs through a trusted operator workflow, not generating new IDs and
+blindly repeating. Reuse of an existing principal, invitations and additional
+project creation need separate operations. The read-only runtime adapter cannot
+execute this statement. No live metadata has been provisioned by these tests.
+
 `@signaltrail/project-access` connects a verified session identity to a project
 membership lookup. It does not authenticate cookies, verify JWTs, create users,
 or expose a listener. Its PostgreSQL adapter uses node-postgres; it supplies no default authentication.
