@@ -60,7 +60,7 @@ Entries are questions, not approvals or completed work.
 - **Public SDK capture API:** `openAnalyticsClient` now implements anonymous
   `track`/`reset`, generated visitor/session/event IDs, validated inputs, private
   URL/campaign capture and existing batching/retries. `identify` now stores local transitions and durable link records atomically;
-  server-side visitor counts now resolve retained project links; dashboard wiring remains pending. User decisions: generate anonymous
+  server-side visitor counts now resolve retained project links and the event-time dashboard displays those totals. User decisions: generate anonymous
   visitor IDs; support `identify(userId)` and link earlier anonymous activity
   within the same project; expire sessions after 30 minutes without captured
   activity, retaining the session on tab reopen within that window. URL navigation
@@ -85,7 +85,7 @@ Entries are questions, not approvals or completed work.
   Cross-origin synchronization is not implied. User approved automatic reset
   before `identify(B)` when A is currently identified: create a fresh anonymous
   identity context/session for B without linking A’s history to B. Previously
-  queued events retain their original identities. Implementation remains pending. Keep the low-level APIs stable.
+  queued events retain their original identities. These transitions are implemented; keep the low-level APIs stable.
   The durable anonymous/session store now drives capture, with fake IndexedDB
   and native-browser coverage. Current high-level initialization requires
   IndexedDB, and later identity-write failures return `identity_unavailable`.
@@ -126,24 +126,16 @@ Entries are questions, not approvals or completed work.
   admission and per-project quotas remain unresolved; a processing-slot cap is
   not a whole-process RSS guarantee or connection-flood test.
 
-- **Analytics read semantics and access:** the new server-only reader counts
-  unique events by latest `received_at`, using a required UTC window of at most
-  31 days. A later retry can move an event between received-time windows.
-  User decision: product dashboard dates must use when the event happened
-  (client event time), with received time retained for delivery diagnostics.
-  Server-only event-time count methods now exist and exclude malformed/extreme
-  stored dates; server listing also supports event time, while existing API/UI still use received time. API/UI
-  migration and unreasonable client-clock handling remain to be implemented
-  before exposing event-time totals. Do not claim current reads meet this decision. A server must authorize project membership before calling the reader;
-  public ingestion keys must never grant read access. Production read-only
-  ClickHouse credentials and allowed query settings remain to be provisioned.
-  The injected query boundary and Node HTTP bridge now test denial before reads,
-  canonical project scope, deadlines, admission, disconnects, and shutdown. Real
-  HTTP fixtures use PostgreSQL membership and ClickHouse reads. The library server
-  is not mounted in the dashboard or deployed.
-  Choose the dashboard session provider, membership persistence, and same-origin
-  cookie/origin policy before wiring an actual application route; fixture-only
-  authorization is not a production fallback.
+- **Analytics read semantics and access:** product dashboard dates use client
+  event time, with receive time retained for diagnostics. Event-time counts,
+  visitor counts, list APIs, query client and protected dashboard are implemented.
+  The owner confirmed real local project selection and empty analytics reads.
+  Malformed/extreme stored dates are excluded. Decide unreasonable client-clock
+  handling and attribution precedence before making stronger product claims.
+  Server-side Clerk owner checks and PostgreSQL membership gate each resource;
+  public ingestion keys grant no reads. Local restricted readers are provisioned;
+  production credentials/TLS/deployment remain pending. The original receive-time
+  methods remain available for delivery diagnostics, not product date semantics.
   Event summaries and bounded keyset paging are now available in the private
   reader. Paging is not a snapshot under concurrent writes or later retries;
   decide stable export/snapshot semantics before offering complete exports.
@@ -194,8 +186,8 @@ from outside contributors should be assumed. See `LICENSING.md`.
   sends settling after the ingestion deadline, followed by SDK retries with the
   original IDs. Ingestion intentionally permits these duplicates. The initial
   ClickHouse migration and isolated pipeline now exercise downstream uniqueness
-  by `(projectId, eventId)` using `FINAL`. The query API is still pending; every
-  analytics read must preserve that uniqueness rather than relying on background
+  by `(projectId, eventId)` using `FINAL`. The query API now preserves that uniqueness; every
+  additional analytics read must do the same rather than relying on background
   merges. Confirm consistency and conflict semantics before exposing totals.
 - **Working ClickHouse design:** the first migration uses
   `ReplacingMergeTree(received_at)` with `(project_id, event_id)` as the sorting
