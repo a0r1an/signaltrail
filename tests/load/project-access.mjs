@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import {
   createProjectAccessResolver,
+  createProjectListReader,
   createInitialMigrationStatement,
   createPostgresMembershipDatabase,
 } from '../../packages/project-access/dist/index.js';
@@ -114,6 +115,46 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     },
   });
   try {
+    const readProjects = createProjectListReader(database.query);
+    const extraProject = id(13);
+    await sql(
+      `INSERT INTO signaltrail_control.projects(id,organization_id,name) VALUES ('${extraProject}','${orgA}','Second A')`,
+    );
+    const firstProjects = await readProjects(
+      { issuer: 'issuer-a', subject: 'same-subject' },
+      { limit: 1 },
+      new AbortController().signal,
+    );
+    assert.deepEqual(firstProjects.projects, [{ id: projectA, name: 'A' }]);
+    assert.equal(firstProjects.hasMore, true);
+    const secondProjects = await readProjects(
+      { issuer: 'issuer-a', subject: 'same-subject' },
+      { limit: 1, cursor: firstProjects.nextCursor },
+      new AbortController().signal,
+    );
+    assert.deepEqual(secondProjects, {
+      projects: [{ id: extraProject, name: 'Second A' }],
+      hasMore: false,
+    });
+    assert.deepEqual(
+      (
+        await readProjects(
+          { issuer: 'issuer-b', subject: 'same-subject' },
+          {},
+          new AbortController().signal,
+        )
+      ).projects,
+      [{ id: projectB, name: 'B' }],
+    );
+    await assert.rejects(
+      readProjects(
+        { issuer: 'issuer-b', subject: 'same-subject' },
+        { cursor: firstProjects.nextCursor },
+        new AbortController().signal,
+      ),
+      /Invalid project cursor/,
+    );
+    await sql(`DELETE FROM signaltrail_control.projects WHERE id='${extraProject}'`);
     let lookups = 0;
     const resolve = createProjectAccessResolver({
       resolveIdentity: async (request) =>
@@ -450,6 +491,8 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
     return {
       passed: true,
       ...(dashboard ? { dashboard } : {}),
+      membershipScopedProjectPaging: true,
+      projectCursorPrincipalBinding: true,
       issuerIsolation: true,
       crossOrganizationDenied: true,
       membershipRemovalImmediate: true,

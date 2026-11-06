@@ -29,6 +29,20 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — membership-scoped project listing foundation
+
+- Added `createProjectListReader` for bounded organization-membership project
+  discovery. It returns IDs/names in UUID keyset order, defaults to 50 / maximum
+  100, and binds cursors to the verified principal. Every page rechecks membership;
+  query inputs are parameters and malformed/inconsistent rows fail closed.
+- All 54 project-access tests plus lint/types/build pass. Isolated real PostgreSQL
+  verification passes and cleans up owned resources:
+  `test-results/load/2026-11-06T00-03-46.880Z-project-access/project-access.json`.
+  It checks page continuation, issuer/organization isolation and cursor binding.
+- Next: use this reader for the dashboard project picker. Live credentials and
+  owner metadata remain unverified; no operator permissions or external resources
+  were changed.
+
 ### November 5 — identified visitor total in explorer
 
 - Added exact identified-visitor totals beside event totals in the connected

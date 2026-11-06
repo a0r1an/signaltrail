@@ -105,3 +105,15 @@ supervision must handle an unconfirmed shutdown. The real fixture checks pool
 saturation, queued and active cancellation, parameter snapshots, statement timeout,
 read-only defaults, backend termination/recovery, diagnostic isolation, and close
 with active/queued operations. These checks are not a production pool-sizing test.
+
+## Membership-scoped project pages
+
+`createProjectListReader(query)` returns a server-only reader accepting an already
+verified principal, `{ limit?, cursor? }` and a cancellation signal. It returns
+project IDs/names only for owner/admin/member organization memberships. Default
+page size is 50, maximum 100, ordered by UUID with keyset continuation. The opaque
+cursor is bound to the principal's issuer and subject; it is not authority. Every
+page rechecks current membership. Inputs use bound SQL parameters and the same
+bounded PostgreSQL adapter. Inconsistent, duplicate or unsorted storage rows fail
+without returning partial project data. Project names retain valid Unicode up to
+the schema's 200-character limit. No invitations or membership grants are created.

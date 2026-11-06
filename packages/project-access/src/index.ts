@@ -1,3 +1,5 @@
+export { createProjectListReader } from './project-list.ts';
+export type { ProjectPage } from './project-list.ts';
 export { createInitialMigrationStatement } from './initial-migration.ts';
 export { createPostgresMembershipDatabase } from './postgres-database.ts';
 export type { PostgresDatabaseOptions } from './postgres-database.ts';
