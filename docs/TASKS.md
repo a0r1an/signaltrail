@@ -5,7 +5,7 @@ PROJECT_STATUS are session records, not instructions to repeat completed work.
 Evidence and limitations belong in PROJECT_STATUS; decisions awaiting the user
 belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked.
 
-## Current slice: real local capture to dashboard
+## Completed slice: real local capture to dashboard
 
 - [x] Configure development Clerk owner-only sign-in; user verified authorized
       owner and signed-out denial.
@@ -20,9 +20,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Commit the verified demo/pipeline slice and updated task queue.
 - [x] Confirm product-click events reach local storage: read-only CLI status
       reports four `demo_product_viewed` events, separate from one labeled CLI probe.
-- [ ] Confirm those browser product clicks appear in the authenticated dashboard.
-      Browser-control integration currently fails; manual user evidence is acceptable
-      when clearly labeled. Do not claim browser automation succeeded.
+- [x] User confirmed `demo_product_viewed` appears in the authenticated dashboard.
+      This is manual browser evidence plus CLI storage verification; browser-control
+      integration remains broken, and no automated browser success is claimed.
 
 ## Analytics release work
 

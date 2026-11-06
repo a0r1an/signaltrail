@@ -55,6 +55,11 @@ performed. Historical sections below preserve evidence from their recorded dates
   event-time window. This verifies stored product captures; explicit confirmation
   of their appearance in the authenticated dashboard is pending. No extra events
   were emitted by this status check.
+- User subsequently confirmed seeing the product event in the authenticated
+  dashboard. The real local browser SDK → stored-key ingestion → Redpanda →
+  restricted processor → ClickHouse → Clerk/membership-protected dashboard path
+  is now manually verified, with independent stored-event counts. The local demo
+  remains running. This is local correctness evidence, not production readiness.
 - Added `TASKS.md` as the current actionable queue and linked it from AGENTS.
 
 ### November 6 — real local Clerk and dashboard data setup
