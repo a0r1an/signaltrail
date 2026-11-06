@@ -29,6 +29,21 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — reviewable migration plan command
+
+- Added `./scripts/signaltrail-ops.mjs metadata plan` to generate the complete
+  tracked SQL plan and exact-source/statement checksum manifest in a unique ignored
+  `test-results/migrations/` directory. It accepts no database destination, reads
+  no credentials and never executes SQL or marks a plan applied.
+- Test-first verification covers both registered migrations, exact byte hashes,
+  unknown migration refusal, invalid UTF-8 and missing source refusal. All 26
+  load-harness unit tests pass. The unit command now builds its access dependency
+  before running, matching CI's pre-build check order.
+- Local plan generation succeeded at `test-results/migrations/plan-4CQZec`.
+  This is a review artifact, not target-schema verification. Application via an
+  operator identity, initial metadata/key provisioning, live Clerk login and
+  deployment remain pending. See `setup/ingestion-data.md` for the review boundary.
+
 ### November 5 — restricted ingestion reader proof
 
 - The isolated PostgreSQL probe now provisions a fixture-only reader with SELECT

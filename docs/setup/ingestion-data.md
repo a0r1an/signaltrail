@@ -25,6 +25,22 @@ identity before startup. See `packages/project-access/README.md` for the migrati
 foundation. The deployment migration and initial organization/project/key
 provisioning workflow remains pending; do not run fixture SQL against live data.
 
+Generate the complete tracked SQL plan with:
+
+```sh
+./scripts/signaltrail-ops.mjs metadata plan
+```
+
+This builds the access package and writes a unique ignored directory under
+`test-results/migrations/` containing `plan.sql` and `manifest.json`. The manifest
+records exact migration source hashes, the statement hash and `applied: false`.
+Review the SQL and target database before applying it through a separate migration
+identity. The command accepts no database URL, reads no credentials, contacts no
+database and never marks a plan as applied. Preserve the reviewed manifest with
+deployment evidence; generating a plan does not verify the target schema.
+Unregistered `.sql` files in `infra/postgres` fail planning until the explicit
+migration list is updated. Keep already applied sources immutable.
+
 Generate browser credentials with `createIngestionKey`; store only
 `hashIngestionKey(key)` as the SHA-256 key hash with a project UUID. These are
 public write credentials, never private analytics read credentials. Each request

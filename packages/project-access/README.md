@@ -144,3 +144,9 @@ ingestion entrypoint now binds this resolver and verifies table access before
 opening listeners; see `docs/setup/ingestion-data.md`. Operator migration/bootstrap
 tooling and deployed role provisioning remain separate work. The disposable PostgreSQL probe verifies upgrades, rollback,
 concurrent replay, lookup, revocation, uniqueness and project deletion.
+
+`./scripts/signaltrail-ops.mjs metadata plan` generates the registered migration
+set and a checksum manifest under ignored `test-results/migrations/`. It performs
+no database operation. Review/application boundaries are documented in
+`docs/setup/ingestion-data.md`; target selection, a separate operator identity
+and deployment evidence are still required before applying a plan.
