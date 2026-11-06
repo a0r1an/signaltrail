@@ -29,6 +29,20 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — bounded owner verification
+
+- Added a five-second owner-verification response deadline and a provisional
+  32-call per-process gate around actual Clerk verification work. Timed-out
+  provider calls retain capacity until settlement, preventing retry accumulation.
+  Late results cannot authorize an expired request. No successful grants are cached.
+- Test-first failures reproduced missing deadlines and missing provider admission.
+  All 81 dashboard tests plus lint/types/production build pass, including gate
+  retention/release, deadline cleanup and invalid timeout configuration. This uses
+  a mocked verifier; live Clerk latency/revocation/capacity remain unverified.
+- Next: finish the operator migration/bootstrap workflow and production ingestion
+  key resolver. The current ingestion entrypoint deliberately rejects production
+  until a real project resolver is configured. No external account/data changed.
+
 ### November 5 — server-rendered project picker
 
 - Replaced manual UUID entry with membership-scoped project selection and bounded

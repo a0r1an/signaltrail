@@ -71,3 +71,10 @@ References: [access modes](https://clerk.com/docs/guides/secure/restricting-acce
 [user creation](https://clerk.com/docs/guides/users/managing),
 [Next.js sessions](https://clerk.com/docs/reference/nextjs/app-router/auth), and
 [Next.js proxy](https://clerk.com/docs/reference/nextjs/clerk-middleware).
+
+Owner verification has a five-second response deadline. At most 32 underlying
+Clerk verification calls may be outstanding per warm process. Timed-out provider
+work retains its slot until it actually settles; overload fails closed. These
+are provisional resource limits, not measured authentication capacity. The guard
+does not promise instantaneous vendor-session revocation or cancel unsupported
+provider work. Sessions and prior successful grants are not cached by this guard.

@@ -14,10 +14,11 @@ Entries are questions, not approvals or completed work.
   Clerk is selected, with invite-only registration, a manually created email/
   password account, and server-side access restricted to the owner Clerk user ID
   for the first 90 days. Local Next.js integration now guards pages/APIs and
-  fails closed without configuration. Clerk account/settings and valid-login
+  fails closed without configuration. Clerk account creation is reported; application settings and valid-login
   verification remain pending; see `setup/clerk.md`.
-  Session verification, a read-only database identity, TLS/CA provisioning, and
-  deployment migration application remain unconfigured. A bounded real PostgreSQL
+  Session guards are implemented with deadlines/admission; live session
+  verification, a read-only database identity, TLS/CA provisioning, and deployment
+  migration application remain unverified/unconfigured. A bounded real PostgreSQL
   adapter is now locally verified; its pool/query limits still need representative
   workload measurement before production sizing.
   A versioned initial migration statement now has fixture coverage for atomicity,

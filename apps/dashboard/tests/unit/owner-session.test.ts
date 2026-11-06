@@ -52,3 +52,42 @@ it('rejects other verified users and suppresses verifier failures', async () => 
   expect(await readOwnerAccess()).toEqual({ status: 'forbidden' });
   expect(await readOwnerAccess()).toEqual({ status: 'unavailable' });
 });
+it('retains provider capacity until timed-out verifications actually settle', async () => {
+  configure();
+  vi.useFakeTimers();
+  const finish: (() => void)[] = [];
+  verifiedAuth.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish.push(() =>
+          resolve({
+            userId: 'user_owner',
+            sessionId: 'sess_owner',
+            sessionClaims: { iss: 'https://owned.clerk.accounts.dev' },
+          } as Awaited<ReturnType<typeof auth>>),
+        );
+      }) as ReturnType<typeof auth>,
+  );
+  const pending = Array.from({ length: 33 }, () => readOwnerAccess());
+  try {
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(verifiedAuth).toHaveBeenCalledTimes(32);
+    expect(await Promise.all(pending)).toEqual(
+      Array.from({ length: 33 }, () => ({ status: 'unavailable' })),
+    );
+    expect(await readOwnerAccess()).toEqual({ status: 'unavailable' });
+    expect(verifiedAuth).toHaveBeenCalledTimes(32);
+  } finally {
+    finish.forEach((resolve) => resolve());
+    await Promise.all(pending);
+    await Promise.resolve();
+    await Promise.resolve();
+    vi.useRealTimers();
+  }
+  verifiedAuth.mockResolvedValue({
+    userId: 'user_owner',
+    sessionId: 'sess_owner',
+    sessionClaims: { iss: 'https://owned.clerk.accounts.dev' },
+  } as Awaited<ReturnType<typeof auth>>);
+  expect((await readOwnerAccess()).status).toBe('authorized');
+});

@@ -55,3 +55,40 @@ it.each([
     createOwnerAccess({ ownerUserId, issuer: value, readSession: async () => null }),
   ).toThrow();
 });
+it('fails closed at a verification deadline and ignores late owner results', async () => {
+  vi.useFakeTimers();
+  let finish!: (value: typeof session) => void;
+  const readSession = () =>
+    new Promise<typeof session>((resolve) => {
+      finish = resolve;
+    });
+  const access = createOwnerAccess({ ownerUserId, issuer, readSession, timeoutMs: 50 });
+  let result: unknown;
+  const pending = access().then((value) => {
+    result = value;
+  });
+  try {
+    await vi.advanceTimersByTimeAsync(50);
+    expect(result).toEqual({ status: 'unavailable' });
+  } finally {
+    finish(session);
+    await pending;
+    vi.useRealTimers();
+  }
+});
+it.each([0, 30001, NaN, 1.5])('rejects invalid session deadlines: %s', (timeoutMs) => {
+  expect(() =>
+    createOwnerAccess({ ownerUserId, issuer, timeoutMs, readSession: async () => null }),
+  ).toThrow('Invalid session verification deadline');
+});
+it('clears deadline timers after an immediate verified result', async () => {
+  vi.useFakeTimers();
+  try {
+    expect(
+      (await createOwnerAccess({ ownerUserId, issuer, readSession: async () => session })()).status,
+    ).toBe('authorized');
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
