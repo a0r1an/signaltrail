@@ -3,6 +3,8 @@
 Last updated: 2026-11-06
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+The current actionable queue is [TASKS.md](TASKS.md); historical “next” entries
+below retain their original session context.
 
 ## Goal and architecture
 
@@ -15,7 +17,7 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-11-05
+## Current checkpoint — 2026-11-06
 
 The analytics path now works through the low-level browser SDK, HTTP ingestion,
 Redpanda, and a runnable ClickHouse worker. Native-browser persistence, broker
@@ -28,6 +30,26 @@ Autonomous development resumed on November 3. Event-name filtering from
 healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
+
+### November 6 — signed-in local dashboard confirmed
+
+- User refreshed the real signed-in dashboard and confirmed the SignalTrail
+  project picker, event-time explorer, zero events/visitors and empty event table.
+  This confirms local owner/session, membership and analytics reads together;
+  it is user-observed evidence, not an automated browser result.
+- Added SDK product-click demo page and owned local pipeline startup. Demo lint,
+  types and optimized Webpack build pass. Turbopack build-worker socket creation
+  fails even after escalation; Webpack is an explicit supported workaround.
+- Added separate local key-column ingestion and INSERT-only processor identities.
+  Pipeline runs on demo 3001/ingestion 4102/metrics 9467, preserving an existing
+  process on 4100. Real low-level SDK acceptance and exact ClickHouse event read
+  passed at `test-results/local-pipeline/probe-tUR0Xz/report.json`. One labeled
+  `local_pipeline_probe` event remains in this local project. This uses Node queue
+  fallback and does not prove browser capture or UI appearance of the event.
+- The browser product-click/dashboard check is pending user observation because
+  browser page control remains broken. See `setup/local-demo.md` for commands,
+  process ownership, fixture-event labeling and filter-window behavior.
+- Added `TASKS.md` as the current actionable queue and linked it from AGENTS.
 
 ### November 6 — real local Clerk and dashboard data setup
 
@@ -791,28 +813,15 @@ performed. Historical sections below preserve evidence from their recorded dates
 
 ### Remaining product and production work
 
-- Public SDK `init`/`track`/`identify`, visitor/session identity lifecycle, and
-  runtime validation/error reporting for JavaScript capture callers. Existing
-  low-level delivery APIs accept complete events; do not present them as a
-  finished drop-in analytics SDK.
-- Production project-key resolution, metadata persistence and authorization;
-  ingestion currently uses the development resolver and refuses production mode.
-- Analytics query APIs and dashboard data integration with consistent unique
-  reads; ClickHouse retention and conflict/query-cost decisions.
-- Session replay capture, replay worker/object integration, and playback. S3 and
-  restricted human development access are established; that is not an implemented
-  replay pipeline or unattended worker identity.
-- Off-server analytics archives, archive-lag ingestion gating, database backups,
-  replacement-host restoration, and measured four-hour RTO/best-effort one-hour
-  RPO. These remain planned, not demonstrated by local process recovery tests.
-- VPS selection, production credentials and supervision, sustained/endurance load
-  tests, consumer-lag visibility, alert routing, and production capacity sizing.
-  See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) before making unresolved decisions.
+Use [TASKS.md](TASKS.md) for the current backlog. The former list here mixed
+completed SDK, production resolver, and dashboard work with still-pending replay
+and production reliability tasks; it is superseded by that maintained queue.
 
-## Latest observed verification evidence
+## Historical verification snapshot (newer session evidence above)
 
-Counts below are the latest observed results from separate package runs, not a
-claim that the entire workspace or remote CI ran at final HEAD.
+Counts below preserve an earlier cross-package snapshot. Use the dated session
+entries above for newer results; neither implies a whole-workspace or remote CI
+run at final HEAD.
 
 | Suite                                          | Latest observed passing count | Evidence scope                                                            |
 | ---------------------------------------------- | ----------------------------: | ------------------------------------------------------------------------- |

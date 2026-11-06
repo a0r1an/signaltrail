@@ -8,6 +8,8 @@ verified progress within the available usage budget while preserving correctness
 and a reviewable commit history.
 
 Read `docs/PROJECT_STATUS.md` and `docs/OPEN_QUESTIONS.md` at session start.
+Read `docs/TASKS.md` for the current actionable queue; keep it synchronized when
+completing or blocking a slice. Historical “next” entries are not the task queue.
 Verify existing milestones rather than repeating completed setup. Product scope
 is also described in
 `/Users/eufracio/Documents/ChatGPT/Senior/signaltrail-project-plan.md`.

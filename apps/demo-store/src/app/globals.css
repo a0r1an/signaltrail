@@ -1,1 +1,62 @@
 @import 'tailwindcss';
+
+:root {
+  color-scheme: light;
+  background: #f7f5f0;
+  color: #213a31;
+  font-family: Arial, sans-serif;
+}
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+header {
+  margin-bottom: 48px;
+}
+h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+  max-width: 650px;
+  margin: 16px 0;
+}
+h2 {
+  font-size: 1.5rem;
+  margin: 16px 0;
+}
+h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+p {
+  line-height: 1.6;
+  margin: 12px 0;
+}
+.products {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 24px;
+  margin: 24px 0;
+}
+article {
+  padding: 28px;
+  border: 1px solid #bcc6bd;
+  border-radius: 12px;
+  background: white;
+}
+button {
+  background: #213a31;
+  color: white;
+  border: 0;
+  padding: 12px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 3px solid #b07b18;
+  outline-offset: 4px;
+}

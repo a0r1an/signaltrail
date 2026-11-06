@@ -67,6 +67,25 @@ try {
   )
     throw new Error();
   const statement = createInitialProjectStatement(state);
+  if (!state.ingestionPassword || !state.processorPassword) {
+    state.ingestionPassword ??= randomBytes(32).toString('hex');
+    state.processorPassword ??= randomBytes(32).toString('hex');
+    const temporaryState = statePath + '.pending-' + randomUUID();
+    await writeFile(temporaryState, JSON.stringify(state, null, 2) + '\n', {
+      flag: 'wx',
+      mode: 0o600,
+    });
+    await rename(temporaryState, statePath);
+  }
+  if (
+    ![state.ingestionPassword, state.processorPassword].every(
+      (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
+    )
+  )
+    throw new Error();
+  const suffix = state.readerName.slice('st_dashboard_'.length);
+  const ingestionName = 'st_ingestion_' + suffix;
+  const processorName = 'st_processor_' + suffix;
   client = new Client({
     connectionString: 'postgres://signaltrail:signaltrail_local@127.0.0.1:5433/signaltrail',
     connectionTimeoutMillis: 5000,
@@ -113,6 +132,21 @@ try {
       `GRANT SELECT ON signaltrail_control.principals,signaltrail_control.organization_memberships,signaltrail_control.organizations,signaltrail_control.projects TO ${state.readerName}`,
     );
     await client.query(`ALTER ROLE ${state.readerName} SET default_transaction_read_only = on`);
+    const ingestionRole = await client.query(
+      'SELECT rolsuper,rolcreatedb,rolcreaterole,rolinherit FROM pg_roles WHERE rolname=$1',
+      [ingestionName],
+    );
+    if (!ingestionRole.rows.length)
+      await client.query(
+        `CREATE ROLE ${ingestionName} LOGIN NOINHERIT PASSWORD '${state.ingestionPassword}'`,
+      );
+    else if (Object.values(ingestionRole.rows[0]).some(Boolean)) throw new Error();
+    await client.query(`GRANT CONNECT ON DATABASE signaltrail TO ${ingestionName}`);
+    await client.query(`GRANT USAGE ON SCHEMA signaltrail_control TO ${ingestionName}`);
+    await client.query(
+      `GRANT SELECT(project_id,key_hash,revoked_at) ON signaltrail_control.ingestion_keys TO ${ingestionName}`,
+    );
+    await client.query(`ALTER ROLE ${ingestionName} SET default_transaction_read_only = on`);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -137,7 +171,7 @@ try {
       cwd: root,
       timeout: 15000,
       stdio: ['pipe', 'pipe', 'pipe'],
-      input: `${schema}\nCREATE USER IF NOT EXISTS ${state.readerName} IDENTIFIED WITH sha256_password BY '${state.chPassword}';\nGRANT SELECT ON signaltrail.analytics_events TO ${state.readerName};`,
+      input: `${schema}\nCREATE USER IF NOT EXISTS ${state.readerName} IDENTIFIED WITH sha256_password BY '${state.chPassword}';\nGRANT SELECT ON signaltrail.analytics_events TO ${state.readerName};\nCREATE USER IF NOT EXISTS ${processorName} IDENTIFIED WITH sha256_password BY '${state.processorPassword}';\nGRANT INSERT ON signaltrail.analytics_events TO ${processorName};`,
     },
   );
   const connectionString = `postgres://${state.readerName}:${state.pgPassword}@127.0.0.1:5433/signaltrail`;

@@ -16,6 +16,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
+  ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local
   ./scripts/signaltrail-ops.mjs install
   ./scripts/signaltrail-ops.mjs --dry-run <operation>
 
@@ -49,6 +50,7 @@ const packages = {
   analytics: '@signaltrail/analytics',
   access: '@signaltrail/project-access',
   dashboard: '@signaltrail/dashboard',
+  demo: '@signaltrail/demo-store',
 };
 function invalid() {
   throw new Error(`Unknown operation.\n${help}`);
@@ -66,8 +68,9 @@ try {
     if (['sdk', 'ingestion'].includes(action))
       pnpm('--filter', '@signaltrail/project-access', 'build');
     if (action === 'sdk') pnpm('--filter', '@signaltrail/ingestion', 'build');
+    if (action === 'demo') pnpm('--filter', '@signaltrail/browser-sdk', 'build');
     for (const script of ['lint', 'test', 'typecheck', 'build'])
-      pnpm('--filter', packages[action], script);
+      if (action !== 'demo' || script !== 'test') pnpm('--filter', packages[action], script);
   } else if (group === 'dashboard' && action === 'auth-smoke') {
     pnpm('--filter', '@signaltrail/analytics', 'build');
     pnpm('--filter', '@signaltrail/project-access', 'build');
@@ -199,6 +202,18 @@ try {
   } else if (group === 'metadata' && action === 'bootstrap-plan') {
     pnpm('--filter', '@signaltrail/project-access', 'build');
     tasks.push({ command: 'node', args: ['scripts/bootstrap-project-plan.mjs'] });
+  } else if (group === 'pipeline' && action === 'start-local') {
+    for (const pkg of [
+      'contracts',
+      'project-access',
+      'browser-sdk',
+      'ingestion',
+      'event-processor',
+    ])
+      pnpm('--filter', `@signaltrail/${pkg}`, 'build');
+    tasks.push({ command: 'node', args: ['scripts/pipeline-start-local.mjs'] });
+  } else if (group === 'pipeline' && action === 'probe-local') {
+    tasks.push({ command: 'node', args: ['scripts/pipeline-probe-local.mjs'] });
   } else if (group === 'install') pnpm('install', '--frozen-lockfile');
   else invalid();
   if (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name !== 'signaltrail')
