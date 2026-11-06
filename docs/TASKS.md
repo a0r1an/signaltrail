@@ -18,7 +18,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Start the owned local demo pipeline through the CLI and verify an SDK event
       reaches ClickHouse. Distinguish command-line delivery from browser capture.
 - [x] Commit the verified demo/pipeline slice and updated task queue.
-- [ ] Confirm a browser product click appears in the authenticated dashboard.
+- [x] Confirm product-click events reach local storage: read-only CLI status
+      reports four `demo_product_viewed` events, separate from one labeled CLI probe.
+- [ ] Confirm those browser product clicks appear in the authenticated dashboard.
       Browser-control integration currently fails; manual user evidence is acceptable
       when clearly labeled. Do not claim browser automation succeeded.
 

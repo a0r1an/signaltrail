@@ -52,6 +52,10 @@ may still have been accepted; inspect the event rather than assuming loss. This
 probe does not establish native-browser persistence, a real product click, or
 authenticated dashboard rendering. Those are separate checks.
 
+`./scripts/signaltrail-ops.mjs pipeline status-local` performs read-only counts
+of product clicks and CLI probes in the project's last 24 hours. It sends no
+events and does not claim browser automation or authenticated UI verification.
+
 For the real browser check, open the demo, click a product, then open the signed-in
 dashboard. Include the current time in its UTC filters. The dashboard's Refresh
 button reloads the selected window; it does not automatically move the window's

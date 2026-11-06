@@ -49,6 +49,12 @@ performed. Historical sections below preserve evidence from their recorded dates
 - The browser product-click/dashboard check is pending user observation because
   browser page control remains broken. See `setup/local-demo.md` for commands,
   process ownership, fixture-event labeling and filter-window behavior.
+- After the user reported completing the demo interaction, the read-only
+  `pipeline status-local` command confirmed four `demo_product_viewed` events
+  and one separate `local_pipeline_probe` in the local project's last-24-hour
+  event-time window. This verifies stored product captures; explicit confirmation
+  of their appearance in the authenticated dashboard is pending. No extra events
+  were emitted by this status check.
 - Added `TASKS.md` as the current actionable queue and linked it from AGENTS.
 
 ### November 6 — real local Clerk and dashboard data setup

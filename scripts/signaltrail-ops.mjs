@@ -16,7 +16,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
-  ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local
+  ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local|status-local
   ./scripts/signaltrail-ops.mjs install
   ./scripts/signaltrail-ops.mjs --dry-run <operation>
 
@@ -214,6 +214,8 @@ try {
     tasks.push({ command: 'node', args: ['scripts/pipeline-start-local.mjs'] });
   } else if (group === 'pipeline' && action === 'probe-local') {
     tasks.push({ command: 'node', args: ['scripts/pipeline-probe-local.mjs'] });
+  } else if (group === 'pipeline' && action === 'status-local') {
+    tasks.push({ command: 'node', args: ['scripts/pipeline-status-local.mjs'] });
   } else if (group === 'install') pnpm('install', '--frozen-lockfile');
   else invalid();
   if (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name !== 'signaltrail')
