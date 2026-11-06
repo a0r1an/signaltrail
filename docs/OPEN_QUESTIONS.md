@@ -1,9 +1,20 @@
 # Open questions and working assumptions
 
-Updated: 2026-11-05. Record unresolved decisions here for asynchronous review.
+Updated: 2026-11-06. Record unresolved decisions here for asynchronous review.
 Entries are questions, not approvals or completed work.
 
 ## Needs user input before production
+
+- **Initial owner and target configuration:** the atomic initial-project builder
+  and local `metadata bootstrap-plan` command are implemented. Before applying a
+  plan, supply the exact verified Clerk issuer/owner user ID, fresh row UUIDs,
+  desired organization/project/key names, and an explicitly selected database
+  with a separate operator identity. No values are inferred from chat aliases,
+  email addresses, public SDK keys or account-creation reports. The local input
+  example and procedure are in `setup/ingestion-data.md`. Planning is not approval
+  to apply a plan, create a live membership or deploy anything; no live metadata
+  has been provisioned. Existing principal reuse/extra projects need separate
+  operations; this initial workflow intentionally rejects conflicts.
 
 - **Project membership policy:** the new private membership foundation uses UUID
   projects and verified issuer/subject identities. Its reversible default grants

@@ -29,6 +29,27 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 6 — local operator provisioning artifact
+
+- Added `metadata bootstrap-plan` to the standard runner. It reads the explicit
+  ignored `.local-data/bootstrap-input.json`, validates exact fields, generates
+  a fresh public key, and writes parameterized `statement.json`, separate
+  `sdk-key.txt`, and checksum/completion manifest to a unique ignored directory.
+  It contacts no database, prints no key and never marks a plan applied. Directories
+  are 0700 and artifact files 0600; failed writes never report completion.
+- All 27 load-harness unit tests pass, including key/hash pairing, permissions,
+  statement checksum, unique output directories and invalid input rejection.
+  The PostgreSQL probe now applies the generated artifact to disposable storage
+  and verifies owner listing, matching stored key, replay rejection and rollback.
+  Probe/cleanup pass at
+  `test-results/load/2026-11-06T14-06-56.589Z-project-access/project-access.json`.
+- Input example and review/application boundaries are in `setup/ingestion-data.md`.
+  The verified live Clerk issuer/owner ID and selected target/operator identity
+  remain outstanding in `OPEN_QUESTIONS.md`. No actual local owner configuration
+  was read, no live metadata was provisioned, and no deployment was performed.
+  Next: configure/verify real owner sign-in and provision the selected environment
+  through a reviewed operator workflow; no apply command exists yet.
+
 ### November 6 — atomic initial owner/project provisioning
 
 - Added `createInitialProjectStatement` for explicit new principal, organization,

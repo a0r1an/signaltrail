@@ -1,0 +1,11 @@
+{
+  "principalId": "REPLACE_WITH_NEW_UUID",
+  "issuer": "REPLACE_WITH_VERIFIED_CLERK_ISSUER",
+  "subject": "REPLACE_WITH_OWNER_CLERK_USER_ID",
+  "organizationId": "REPLACE_WITH_NEW_UUID",
+  "organizationName": "Personal",
+  "projectId": "REPLACE_WITH_NEW_UUID",
+  "projectName": "SignalTrail",
+  "keyId": "REPLACE_WITH_NEW_UUID",
+  "keyName": "Browser"
+}

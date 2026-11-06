@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { writeInitialProjectPlan } from '../../scripts/bootstrap-project-plan.mjs';
 import {
   createInitialProjectStatement,
-  createIngestionKey,
   createStoredProjectResolver,
   createProjectListReader,
 } from '../../packages/project-access/dist/index.js';
@@ -22,8 +25,8 @@ export async function exerciseInitialProject(database, sql) {
     projectName: 'Initial project',
     keyId: id(54),
     keyName: 'Browser',
-    publicKey: createIngestionKey(),
   };
+  const root = await mkdtemp(join(tmpdir(), 'signaltrail-bootstrap-proof-'));
   const client = new Client({
     connectionString: 'postgres://signaltrail:signaltrail_local@127.0.0.1:35433/signaltrail',
     connectionTimeoutMillis: 5000,
@@ -31,13 +34,12 @@ export async function exerciseInitialProject(database, sql) {
     statement_timeout: 4000,
   });
   try {
+    const plan = await writeInitialProjectPlan(root, input);
+    const query = JSON.parse(await readFile(join(plan.directory, 'statement.json'), 'utf8'));
+    const publicKey = (await readFile(join(plan.directory, 'sdk-key.txt'), 'utf8')).trim();
     await client.connect();
-    const query = createInitialProjectStatement(input);
     assert.deepEqual((await client.query(query)).rows, [{ project_id: input.projectId }]);
-    assert.equal(
-      await createStoredProjectResolver(database.query)(input.publicKey),
-      input.projectId,
-    );
+    assert.equal(await createStoredProjectResolver(database.query)(publicKey), input.projectId);
     const page = await createProjectListReader(database.query)(
       { issuer: input.issuer, subject: input.subject },
       {},
@@ -47,6 +49,7 @@ export async function exerciseInitialProject(database, sql) {
     await assert.rejects(client.query(query), (error) => error.code === '23505');
     const conflicting = createInitialProjectStatement({
       ...input,
+      publicKey,
       principalId: id(61),
       subject: 'rollback-owner',
       organizationId: id(62),
@@ -66,12 +69,17 @@ export async function exerciseInitialProject(database, sql) {
     );
     return {
       passed: true,
+      generatedArtifactAppliedToFixture: true,
       ownerCanListProject: true,
       storedKeyResolves: true,
       replayRejected: true,
       lateConflictRollsBackAllRows: true,
     };
   } finally {
-    await client.end();
+    try {
+      await client.end();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   }
 }

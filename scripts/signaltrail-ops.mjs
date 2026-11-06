@@ -15,7 +15,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
-  ./scripts/signaltrail-ops.mjs metadata plan
+  ./scripts/signaltrail-ops.mjs metadata plan|bootstrap-plan
   ./scripts/signaltrail-ops.mjs install
   ./scripts/signaltrail-ops.mjs --dry-run <operation>
 
@@ -186,6 +186,9 @@ try {
   } else if (group === 'metadata' && action === 'plan') {
     pnpm('--filter', '@signaltrail/project-access', 'build');
     tasks.push({ command: 'node', args: ['scripts/control-plane-plan.mjs'] });
+  } else if (group === 'metadata' && action === 'bootstrap-plan') {
+    pnpm('--filter', '@signaltrail/project-access', 'build');
+    tasks.push({ command: 'node', args: ['scripts/bootstrap-project-plan.mjs'] });
   } else if (group === 'install') pnpm('install', '--frozen-lockfile');
   else invalid();
   if (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name !== 'signaltrail')

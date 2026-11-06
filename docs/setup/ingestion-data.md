@@ -65,3 +65,34 @@ No migration, key provisioning, or membership creation happens automatically.
 
 Key rotation grace is still an open release decision. Existing browser queues
 remain scoped to their original key; never silently move them to a replacement.
+
+## Initial project plan
+
+Copy `docs/setup/bootstrap-input.example.json` to the ignored
+`.local-data/bootstrap-input.json` and replace every placeholder. Use fresh UUIDs
+and the exact verified Clerk issuer and owner user ID. This does not create a
+Clerk user and cannot verify that the supplied account belongs to you.
+
+```sh
+./scripts/signaltrail-ops.mjs metadata bootstrap-plan
+```
+
+The command creates a unique ignored directory under `test-results/bootstrap/`:
+
+- `statement.json` contains parameterized SQL and bound values for an operator
+  PostgreSQL connection. It contains a key hash, never the raw browser key.
+- `sdk-key.txt` contains the matching public SDK key; it is not printed.
+- `manifest.json` contains the statement-file checksum and `applied: false`.
+
+The directory is private (0700); each artifact is owner-readable/writable (0600).
+Review the selected plan and account IDs before applying it through a separate
+trusted operator connection with a bounded statement/lock timeout. It is a JSON
+query object, not a file to feed directly to psql. There is no apply command yet.
+Do not expose these artifacts through a web server or commit local identity data.
+
+Every planning run generates a fresh public key. Choose one reviewed plan
+explicitly; do not infer that the newest directory was applied or mix its SDK key
+with another statement. After an uncertain application result, inspect the intended
+IDs before retrying. Existing rows cause conflict and rollback, not automatic
+adoption. Keep the selected key for SDK configuration only after confirming the
+database outcome. No browser or dashboard request can invoke provisioning.
