@@ -55,6 +55,10 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 ## Production reliability and operations
 
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
+      Current proposal and launch workload are in
+      [launch cost/capacity](performance/launch-cost-and-capacity.md). Benchmark the
+      actual short-term candidate before claiming support for 100–1,000 active users;
+      no provider or spending is approved yet.
 - [ ] Production TLS, restricted credentials, process supervision, Vercel routing
       and deployment/rollback workflow.
 - [ ] Off-server analytics archiving and reject-ingestion policy when lag exceeds

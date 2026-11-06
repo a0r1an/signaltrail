@@ -47,6 +47,13 @@ Entries are questions, not approvals or completed work.
 - **Infrastructure budget and host:** provider, VPS size, region, monthly budget,
   and expected personal-use traffic remain undecided. Current load results are
   local development evidence; do not treat them as production capacity estimates.
+  User clarified: only owner-built applications, zero current usage, social-media
+  launch and possible growth, with a target burst of 100–1,000 users and measured
+  headroom for scaling. Arrival-vs-concurrent interpretation is pending. The
+  proposal in `performance/launch-cost-and-capacity.md` budgets $35–55/month for
+  analytics with Hobby, or $55–75 with one Vercel Pro seat; these are planning
+  allowances, not approved spending. OVH's advertised starting price/term and
+  candidate-host benchmarks must be checked before purchase or capacity claims.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.

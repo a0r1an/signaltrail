@@ -31,6 +31,21 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 6 — proposed launch cost and capacity plan
+
+- Captured owner-only application use, zero current traffic and a possible
+  social-media burst of 100–1,000 visitors. Published candidate prices were checked
+  and a cost/workload/qualification proposal is recorded in
+  `performance/launch-cost-and-capacity.md`. No provider, spend or deployment is
+  approved. The arrival-vs-concurrent definition remains pending.
+- Planning envelope: $35–55/month for analytics with Vercel Hobby, or $55–75 with
+  one Pro seat, before taxes/application-hosting costs/overages. S3/replay budgets
+  are explicitly provisional; actual replay byte rates are unmeasured.
+- Existing 60-second local 1,000-events/s evidence is separated from candidate VPS
+  capacity. Planned qualification includes singleton/small batches, real stored-key
+  lookup, seeded data, concurrent reads/backups, sustained load, burst drain and
+  accepted/stored reconciliation. Monitoring thresholds are proposed, not deployed.
+
 ### November 6 — signed-in local dashboard confirmed
 
 - User refreshed the real signed-in dashboard and confirmed the SignalTrail
