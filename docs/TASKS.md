@@ -54,6 +54,14 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 
 ## Production reliability and operations
 
+- [x] Local two-CPU/four-GiB frontier and longer repeat: 50 EPS passes a fresh
+      three-minute trial with one million rows; 100 EPS is not repeatably
+      zero-refusal and 200 EPS fails. Exact accepted/stored/offset drain holds;
+      admission and metadata limits surfaced before an observed OOM. See
+      [capacity evidence](performance/4gb-local-capacity.md).
+- [ ] Investigate measured admission/metadata-gate contention without blindly
+      raising bounds; repeat on the selected host with CPU-credit, retained-data,
+      concurrent-query, backup and endurance measurements before capacity claims.
 - [x] First two-GiB comparison: same three stages and concurrent SQL pass under
       1664-MiB service caps plus host allowance. ClickHouse cap headroom is narrow;
       this does not qualify production memory, CPU, disk or endurance.

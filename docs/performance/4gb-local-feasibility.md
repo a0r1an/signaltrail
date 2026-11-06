@@ -25,6 +25,11 @@ Prefer longer retention-scale, background-maintenance and backup tests before
 choosing this as a production size. This one trial does not establish relative
 performance between memory profiles.
 
+The later [two-CPU capacity search](4gb-local-capacity.md) uses one million rows
+and longer/higher traffic. ClickHouse there exceeds this two-GiB fixture's
+512-MiB ClickHouse cap. Do not extend the small-data two-GiB pass to that workload;
+this also does not prove that every possible two-GiB service allocation would fail.
+
 ## Result — four GiB, 2026-11-06
 
 The first complete run passed all three stages and teardown:

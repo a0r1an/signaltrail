@@ -13,7 +13,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs browser test|install|size|benchmark
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
-  ./scripts/signaltrail-ops.mjs load memory-4gb|memory-2gb
+  ./scripts/signaltrail-ops.mjs load memory-4gb|memory-2gb|capacity-4gb|capacity-4gb-boundary|capacity-4gb-confirm
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
@@ -119,7 +119,16 @@ try {
       '-fsS',
       'http://127.0.0.1:9644/public_metrics',
     );
-  else if (group === 'load' && ['memory-4gb', 'memory-2gb'].includes(action)) {
+  else if (
+    group === 'load' &&
+    [
+      'memory-4gb',
+      'memory-2gb',
+      'capacity-4gb',
+      'capacity-4gb-boundary',
+      'capacity-4gb-confirm',
+    ].includes(action)
+  ) {
     for (const name of ['contracts', 'project-access', 'ingestion', 'event-processor'])
       pnpm('--filter', `@signaltrail/${name}`, 'build');
     tasks.push({ command: 'node', args: ['tests/load/memory-run.mjs', action] });

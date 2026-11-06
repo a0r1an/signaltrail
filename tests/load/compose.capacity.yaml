@@ -1,0 +1,16 @@
+services:
+  postgres:
+    cpuset: '0,1'
+    ports: !override
+      - '127.0.0.1:34104:4104'
+      - '127.0.0.1:34105:4105'
+  redpanda:
+    cpuset: '0,1'
+  clickhouse:
+    cpuset: '0,1'
+  valkey:
+    cpuset: '0,1'
+  app:
+    cpuset: '0,1'
+    environment:
+      SIGNALTRAIL_CAPACITY_PROFILE: '1'

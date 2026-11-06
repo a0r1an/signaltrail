@@ -3,6 +3,9 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
+import { measureSourceLag } from './pipeline-measurements.mjs';
+import { createPostgresMembershipDatabase } from '../../packages/project-access/dist/index.js';
 import {
   createIngestionServer,
   createProjectRuntime,
@@ -11,6 +14,8 @@ import {
 const { Client } = createRequire(
   new URL('../../packages/project-access/package.json', import.meta.url),
 )('pg');
+const capacity = process.env.SIGNALTRAIL_CAPACITY_PROFILE === '1';
+const seedRows = capacity ? 1000000 : 100000;
 const pg = new Client({
   connectionString: 'postgres://signaltrail:signaltrail_local@127.0.0.1:5432/signaltrail',
 });
@@ -39,14 +44,38 @@ async function query(sql) {
 }
 await query(await readFile('infra/clickhouse/001-analytics-events.sql', 'utf8'));
 await query(
-  `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%50)), concat('session-',toString(number%50)), number, 'https://load.invalid', '{}', '{}' FROM numbers(100000)`,
+  `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
 );
-const projects = createProjectRuntime({
-  NODE_ENV: 'production',
-  SIGNALTRAIL_INGESTION_DATABASE_URL:
-    'postgres://signaltrail:signaltrail_local@127.0.0.1:5432/signaltrail',
-  SIGNALTRAIL_INGESTION_DATABASE_TLS: 'false',
-});
+let metadataDatabase,
+  metadataFailures = 0,
+  metadataAtCapacity = 0;
+const projects = createProjectRuntime(
+  {
+    NODE_ENV: 'production',
+    SIGNALTRAIL_INGESTION_DATABASE_URL:
+      'postgres://signaltrail:signaltrail_local@127.0.0.1:5432/signaltrail',
+    SIGNALTRAIL_INGESTION_DATABASE_TLS: 'false',
+  },
+  capacity
+    ? {
+        createDatabase(options) {
+          const database = createPostgresMembershipDatabase(options);
+          metadataDatabase = database;
+          return {
+            close: database.close,
+            query(input) {
+              const state = database.snapshot();
+              if (state.inFlight >= state.capacity) metadataAtCapacity++;
+              return database.query(input).catch((error) => {
+                metadataFailures++;
+                throw error;
+              });
+            },
+          };
+        },
+      }
+    : undefined,
+);
 await projects.verify();
 const publisher = createRedpandaPublisher({
   brokers: ['redpanda:9092'],
@@ -55,6 +84,49 @@ const publisher = createRedpandaPublisher({
   maxOutstandingBytes: 8388608,
 });
 await publisher.connect();
+let observer, statusServer;
+let activeRequests = 0,
+  admissionRefused = 0;
+const statusClasses = {};
+if (capacity) {
+  const { Kafka, logLevel } = createRequire(
+    new URL('../../apps/ingestion/package.json', import.meta.url),
+  )('kafkajs');
+  observer = new Kafka({
+    brokers: ['redpanda:9092'],
+    clientId: 'capacity-observer',
+    logLevel: logLevel.ERROR,
+  }).admin();
+  await observer.connect();
+  statusServer = createServer((req, res) => {
+    if (req.url !== '/status') {
+      res.writeHead(404).end();
+      return;
+    }
+    void (async () => {
+      const committed = await observer.fetchOffsets({
+        groupId: 'memory-budget',
+        topics: ['signaltrail.analytics.v1'],
+      });
+      const high = await observer.fetchTopicOffsets('signaltrail.analytics.v1');
+      const source = measureSourceLag(high, committed[0]?.partitions ?? []);
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(
+        JSON.stringify({
+          source,
+          publisher: publisher.snapshot(),
+          admission: { activeRequests, refused: admissionRefused },
+          metadata: {
+            ...metadataDatabase.snapshot(),
+            failedQueries: metadataFailures,
+            attemptsAtCapacity: metadataAtCapacity,
+          },
+          statusClasses,
+        }),
+      );
+    })().catch(() => res.writeHead(503).end());
+  });
+  statusServer.listen(4105, '0.0.0.0');
+}
 const worker = spawn(process.execPath, ['workers/event-processor/dist/main.js'], {
   stdio: 'inherit',
   env: {
@@ -77,6 +149,18 @@ const server = createIngestionServer({
   maxConcurrentRequests: 32,
   resolveProjectKey: projects.resolveProjectKey,
   publish: publisher.publish,
+  ...(capacity
+    ? {
+        observeAdmission(active, refused) {
+          activeRequests = active;
+          if (refused) admissionRefused++;
+        },
+        observeRequest(status) {
+          const key = String(status);
+          statusClasses[key] = (statusClasses[key] ?? 0) + 1;
+        },
+      }
+    : {}),
 });
 server.listen(4104, '0.0.0.0');
 for (const signal of ['SIGTERM', 'SIGINT'])
@@ -90,5 +174,7 @@ for (const signal of ['SIGTERM', 'SIGINT'])
     await new Promise((resolve) => worker.once('exit', resolve));
     await publisher.close();
     await projects.close();
+    await observer?.disconnect();
+    statusServer?.close();
     clearTimeout(deadline);
   });

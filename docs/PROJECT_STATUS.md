@@ -19,6 +19,37 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-06
 
+### November 6 — two-CPU/four-GiB offered-load frontier
+
+- Added `load capacity-4gb`, `capacity-4gb-boundary` and `capacity-4gb-confirm`.
+  The isolated services share verified CPU affinity 0,1, retain the four-GiB
+  memory budget, seed one million historical rows, use 1000 session IDs and
+  singleton HTTP requests, and run concurrent analytical SQL. Fixture diagnostics
+  record real committed source lag, publisher/admission counters and, for repeats,
+  metadata occupancy/failures. Production limits were not changed.
+- Initial ramp passed 10/25/50/100 EPS for 60 seconds each, then failed 200 EPS
+  with 253 HTTP 503s and two generator drops. There were 226 measured request
+  refusals; the remainder were not attributed by that initial observer. Report:
+  `test-results/load/2026-11-06T23-21-46.541Z-capacity-4gb/result.json`.
+- The longer 100-EPS repeat failed after 51 HTTP 503s: 16 request refusals plus
+  35 instrumented metadata-at-capacity failures (four connections, 16 in-flight
+  query limit). Refusals appeared around 80 seconds, beyond the original short
+  trial. All 11950 accepted events were stored, with final lag zero. Report:
+  `test-results/load/2026-11-06T23-30-08.723Z-capacity-4gb-boundary/result.json`.
+- A fresh three-minute 50-EPS confirmation passed: 9001 accepted/unique stored,
+  no refusals, retries, rejections, malformed outcomes or generator drops, and
+  final lag zero. HTTP p95 9.56 ms / p99 34.95 ms. Largest sampled displayed target
+  memory 1073.15 MiB; ClickHouse peak 677.9 MiB; sampled target CPU about 0.612
+  cores on average. Report:
+  `test-results/load/2026-11-06T23-34-41.658Z-capacity-4gb-confirm/result.json`.
+- All three runs cleaned up their owned infrastructure, preserving development
+  services; no detected OOM or restart occurred. All 37 harness unit tests pass.
+  Failed targets remain failed reports, not successful qualification. See
+  `performance/4gb-local-capacity.md` for thresholds, tables and interpretation.
+  This establishes a local reference at 50 EPS, not an exact RAM/instance ceiling,
+  endurance result or Lightsail CPU-credit/EBS guarantee. Next: investigate bounded
+  admission settings and qualify the actual host with maintenance/endurance load.
+
 ### November 6 — two-GiB local feasibility comparison
 
 - Added `load memory-2gb`, reusing the isolated workload and verification with

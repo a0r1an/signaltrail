@@ -2,6 +2,19 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { memoryPlan, memoryPlans, verifyMemoryLimits } from './memory-budget.mjs';
 
+test('capacity profile requires all target services on the same two logical CPUs', () => {
+  const plan = memoryPlans['capacity-4gb'];
+  const containers = Object.entries(plan.services).map(([service, mib]) => ({
+    Config: { Labels: { 'com.docker.compose.service': service } },
+    HostConfig: { Memory: mib * 1048576, MemorySwap: mib * 1048576, CpusetCpus: '0,1' },
+    State: { Running: true, OOMKilled: false },
+    RestartCount: 0,
+  }));
+  assert.doesNotThrow(() => verifyMemoryLimits(containers, plan));
+  containers[0].HostConfig.CpusetCpus = '';
+  assert.throws(() => verifyMemoryLimits(containers, plan));
+});
+
 test('two GiB plan reserves host memory and validates its own smaller limits', () => {
   const plan = memoryPlans['memory-2gb'];
   assert.ok(plan);
