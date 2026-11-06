@@ -71,6 +71,35 @@ Provider daily backups are not the agreed one-hour recovery point or a proven
 datacenter-loss recovery mechanism. Off-server archive/backups, lag gating and a
 restore drill remain required work. Preserve independent S3 budget for those.
 
+## AWS alternatives (not selected)
+
+Lightsail Linux dual-stack bundles currently list 8 GB/2 vCPU/160 GB SSD/5 TB
+transfer at $44/month, memory-optimized 16 GB/2 vCPU/160 GB at $74, and general
+purpose 16 GB/4 vCPU/320 GB/6 TB at $84. Public IPv4 is included. The $84 plan is
+the stronger AWS candidate to qualify for this colocated stack; the $44 plan is
+a lean experiment, not a 1,000-user guarantee. Sources:
+[Lightsail pricing](https://aws.amazon.com/lightsail/pricing/),
+[CPU baseline/burst behavior](https://docs.aws.amazon.com/lightsail/latest/userguide/baseline-cpu-performance.html).
+
+For the $84 plan, allow $5–15 for snapshots, $3–10 for S3 recovery objects/requests
+and $1–2 for domain equivalent. Calculated total is $93–111 with Hobby, $113–131
+with one Vercel Pro seat. These are allowances before tax, replay, application
+hosting and overages; no promotional credits are assumed. Qualification must
+include CPU burst depletion and sustained disk behavior.
+
+EC2 offers independent instance/EBS sizing, instance-profile credentials and
+broader networking/automation options, but requires a region/type-specific quote.
+As a cost-structure illustration, 200 GiB gp3 at $0.08/GiB-month adds $16/month;
+one IPv4 at $0.005/hour for 730 hours adds $3.65. Compute, snapshots and applicable
+transfer are additional. These are example rates, not a complete Oregon quote.
+Sources: [EBS](https://aws.amazon.com/ebs/pricing/),
+[IPv4](https://aws.amazon.com/vpc/pricing/),
+[EC2](https://aws.amazon.com/ec2/pricing/on-demand/).
+
+AWS does not require switching our databases to managed services. A single AWS
+instance still shares one host failure point. Lightsail favors packaged cost;
+EC2 favors infrastructure control. No provider/account/resource was changed.
+
 ## Convert users into a test workload
 
 Clarification pending: whether 1,000 means arrivals over minutes or simultaneous
