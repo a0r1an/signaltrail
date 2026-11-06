@@ -25,7 +25,7 @@ and failure traces live in ignored `test-results/event-explorer-browser/`.
 It does not supply production authentication or real database integration.
 
 The protected `/dashboard` server page now mounts `ConnectedExplorer` for a
-selected project UUID. Its client uses same-origin occurrence-time API methods;
+project selected from the server-rendered membership list. Its client uses same-origin occurrence-time API methods;
 owner/session verification and fresh membership checks live on the server.
 `ExplorerClient` uses date-basis-neutral `countEvents` / `listEvents` methods.
 The injected component defaults to received-time diagnostics; the connected app
@@ -40,3 +40,9 @@ The optional `countVisitors` reader adds an exact visitor total. It is refreshed
 with filters/totals rather than each cursor page. Visitor-only failures preserve
 usable events; a denial from any sibling request clears all private data. The
 connected application uses project-scoped identity resolution for this total.
+
+`ProjectPicker` uses native GET forms for project selection and bounded project
+page navigation. The current cursor is retained when submitting a selection,
+so projects beyond the first metadata page remain selectable. The server only
+mounts the explorer for a project on the current authorized page; malformed or
+unknown requested IDs cannot inject a project/name into the view.

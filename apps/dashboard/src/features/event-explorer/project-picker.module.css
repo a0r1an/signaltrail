@@ -1,0 +1,50 @@
+.picker {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid #d7dfeb;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.picker form {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.field {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 600;
+  min-width: 12rem;
+  max-width: 100%;
+}
+.picker select {
+  max-width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #bac8df;
+  border-radius: 0.4rem;
+  color: #17243a;
+  background: #fff;
+  font: inherit;
+}
+.picker button {
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #2356d8;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.picker nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.picker nav button {
+  background: transparent;
+  padding: 0;
+  color: #2356d8;
+  text-decoration: underline;
+}

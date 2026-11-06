@@ -34,8 +34,10 @@ ClickHouse. Database/auth failures return generic 503 responses without connecti
 details. These endpoints are server routes, not a published standalone service.
 
 The protected `/dashboard` page mounts the occurrence-time explorer after a
-project UUID is selected. Selection does not authorize reads; each API request
-still checks membership. An organization/project picker remains future work.
+project is selected from the server-rendered membership list. Pages are bounded
+and use principal-bound cursors. Selecting a project preserves its project-page
+position. Selection does not authorize analytics reads; each API request still
+checks membership. No projects or memberships are automatically created.
 The browser client uses `endpoint: location.origin`, `pathPrefix: 'api/analytics/'`
 and an explicit same-origin fetch adapter. It passes no service credentials to
 the browser. Both occurrence and received timestamps are displayed; the default

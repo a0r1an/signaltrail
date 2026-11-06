@@ -387,6 +387,20 @@ try {
       });
       await expect(page.getByLabel('Unique visitors', { exact: true })).toHaveText('1');
       result.cases.connectedSameOriginOccurrenceView = true;
+      await page.route('**/dashboard?**', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<!doctype html><p>Project selection submitted</p>',
+        }),
+      );
+      await page.getByLabel('Project', { exact: true }).selectOption('project-b');
+      await page.getByRole('button', { name: 'Open project', exact: true }).click();
+      await expect(page).toHaveURL(/\/dashboard\?/);
+      const projectSelection = new URL(page.url());
+      assert.equal(projectSelection.searchParams.get('projectId'), 'project-b');
+      assert.equal(projectSelection.searchParams.get('projectCursor'), 'fixture-project-position');
+      result.cases.projectPickerPreservesPageOnSelection = true;
       assert.deepEqual(errors, []);
       result.passed = true;
     })(),

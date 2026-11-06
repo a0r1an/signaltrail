@@ -29,6 +29,25 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — server-rendered project picker
+
+- Replaced manual UUID entry with membership-scoped project selection and bounded
+  native-form page navigation. Unknown/malformed requested project IDs never
+  mount the explorer. Selection retains the current project cursor so later-page
+  projects remain selectable; empty/unavailable lists have explicit states.
+- Service connections are shared with analytics reads; owner/project grants are
+  reverified, not cached. Verifier failures remain unavailable and cannot be
+  misclassified as invalid user input. No project or membership is auto-created.
+- All 74 dashboard tests plus lint/types/optimized build pass. Native browser
+  verification passes 16 groups with cleanup:
+  `test-results/event-explorer-browser/2026-11-06T00-09-55.845Z/report.json`.
+  A fixture-only Next-router import first prevented startup; native server forms
+  removed that dependency. A later trace exposed an ambiguous select label; an
+  explicit label/ID fixed it without increasing the probe deadline.
+- Live Clerk configuration, restricted data roles and owner metadata remain
+  unverified. Next: bound owner-session verification latency, then finish the
+  operator setup workflow and real owner sign-in checks.
+
 ### November 5 — membership-scoped project listing foundation
 
 - Added `createProjectListReader` for bounded organization-membership project

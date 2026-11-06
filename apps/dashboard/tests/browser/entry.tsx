@@ -1,3 +1,4 @@
+import { ProjectPicker } from '../../src/features/event-explorer/project-picker';
 import { ConnectedExplorer } from '../../src/features/event-explorer/connected-explorer';
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -26,6 +27,20 @@ function Fixture() {
         </button>
         <button onClick={() => setScope('fixture-session-b')}>Replace session</button>
       </aside>
+      {connected && (
+        <ProjectPicker
+          page={{
+            projects: [
+              { id: 'project-a', name: 'Demo store' },
+              { id: 'project-b', name: 'Second project' },
+            ],
+            hasMore: true,
+            nextCursor: 'fixture-next-project',
+          }}
+          selectedId={project.id}
+          cursor="fixture-project-position"
+        />
+      )}
       {connected ? (
         <ConnectedExplorer
           project={project}

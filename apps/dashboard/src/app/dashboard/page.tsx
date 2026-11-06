@@ -1,3 +1,7 @@
+import Link from 'next/link';
+import { ProjectPicker } from '../../features/event-explorer/project-picker';
+import { readDashboardProjects } from '../../features/analytics/service';
+import { selectedProject } from '../../features/analytics/project-selection';
 import { createHash } from 'node:crypto';
 import { ConnectedExplorer } from '../../features/event-explorer/connected-explorer';
 import { SignOutButton } from '@clerk/nextjs';
@@ -7,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ projectId?: string | string[] }>;
+  searchParams: Promise<{ projectId?: string | string[]; projectCursor?: string | string[] }>;
 }) {
   const access = await readOwnerAccess();
   if (access.status === 'unauthenticated') redirect('/sign-in');
@@ -19,11 +23,16 @@ export default async function DashboardPage({
         <p>Authentication could not be confirmed. Try again later.</p>
       </main>
     );
-  const requested = (await searchParams).projectId;
-  const projectId =
-    typeof requested === 'string' &&
-    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(requested)
-      ? requested.toLowerCase()
+  const parameters = await searchParams;
+  const cursor = parameters.projectCursor;
+  const selection = Array.isArray(cursor)
+    ? { status: 'invalid_query' as const }
+    : await readDashboardProjects(cursor === undefined ? {} : { cursor });
+  if (selection.status === 'unauthenticated') redirect('/sign-in');
+  if (selection.status === 'forbidden') notFound();
+  const project =
+    selection.status === 'available'
+      ? selectedProject(selection.page, parameters.projectId)
       : undefined;
   const scopeKey = createHash('sha256')
     .update(JSON.stringify([access.principal, access.sessionId]))
@@ -33,22 +42,26 @@ export default async function DashboardPage({
   return (
     <main>
       <h1>SignalTrail</h1>
-      <form action="/dashboard" method="get">
-        <label>
-          Project ID{' '}
-          <input
-            name="projectId"
-            required
-            defaultValue={projectId ?? ''}
-            maxLength={36}
-            placeholder="Project UUID"
-          />
-        </label>
-        <button type="submit">Open project</button>
-      </form>
-      {projectId ? (
+      {selection.status === 'available' ? (
+        <ProjectPicker
+          page={selection.page}
+          {...(project ? { selectedId: project.id } : {})}
+          {...(typeof cursor === 'string' ? { cursor } : {})}
+        />
+      ) : (
+        <p role="alert">
+          {selection.status === 'invalid_query' ? (
+            <>
+              This project page is invalid. <Link href="/dashboard">Start again</Link>.
+            </>
+          ) : (
+            'Projects are temporarily unavailable. Try again later.'
+          )}
+        </p>
+      )}
+      {project ? (
         <ConnectedExplorer
-          project={{ id: projectId, name: 'Selected project' }}
+          project={project}
           scopeKey={scopeKey}
           initialQuery={{
             from: new Date(now - 86400000).toISOString(),
@@ -56,7 +69,7 @@ export default async function DashboardPage({
           }}
         />
       ) : (
-        <p>Choose a project you belong to. Project access is checked before analytics reads.</p>
+        <p>Choose an available project to explore its activity.</p>
       )}
       <SignOutButton redirectUrl="/sign-in">
         <button>Sign out</button>
