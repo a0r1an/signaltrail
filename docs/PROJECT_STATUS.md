@@ -29,6 +29,20 @@ healthcheck defect was reproduced and corrected with a controlled initialization
 gate. Changes are local; no push, deployment, or remote CI verification has been
 performed. Historical sections below preserve evidence from their recorded dates.
 
+### November 5 — identified visitor total in explorer
+
+- Added exact identified-visitor totals beside event totals in the connected
+  occurrence-time view. Cursor-only navigation does not recount totals. A visitor
+  query failure leaves events/event totals usable; any access denial clears all
+  displayed data. Existing diagnostics can omit the optional visitor reader.
+- All 68 dashboard tests and lint/types/build pass. Native connected rendering
+  passes, including the visitor total, with owned browser/server cleanup:
+  `test-results/event-explorer-browser/2026-11-06T00-00-17.195Z/report.json`
+  (UTC date is November 6; local session date remains November 5).
+- Next: replace manual UUID selection with a bounded membership-scoped project
+  picker. Actual Clerk login, read-role provisioning and owner metadata remain
+  unverified; fixture screenshots do not establish deployment readiness.
+
 ### November 5 — connected occurrence-time explorer
 
 - Mounted the explorer on the protected `/dashboard` page after UUID project

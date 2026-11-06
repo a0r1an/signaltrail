@@ -105,6 +105,7 @@ const handler = createAnalyticsQueryHandler({
       ? { status: 'authorized', projectId }
       : { status: 'forbidden' };
   },
+  countOccurredVisitors: async () => ({ count: '1' }),
   countOccurredEvents: async (query) => ({
     count: String((await data(query, { ...config })).length),
   }),
@@ -384,6 +385,7 @@ try {
         path: resolve(directory, 'event-time-connected-desktop.png'),
         fullPage: true,
       });
+      await expect(page.getByLabel('Unique visitors', { exact: true })).toHaveText('1');
       result.cases.connectedSameOriginOccurrenceView = true;
       assert.deepEqual(errors, []);
       result.passed = true;

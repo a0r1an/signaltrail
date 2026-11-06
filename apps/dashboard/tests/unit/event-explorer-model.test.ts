@@ -258,3 +258,63 @@ it('ignores authorization failures from an obsolete filter request', async () =>
     eventsError: undefined,
   });
 });
+it('loads visitor totals without recounting them for cursor-only navigation', async () => {
+  const countVisitors = vi.fn(async () => ({ count: '9007199254740993' }));
+  const base = fixture();
+  const client = { ...base.client, countVisitors };
+  const model = createEventExplorerModel({
+    projectId: 'trusted-project',
+    initialQuery: query,
+    client,
+  });
+  await model.apply(query);
+  expect(model.getSnapshot()).toMatchObject({ visitors: '9007199254740993' });
+  await model.next();
+  expect(countVisitors).toHaveBeenCalledTimes(1);
+  expect(countVisitors).toHaveBeenCalledWith(
+    { ...query, projectId: 'trusted-project' },
+    expect.any(AbortSignal),
+  );
+});
+it('keeps event data and totals usable when only visitor counting fails', async () => {
+  const base = fixture();
+  const model = createEventExplorerModel({
+    projectId: 'trusted-project',
+    initialQuery: query,
+    client: {
+      ...base.client,
+      countVisitors: async () => {
+        throw new Error('private detail');
+      },
+    },
+  });
+  await model.apply(query);
+  expect(model.getSnapshot()).toMatchObject({
+    page,
+    count: '18446744073709551615',
+    visitors: undefined,
+    visitorError: 'unavailable',
+    eventsError: undefined,
+    countError: undefined,
+  });
+});
+it('clears all event and visitor data when the visitor request reports revoked access', async () => {
+  const base = fixture(),
+    countVisitors = vi.fn(async () => ({ count: '1' }));
+  const model = createEventExplorerModel({
+    projectId: 'trusted-project',
+    initialQuery: query,
+    client: { ...base.client, countVisitors },
+  });
+  await model.apply(query);
+  countVisitors.mockRejectedValueOnce({ status: 403 });
+  await model.refresh();
+  expect(model.getSnapshot()).toMatchObject({
+    page: undefined,
+    count: undefined,
+    visitors: undefined,
+    eventsError: 'forbidden',
+    countError: 'forbidden',
+    visitorError: 'forbidden',
+  });
+});

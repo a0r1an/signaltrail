@@ -10,6 +10,10 @@ export type ExplorerQuery = Omit<AnalyticsCountRequest, 'projectId'>;
 export type ExplorerError = 'sign_in' | 'forbidden' | 'invalid_query' | 'unavailable';
 export interface ExplorerClient {
   countEvents(query: AnalyticsCountRequest, signal?: AbortSignal): Promise<AnalyticsCountResponse>;
+  countVisitors?(
+    query: AnalyticsCountRequest,
+    signal?: AbortSignal,
+  ): Promise<AnalyticsCountResponse>;
   listEvents(
     query: AnalyticsEventListRequest,
     signal?: AbortSignal,
@@ -19,12 +23,14 @@ export interface ExplorerState {
   query: ExplorerQuery;
   page: AnalyticsEventPage | AnalyticsOccurredEventPage | undefined;
   count: string | undefined;
+  visitors: string | undefined;
   cursor: string | undefined;
   pageIndex: number;
   loading: boolean;
   closed: boolean;
   eventsError: ExplorerError | undefined;
   countError: ExplorerError | undefined;
+  visitorError: ExplorerError | undefined;
 }
 export interface ExplorerOptions {
   projectId: string;
@@ -59,12 +65,14 @@ export function createEventExplorerModel(options: ExplorerOptions) {
     query: pickQuery(options.initialQuery),
     page: undefined,
     count: undefined,
+    visitors: undefined,
     cursor: undefined,
     pageIndex: 1,
     loading: false,
     closed: false,
     eventsError: undefined,
     countError: undefined,
+    visitorError: undefined,
   });
   const listeners = new Set<() => void>();
   let revision = 0;
@@ -92,7 +100,16 @@ export function createEventExplorerModel(options: ExplorerOptions) {
       loading: true,
       eventsError: undefined,
       countError: recount ? undefined : state.countError,
-      ...(reset ? { page: undefined, count: undefined, cursor: undefined, pageIndex: 1 } : {}),
+      visitorError: recount ? undefined : state.visitorError,
+      ...(reset
+        ? {
+            page: undefined,
+            count: undefined,
+            visitors: undefined,
+            cursor: undefined,
+            pageIndex: 1,
+          }
+        : {}),
     });
     function watch<T>(promise: Promise<T>): Promise<T> {
       return promise.catch((error: unknown) => {
@@ -109,11 +126,13 @@ export function createEventExplorerModel(options: ExplorerOptions) {
             ...state,
             page: undefined,
             count: undefined,
+            visitors: undefined,
             cursor: undefined,
             pageIndex: 1,
             loading: false,
             eventsError: kind,
             countError: kind,
+            visitorError: kind,
           });
         }
         throw error;
@@ -130,7 +149,17 @@ export function createEventExplorerModel(options: ExplorerOptions) {
       (async () =>
         recount ? client.countEvents({ ...query, projectId }, controller.signal) : undefined)(),
     );
-    const [events, count] = await Promise.allSettled([pagePromise, countPromise]);
+    const visitorPromise = watch(
+      (async () =>
+        recount && client.countVisitors
+          ? client.countVisitors({ ...query, projectId }, controller.signal)
+          : undefined)(),
+    );
+    const [events, count, visitors] = await Promise.allSettled([
+      pagePromise,
+      countPromise,
+      visitorPromise,
+    ]);
     if (state.closed || requestId !== revision) return;
     pending = undefined;
     const eventsError = events.status === 'rejected' ? classify(events.reason) : undefined;
@@ -141,9 +170,18 @@ export function createEventExplorerModel(options: ExplorerOptions) {
       loading: false,
       eventsError,
       countError,
+      visitorError:
+        visitors.status === 'rejected'
+          ? classify(visitors.reason)
+          : recount
+            ? undefined
+            : state.visitorError,
       ...(events.status === 'fulfilled' ? { page: events.value, cursor, pageIndex } : {}),
       ...(count.status === 'fulfilled' && count.value !== undefined
         ? { count: count.value.count }
+        : {}),
+      ...(visitors.status === 'fulfilled' && visitors.value !== undefined
+        ? { visitors: visitors.value.count }
         : {}),
     });
   }
@@ -174,7 +212,7 @@ export function createEventExplorerModel(options: ExplorerOptions) {
       revision++;
       pending?.abort();
       pending = undefined;
-      emit({ ...state, loading: false, page: undefined, count: undefined });
+      emit({ ...state, loading: false, page: undefined, count: undefined, visitors: undefined });
     },
     close() {
       if (state.closed) return;
@@ -187,6 +225,7 @@ export function createEventExplorerModel(options: ExplorerOptions) {
         loading: false,
         page: undefined,
         count: undefined,
+        visitors: undefined,
       });
       listeners.clear();
     },

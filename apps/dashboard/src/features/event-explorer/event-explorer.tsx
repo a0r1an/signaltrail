@@ -130,6 +130,18 @@ function ScopedExplorer({
                 : new Intl.NumberFormat('en-US').format(BigInt(state.count))}
           </strong>
         </div>
+        {client.countVisitors && (
+          <div>
+            <p>Unique visitors</p>
+            <strong aria-label="Unique visitors">
+              {state.visitorError
+                ? 'Total unavailable'
+                : state.visitors === undefined
+                  ? '—'
+                  : new Intl.NumberFormat('en-US').format(BigInt(state.visitors))}
+            </strong>
+          </div>
+        )}
         <p>
           {timeBasis === 'occurred' ? 'Event time' : 'Received time'} · UTC
           <br />

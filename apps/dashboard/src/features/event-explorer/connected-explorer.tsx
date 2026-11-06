@@ -23,7 +23,11 @@ function ScopedConnected(props: ConnectedExplorerProps) {
     });
     queueMicrotask(() => {
       if (active)
-        setClient({ countEvents: query.countOccurredEvents, listEvents: query.listOccurredEvents });
+        setClient({
+          countEvents: query.countOccurredEvents,
+          countVisitors: query.countOccurredVisitors,
+          listEvents: query.listOccurredEvents,
+        });
     });
     return () => {
       active = false;

@@ -35,3 +35,8 @@ and provisioned data credentials remain unverified; the fixture supplies no
 production authentication or fallback.
 Run `./scripts/signaltrail-ops.mjs check dashboard` for models, lint, route types,
 TypeScript and the optimized production build.
+
+The optional `countVisitors` reader adds an exact visitor total. It is refreshed
+with filters/totals rather than each cursor page. Visitor-only failures preserve
+usable events; a denial from any sibling request clears all private data. The
+connected application uses project-scoped identity resolution for this total.
