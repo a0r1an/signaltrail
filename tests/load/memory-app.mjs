@@ -146,7 +146,7 @@ worker.on('exit', (code) => {
   if (!stopping) process.exit(code || 1);
 });
 const server = createIngestionServer({
-  maxConcurrentRequests: 32,
+  maxConcurrentRequests: 128,
   resolveProjectKey: projects.resolveProjectKey,
   publish: publisher.publish,
   ...(capacity

@@ -120,7 +120,8 @@ The probe inspects actual Docker limits rather than assuming Compose enforces
 them. Missing services, restarts, stopped containers and OOM termination fail the
 probe. Both Node processes have a 128-MiB V8 old-space limit, which is separate
 from total resident memory. PostgreSQL uses 64-MB shared buffers and 30 connections.
-Ingestion admits at most 32 concurrent requests. Redpanda fsync bypass is disabled.
+The November 6 fixture admitted at most 32 concurrent requests. The November 9
+comparison changes the fixture cap to 128; see the capacity report. Redpanda fsync bypass is disabled.
 These are fixture settings, not changes to the development or production stack.
 
 ## Workload and checks

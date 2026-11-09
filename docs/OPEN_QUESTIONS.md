@@ -313,3 +313,12 @@ and the point at which an answer becomes necessary.
   key and are never silently reassigned to another key/project. Decide the
   rotation overlap/grace policy before exposing a rotate-key operation so older
   queued events have a deliberate delivery/expiry path.
+
+## November 9 — safeguard comparison follow-up
+
+- User authorized changing one constraint: isolated HTTP cap 32 → 128. The
+  two-minute 100-EPS stage passes once; 150 EPS fails with 206 metadata-gate
+  refusals, long-tail latency and generator drops. Four connections / 16 queries
+  remain unchanged. No user decision is required for paired local repetitions;
+  repeat both HTTP caps in the same session before claiming a causal improvement
+  or choosing production limits. See `performance/4gb-local-capacity.md`.

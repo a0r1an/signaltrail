@@ -1,19 +1,20 @@
 # SignalTrail remaining work
 
-Updated: 2026-11-06. This is the current task queue. Historical “next” entries in
+Updated: 2026-11-09. This is the current task queue. Historical “next” entries in
 PROJECT_STATUS are session records, not instructions to repeat completed work.
 Evidence and limitations belong in PROJECT_STATUS; decisions awaiting the user
 belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked.
 
-## Next session — continue concurrency and capacity discussion
+## Next safeguard comparison
 
-- [ ] Resume the discussion of the provisional 32-request fixture gate versus
-      the normal 128-request default, and the four-connection/16-query metadata
-      bounds. Explain how each affects refusals, latency and resource pressure
-      before implementing further tuning. Then define a controlled comparison
-      using the same hardware/data/workload and changing one bound at a time.
-      Existing evidence supports a local 50-EPS reference, not a hardware ceiling
-      or production guarantee. See [capacity evidence](performance/4gb-local-capacity.md).
+- [x] Explain HTTP concurrency, PostgreSQL pool and outstanding-query limits;
+      user authorized a single-constraint comparison.
+- [x] Raise only isolated fixture HTTP cap 32 → 128 and run boundary profile:
+      100 EPS / 120 seconds passes; 150 EPS fails at metadata gate/latency.
+- [ ] Repeat fresh cap-32/cap-128 trials at 100 EPS in the same session before
+      attributing improvement to the cap. Keep four connections / 16 queries
+      unchanged. Then choose a single metadata constraint to investigate.
+      See [capacity evidence](performance/4gb-local-capacity.md).
 
 ## Completed slice: real local capture to dashboard
 

@@ -10,6 +10,36 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## HTTP admission comparison — 2026-11-09
+
+Changed only the fixture HTTP processing cap from 32 to 128 (the normal ingestion
+application default). Metadata remains four connections / 16 outstanding queries;
+CPU affinity, memory caps, seed data, publisher budgets and boundary workload are
+unchanged. The fixture now uses 128 for subsequent memory/capacity runs; November 6
+results below used 32. Application defaults and development services were unchanged.
+
+Report: `test-results/load/2026-11-09T18-50-43.045Z-capacity-4gb-boundary/result.json`.
+
+- 100 EPS for 120 seconds passed: 12001 accepted/unique stored, no HTTP failures,
+  event retries, admission/metadata refusals or generator drops; final source lag
+  zero. HTTP p95 8.13 ms / p99 27.69 ms. Largest diagnostic query 288.72 ms.
+- 150 EPS for 60 seconds failed: 206 HTTP 503s, all instrumented at the unchanged
+  metadata gate, zero HTTP-admission refusals, 10 event retry outcomes, and 823
+  generator drops. HTTP p95 289.55 ms / p99 3548.87 ms. Later stages were skipped.
+- Failed stage reported 7962 accepted versus 7971 unique stored and zero final
+  source lag. Publisher counters show 10 cancelled/late completions. Ambiguous
+  outcomes prevent exact reconciliation; extra stored rows do not establish
+  accepted-event loss. This remains a failed report.
+- No detected OOM or restart in lifecycle inspection. Owned infrastructure cleanup
+  passed and the load lock was released. All 37 harness units pass.
+
+The old two-minute 100-EPS run at cap 32 failed with 51 HTTP 503s; the new cap-128
+run passed once. Runs were on different days with shared host resources: this is
+not a repeated paired experiment proving causation or a production recommendation.
+At 150 EPS the metadata gate and long-tail latency remain material constraints.
+Next: fresh same-session cap-32/cap-128 repetitions at 100 EPS to establish whether
+improvement is reproducible, before changing the database pool or query gate.
+
 ## Measured ramp and repeat — 2026-11-06
 
 Initial ramp:
@@ -95,7 +125,8 @@ repeat on the selected host with longer runs and background maintenance.
 - The boundary profile starts with 100 EPS for 120 seconds, followed by 150/175/
   200 EPS for 60 seconds each if every preceding stage passes. The confirmation
   profile runs only 50 EPS for 180 seconds. All use the same resource limits.
-- Ingestion admits 32 concurrent requests. Publisher budgets remain 1000 events
+- November 6 ingestion admitted 32 concurrent requests; the November 9 fixture
+  uses 128 as described above. Publisher budgets remain 1000 events
   and 8 MiB. These application limits can bind before RAM is exhausted.
 - Concurrent direct `FINAL` count/unique-visitor queries group by event name.
   These are not the authenticated dashboard's complete query workload.

@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-11-06
+Last updated: 2026-11-09
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 The current actionable queue is [TASKS.md](TASKS.md); historical “next” entries
@@ -17,7 +17,28 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-11-06
+## Current checkpoint — 2026-11-09
+
+### November 9 — single-constraint HTTP admission comparison
+
+- User authorized changing one safeguard and reporting the result. Changed only
+  isolated memory fixture HTTP admission from 32 to 128; metadata remains four
+  connections / 16 outstanding queries. Normal application default remains 128.
+- Boundary run: 100 EPS / 120 seconds passed (12001 accepted/unique stored, no
+  refusals/retries/drops, final lag zero, HTTP p95 8.13 ms / p99 27.69 ms).
+  150 EPS / 60 seconds failed with 206 metadata-gate HTTP 503s, zero HTTP-gate
+  refusals, 10 event retries and 823 generator drops; p99 3548.87 ms.
+- Failed stage: 7962 accepted versus 7971 unique stored, with late publication
+  completions and zero final lag; ambiguous outcomes prevent exact reconciliation.
+  No accepted-event loss claim or passing capacity claim follows from that stage.
+- All 37 harness unit tests pass; lifecycle inspection found no OOM/restart.
+  Owned infrastructure cleanup passed and the load lock was released.
+  Report: `test-results/load/2026-11-09T18-50-43.045Z-capacity-4gb-boundary/result.json`.
+- Historical cap-32 comparison is on a different day/shared host. Next: fresh
+  paired repeats at 100 EPS before attributing the improvement to the cap or
+  changing the four-connection/16-query limits. Details in the capacity report.
+
+## Previous checkpoint — 2026-11-06
 
 ### November 6 — end-of-day checkpoint and next discussion
 
