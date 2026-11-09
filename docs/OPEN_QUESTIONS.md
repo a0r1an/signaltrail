@@ -358,11 +358,10 @@ and the point at which an answer becomes necessary.
 
 ## November 9 — telemetry access and observed scheduling pressure
 
-- Grafana dashboard/instance URL requested asynchronously; no open tab or recent
-  Grafana history found. Existing token is configured for writes; read access is
-  not assumed. Needed for direct cloud comparison; independent local work proceeds.
-  Capacity fixtures did not advertise load targets, so cloud coverage of prior
-  capacity runs is unverified and development graphs are not substitutes.
+- The capacity scrape-discovery gap identified during this investigation is now
+  resolved for future runs. Historical missing telemetry remains unavailable.
+  The single pending Grafana URL/access dependency is tracked in the Grafana
+  capacity telemetry follow-up below; development graphs are not substitutes.
 - Interval diagnostic run captured one refusal with assigned CPUs around 91–92%
   busy, CPU pressure and GC activity, without app throttle/memory events. Broader
   CPU/scheduling contention is the lead; historical 6.9-second stall not reproduced.
@@ -373,7 +372,7 @@ and the point at which an answer becomes necessary.
   14 metadata refusals, all accepted events stored, CPU pressure remains about 13%.
   Concurrent analytical reads are not a sufficient explanation. Next isolate
   generator/host conditions, then profile ingestion CPU/GC if pressure remains.
-  No new paid or external action is assumed; cloud URL remains optional pending input.
+  No new paid or external action is assumed; see the current Grafana follow-up below.
 
 ## November 9 — generator isolation, memory allocation and Lightsail options
 
