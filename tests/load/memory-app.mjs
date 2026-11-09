@@ -60,7 +60,10 @@ const projects = createProjectRuntime(
   capacity
     ? {
         createDatabase(options) {
-          const database = createPostgresMembershipDatabase(options);
+          const database = createPostgresMembershipDatabase({
+            ...options,
+            maxConnections: Number(process.env.SIGNALTRAIL_FIXTURE_DB_CONNECTIONS ?? 4),
+          });
           metadataDatabase = database;
           return {
             close: database.close,

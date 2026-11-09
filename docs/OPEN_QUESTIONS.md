@@ -335,3 +335,10 @@ and the point at which an answer becomes necessary.
   implemented and verified. Instrumented 100-EPS trial passed without reproducing
   a refusal, so the earlier cause remains unresolved. Reproduce with these
   diagnostics before tuning; no new user decision is required for investigation.
+
+- User subsequently authorized eight connections / 16 total queries. Isolated
+  `capacity-4gb-db8` 100-EPS/two-minute trial passes with all eight connections
+  observed executing concurrently. Both instrumented four/eight runs passed;
+  eight remains experimental, with no production default change or proven
+  superiority. Next matched longer repeats/higher-load diagnosis; no new user
+  decision is required for local verification.

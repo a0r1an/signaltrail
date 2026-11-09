@@ -23,7 +23,7 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
-  if (['capacity-4gb-http32', 'capacity-4gb-http128'].includes(profile))
+  if (['capacity-4gb-http32', 'capacity-4gb-http128', 'capacity-4gb-db8'].includes(profile))
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];
   if (profile === 'capacity-4gb-confirm')
     return [{ users: 500, rate: 50, sessionCount: 1000, durationSeconds: 180 }];

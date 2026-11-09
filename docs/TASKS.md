@@ -17,10 +17,12 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Add retained metadata occupancy peaks, acquisition/execution timing and
       timestamped refusals, plus HTTP peaks and ingestion event-loop delay.
       Real PostgreSQL contention probe and unchanged 100-EPS trial pass.
-- [ ] Reproduce a refusal with enhanced diagnostics, correlate pool wait,
-      execution and event-loop measurements, then select one metadata constraint
-      for a controlled experiment. Four connections / 16 queries remain unchanged.
-      See [capacity evidence](performance/4gb-local-capacity.md).
+- [x] User-authorized eight-connection / 16-total-query experiment at 100 EPS
+      for two minutes passes. Named `capacity-4gb-db8` profile retains baseline.
+- [ ] Compare longer repeated four/eight-connection trials at matched load,
+      then matched higher-load tests to reproduce refusals with diagnostics.
+      Keep HTTP 128 and total queries 16 unchanged. See
+      [capacity evidence](performance/4gb-local-capacity.md).
 
 ## Completed slice: real local capture to dashboard
 

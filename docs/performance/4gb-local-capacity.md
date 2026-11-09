@@ -10,6 +10,44 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## Eight-connection comparison — November 9
+
+User authorized eight connections / 16 outstanding queries (up to eight executing
+and eight waiting when all connections are busy). Added `load capacity-4gb-db8`;
+existing profiles retain four connections. Normal application defaults and
+production configuration remain unchanged. Reports assert eight connections and
+16-query capacity from the live adapter; HTTP remains 128. Only pool size changed
+relative to the preceding instrumented trial, with the same 100 EPS / 120 seconds,
+fresh stack, two shared logical CPUs, memory caps, seed data and direct SQL load.
+
+Report: `test-results/load/2026-11-09T19-36-42.403Z-capacity-4gb-db8/result.json`.
+
+| Measurement | Four connections (19:30 run) | Eight connections (19:36 run) |
+| --- | --- | --- |
+| Accepted / unique stored | 12001 / 12001 | 12001 / 12001 |
+| HTTP/metadata refusals | 0 / 0 | 0 / 0 |
+| HTTP p95 / p99, ms | 8.96 / 47.20 | 7.87 / 32.00 |
+| Connection acquisition mean / max, ms | 0.0415 / 95.20 | 0.0369 / 51.79 |
+| Query round-trip mean / max, ms | 0.624 / 53.25 | 0.554 / 55.74 |
+| Peak outstanding / executing queries | 6 / 4 | 8 / 8 |
+| Average sampled service CPU, cores | 0.973 | 0.891 |
+| Peak summed Docker service memory, MiB | 1228.41 | 1244.54 |
+| Ingestion event-loop histogram max, ms | 54.20 | 71.96 |
+
+No retries, rejections, generator drops, detected OOM or restart in the eight-pool
+run; final broker lag zero. Cleanup passed and the lock was released. All 39
+harness units pass, including a workload test first observed failing before the
+new profile was implemented. Resource samples exclude the load generator and
+whole-guest overhead, use 25 snapshots per run, and can miss peaks. Timing totals
+include startup key verification. Acquisition includes setup and waiting; query
+round trips include network/scheduling. Occupancy peaks are lifetime counters.
+
+Eight connections is a viable experimental setting in this trial, not proven
+superior or production-qualified. Both instrumented trials passed; shared-host
+variation and limited duration still apply. Next compare repeated longer four/eight
+trials at identical load, then use a matched higher-load profile to investigate
+the previously failing 150 EPS workload without changing the 16-query gate.
+
 ## Fresh paired HTTP trials — 2026-11-09
 
 Added repeatable `load capacity-4gb-http32` and `load capacity-4gb-http128`

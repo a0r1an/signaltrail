@@ -4,6 +4,7 @@ export const memoryPlan = {
 };
 export const memoryPlans = {
   'memory-4gb': memoryPlan,
+  'capacity-4gb-db8': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb-http32': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb-http128': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb': { ...memoryPlan, cpuSet: '0,1' },

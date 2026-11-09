@@ -14,6 +14,7 @@ assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
 const memoryPlan = memoryPlans[profile];
 const capacity = profile.startsWith('capacity-4gb');
 const httpCap = profile === 'capacity-4gb-http32' ? 32 : 128;
+const dbConnections = profile === 'capacity-4gb-db8' ? 8 : 4;
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
 const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
@@ -29,7 +30,11 @@ function docker(args, timeout = 300000) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap) },
+      env: {
+        ...process.env,
+        SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap),
+        SIGNALTRAIL_FIXTURE_DB_CONNECTIONS: String(dbConnections),
+      },
     });
     let output = '',
       error = '';
@@ -121,7 +126,7 @@ let result = {
   profile,
   applicationLimits: {
     httpConcurrentRequests: httpCap,
-    metadataConnections: 4,
+    metadataConnections: dbConnections,
     metadataOutstandingQueries: 16,
   },
   ...(capacity
@@ -326,7 +331,8 @@ try {
         deadline = Date.now() + 60000;
       do {
         stage.pipeline = await status();
-        assert.equal(stage.pipeline.metadata.maxConnections, 4);
+        assert.equal(stage.pipeline.metadata.maxConnections, dbConnections);
+        assert.equal(stage.pipeline.metadata.capacity, 16);
         assert.ok(stage.pipeline.metadata.connectionWaitMs.count > 0);
         assert.ok(stage.pipeline.metadata.queryExecutionMs.count > 0);
         assert.ok(stage.pipeline.admission.peakActiveRequests > 0);

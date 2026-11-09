@@ -56,3 +56,10 @@ test('paired HTTP admission profiles use the identical two-minute 100 EPS worklo
   assert.deepEqual(capacityWorkloads('capacity-4gb-http32'), expected);
   assert.deepEqual(capacityWorkloads('capacity-4gb-http128'), expected);
 });
+
+test('eight-connection comparison preserves the two-minute 100 EPS workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-db8'),
+    capacityWorkloads('capacity-4gb-http128'),
+  );
+});

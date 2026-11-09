@@ -19,6 +19,24 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — eight database connections / 16 total queries
+
+- User authorized 8/8 experiment; added `load capacity-4gb-db8`, preserving four
+  connections for existing profiles and normal defaults. HTTP cap remains 128,
+  total outstanding metadata gate remains 16. Effective values asserted live.
+- Same 100-EPS/two-minute profile passes: 12001 accepted/unique stored, no
+  refusals/retries/rejections/drops, final lag zero, no detected OOM or restart.
+  Cleanup passed and lock released. All 39 harness unit tests pass.
+- HTTP p95/p99 7.87/32.00 ms (preceding four-connection run 8.96/47.20 ms).
+  Acquisition mean/max 0.0369/51.79 ms (four: 0.0415/95.20 ms); execution mean/max
+  0.554/55.74 ms. Eight simultaneous queries observed; outstanding peak eight.
+  Sampled CPU average 0.891 cores and summed service memory peak 1244.54 MiB;
+  these exclude guest overhead and do not establish whole-host limits.
+- Report: `test-results/load/2026-11-09T19-36-42.403Z-capacity-4gb-db8/result.json`.
+  Both instrumented four/eight runs pass; one comparison does not prove causal
+  benefit or production capacity. Next longer repeated matched four/eight trials,
+  then matched higher-load testing while keeping the 16-query gate unchanged.
+
 ### November 9 — bottleneck diagnostics retain transients
 
 - Added PostgreSQL acquisition/execution cumulative timing summaries, occupancy
