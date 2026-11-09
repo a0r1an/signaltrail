@@ -348,3 +348,10 @@ and the point at which an answer becomes necessary.
   a proven remedy. Accepted events reconcile and cleanup passed. Next investigate
   timing/resource intervals around refusals before selecting another safeguard
   experiment. Production settings remain undecided; no deployment/spending approved.
+
+- User authorized total-query gate 24 at eight connections. Both five-minute
+  100-EPS repeats failed, with broader scheduling stalls and both HTTP/database
+  gates filling. No evidence to adopt 24; application defaults unchanged. Before
+  further limit tuning, investigate scheduling/generator pressure and establish
+  stable comparison conditions. Detailed counts/ambiguity are in the capacity
+  report; no new user decision or paid infrastructure is assumed.

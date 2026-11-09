@@ -75,3 +75,10 @@ test('long capacity traffic has time for its duration and summary shutdown', asy
   assert.equal(capacityCommandTimeoutMs('capacity-4gb-db4-long'), 420000);
   assert.equal(capacityCommandTimeoutMs('capacity-4gb-http128'), 300000);
 });
+
+test('24-query gate comparison preserves the five-minute eight-connection workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-db8-q24'),
+    capacityWorkloads('capacity-4gb-db8-long'),
+  );
+});

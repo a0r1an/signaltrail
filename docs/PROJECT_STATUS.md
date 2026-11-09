@@ -19,6 +19,27 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — 24-query gate experiment fails both repeats
+
+- User authorized gate 16 → 24 at eight connections, HTTP 128. Added isolated
+  `load capacity-4gb-db8-q24`; existing profiles and application defaults unchanged.
+  All 42 harness units pass; live adapter asserts effective eight/24 settings.
+- Two fresh five-minute 100-EPS trials both fail. Trial 1: 158 metadata gate +
+  117 HTTP gate refusals (275 HTTP 503s), 152 generator drops, p99 1032.42 ms;
+  29574 accepted/unique stored. Trial 2: 637 gate refusals + 24 other metadata
+  failures + 82 HTTP refusals (743 HTTP 503s), 604 generator drops, 34 event
+  retry outcomes, p99 1738.00 ms; 28602 accepted / 28635 unique stored.
+- Second-run 34 late publications create ambiguous outcomes, preventing exact
+  reconciliation; excess stored rows do not prove accepted-event loss. Both final
+  source lags zero. Neither report passes. Both stacks clean up and release lock;
+  no detected OOM/restart. Reports are listed in the capacity document.
+- Acquisition maxima 1.50 / 6.39 seconds, execution round-trip maxima 1.28 / 6.24
+  seconds, ingestion event-loop delay maxima 1.22 / 6.90 seconds, analytical query
+  maxima 3.44 / 3.75 seconds. Broader stalls confound gate-only causal conclusions.
+- No evidence to adopt 24 as a fix. Next investigate host/container scheduling,
+  timing intervals around refusals and generator pressure before more tuning;
+  establish stable comparison conditions. No production defaults changed.
+
 ### November 9 — alternating five-minute pool repeats completed
 
 - User authorized four five-minute trials at 100 EPS in order 4/8/4/8 connections,

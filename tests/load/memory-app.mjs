@@ -63,6 +63,7 @@ const projects = createProjectRuntime(
           const database = createPostgresMembershipDatabase({
             ...options,
             maxConnections: Number(process.env.SIGNALTRAIL_FIXTURE_DB_CONNECTIONS ?? 4),
+            maxInFlight: Number(process.env.SIGNALTRAIL_FIXTURE_DB_QUERIES ?? 16),
           });
           metadataDatabase = database;
           return {

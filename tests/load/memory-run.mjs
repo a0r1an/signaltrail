@@ -18,7 +18,14 @@ assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
 const memoryPlan = memoryPlans[profile];
 const capacity = profile.startsWith('capacity-4gb');
 const httpCap = profile === 'capacity-4gb-http32' ? 32 : 128;
-const dbConnections = ['capacity-4gb-db8', 'capacity-4gb-db8-long'].includes(profile) ? 8 : 4;
+const dbConnections = [
+  'capacity-4gb-db8',
+  'capacity-4gb-db8-long',
+  'capacity-4gb-db8-q24',
+].includes(profile)
+  ? 8
+  : 4;
+const dbQueries = profile === 'capacity-4gb-db8-q24' ? 24 : 16;
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
 const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
@@ -38,6 +45,7 @@ function docker(args, timeout = capacity ? capacityCommandTimeoutMs(profile) : 3
         ...process.env,
         SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap),
         SIGNALTRAIL_FIXTURE_DB_CONNECTIONS: String(dbConnections),
+        SIGNALTRAIL_FIXTURE_DB_QUERIES: String(dbQueries),
       },
     });
     let output = '',
@@ -131,7 +139,7 @@ let result = {
   applicationLimits: {
     httpConcurrentRequests: httpCap,
     metadataConnections: dbConnections,
-    metadataOutstandingQueries: 16,
+    metadataOutstandingQueries: dbQueries,
   },
   ...(capacity
     ? {
@@ -336,7 +344,7 @@ try {
       do {
         stage.pipeline = await status();
         assert.equal(stage.pipeline.metadata.maxConnections, dbConnections);
-        assert.equal(stage.pipeline.metadata.capacity, 16);
+        assert.equal(stage.pipeline.metadata.capacity, dbQueries);
         assert.ok(stage.pipeline.metadata.connectionWaitMs.count > 0);
         assert.ok(stage.pipeline.metadata.queryExecutionMs.count > 0);
         assert.ok(stage.pipeline.admission.peakActiveRequests > 0);

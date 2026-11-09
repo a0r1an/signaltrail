@@ -10,6 +10,47 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## 24-query gate experiment — November 9
+
+User authorized increasing the total metadata gate from 16 to 24 at eight
+connections. Added `load capacity-4gb-db8-q24`, leaving the HTTP cap at 128 and
+all baseline profiles/application defaults unchanged. Two fresh five-minute
+100-EPS trials use the same memory/CPU allocation, seed rows and concurrent SQL.
+The live adapter is asserted to have eight connections / 24 outstanding slots.
+All 42 harness units pass; the workload test first failed before implementation.
+
+| Trial | Metadata gate refusals | Other metadata failures | HTTP gate refusals | Total HTTP 503s | Generator drops | HTTP p95 / p99, ms | Accepted / unique stored | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 158 | 0 | 117 | 275 | 152 | 19.10 / 1032.42 | 29574 / 29574 | Fail |
+| 2 | 637 | 24 | 82 | 743 | 604 | 377.68 / 1738.00 | 28602 / 28635 | Fail |
+
+Reports:
+- `test-results/load/2026-11-09T20-17-25.957Z-capacity-4gb-db8-q24/result.json`
+- `test-results/load/2026-11-09T20-23-28.552Z-capacity-4gb-db8-q24/result.json`
+
+Both fill the 24-query gate; retained refusal events show eight executing /
+16 waiting. Both also fill the 128-request HTTP gate. First run has zero event
+retries; second has 34 retry outcomes and 34 late publication completions.
+Second-run stored count exceeds explicit acceptance by 33; ambiguous outcomes
+prevent exact reconciliation and do not establish accepted-event loss. Both
+finish with source lag zero. Neither report passes.
+
+Acquisition maxima: 1503.58 / 6386.78 ms. Query round-trip maxima: 1278.65 /
+6241.03 ms. Ingestion event-loop histogram maxima: 1224.74 / 6903.82 ms; this is
+client-process scheduling delay, not proof that PostgreSQL spent that long
+executing SQL. Diagnostic analytical query maxima 3437.75 / 3754.31 ms also
+exceed the two-second criterion. These cumulative extrema do not prove exact
+simultaneity. No detected OOM/restart; both owned stacks cleaned up and released
+the lock. No production settings changed.
+
+Compared with prior eight-connection / 16-query trials (64 and three metadata
+refusals), these outcomes do not support adopting 24 as a fix. They also do not
+prove the gate increase caused worse results: shared-host conditions and broad
+scheduling stalls remain confounders. Stop blind limit increases. Next inspect
+intervals around refusal timestamps, host/container scheduling and generator
+pressure; establish a stable comparable environment before further tuning or
+VPS capacity claims. Keep the 24-query profile as experimental evidence only.
+
 ## Alternating five-minute pool trials — November 9
 
 User authorized four fresh trials at 100 EPS for 300 seconds, in order 4 → 8 → 4 → 8

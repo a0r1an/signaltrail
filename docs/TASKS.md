@@ -22,10 +22,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Complete four alternating five-minute 100-EPS trials (4/8/4/8 connections):
       pass / fail / fail / fail; metadata refusals 0/64/10/3. All accepted events
       stored and all stacks cleaned up. No consistently zero-refusal pool found.
-- [ ] Correlate timing/resource intervals around retained refusal timestamps,
-      then select one further experiment, potentially increasing total-query gate
-      at a fixed pool size. Do not claim eight connections reliably fixes refusals.
-      See [capacity evidence](performance/4gb-local-capacity.md).
+- [x] User-authorized eight connections / 24-total-query experiment: two fresh
+      five-minute 100-EPS trials both fail (275 / 743 HTTP 503s), including HTTP
+      and metadata gate refusals. Experimental profile preserved; no default change.
+- [ ] Investigate host/container scheduling, timing intervals around refusals and
+      generator pressure; establish stable comparison conditions before further
+      limit tuning. Larger gate did not establish improvement. See
+      [capacity evidence](performance/4gb-local-capacity.md).
 
 ## Completed slice: real local capture to dashboard
 
