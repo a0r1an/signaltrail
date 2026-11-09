@@ -25,10 +25,16 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] User-authorized eight connections / 24-total-query experiment: two fresh
       five-minute 100-EPS trials both fail (275 / 743 HTTP 503s), including HTTP
       and metadata gate refusals. Experimental profile preserved; no default change.
-- [ ] Investigate host/container scheduling, timing intervals around refusals and
-      generator pressure; establish stable comparison conditions before further
-      limit tuning. Larger gate did not establish improvement. See
-      [capacity evidence](performance/4gb-local-capacity.md).
+- [x] Add and validate interval scheduling/GC/pressure/PostgreSQL-wait telemetry.
+      Reproduced one refusal with CPU pressure and GC activity in the same interval;
+      no app quota throttling or memory-limit events. Historical long stall remains
+      unresolved; capacity fixtures were not registered with Alloy load discovery.
+- [ ] Controlled workload comparison: suppress only concurrent analytical SQL,
+      retain limits/data/rate/instrumentation, repeat and compare pressure/refusals.
+      See [stall investigation](performance/cpu-stall-investigation.md).
+- [ ] Confirm Grafana dashboard URL/read access and capacity scrape coverage before
+      using cloud graphs as evidence for isolated capacity trials; no token change
+      or remote query success is assumed.
 
 ## Completed slice: real local capture to dashboard
 

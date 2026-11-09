@@ -291,6 +291,7 @@ try {
         try {
           const observation = {
             at: new Date().toISOString(),
+            monotonicStartMs: performance.now(),
             users,
             stats: (await compose('stats', '--no-stream', '--format', 'json'))
               .trim()
@@ -299,6 +300,8 @@ try {
               .map(JSON.parse),
           };
           if (capacity) observation.pipeline = await status();
+          observation.finishedAt = new Date().toISOString();
+          observation.collectionMs = performance.now() - observation.monotonicStartMs;
           samples.push(observation);
           await query(
             'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name FORMAT JSONEachRow',
@@ -442,6 +445,20 @@ await finishRun({
         );
       }
     } catch {}
+    if (capacity) {
+      try {
+        const response = await fetch('http://127.0.0.1:34105/diagnostics', {
+          signal: AbortSignal.timeout(10000),
+        });
+        assert.equal(response.status, 200);
+        const diagnostics = await response.json();
+        assert.ok(diagnostics.totalRecords > 0, 'Missing interval diagnostics');
+        await save('stall-diagnostics.json', diagnostics);
+      } catch (error) {
+        result.passed = false;
+        await save('stall-diagnostics-error.json', { message: error.message });
+      }
+    }
     try {
       await save('services.log', await compose('logs', '--no-color', '--tail', '100'));
     } catch {}

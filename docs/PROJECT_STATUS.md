@@ -19,6 +19,30 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — interval telemetry narrows the stall investigation
+
+- Added fixture-only one-second bounded GC/ELU/process-CPU, app cgroup pressure /
+  throttle / memory / I/O and Docker VM CPU/pressure records, plus PostgreSQL
+  wait snapshots through a separate diagnostic connection. No application limits
+  changed. Docker samples now include start/end and collection duration.
+- All 44 harness units pass. Real 128/8/24 five-minute 100-EPS diagnostic run
+  fails zero-refusal criterion with one metadata 503; 30000 accepted/unique stored,
+  no retries/rejections/generator drops, final lag zero; cleanup/lock release pass.
+  Report: `test-results/load/2026-11-09T20-42-57.585Z-capacity-4gb-db8-q24/result.json`.
+- Refusal interval: assigned CPUs about 92%/91% busy, app cgroup CPU-pressure
+  some/full deltas 458/235 ms, ingestion loop max 195 ms, GC total 110 ms / max
+  40 ms. No app quota throttling, memory-limit events or app I/O-pressure rise.
+  PostgreSQL snapshots capture no lock/storage wait. This supports CPU/scheduling
+  contention with GC contribution as a lead, not a uniquely proven cause.
+- Capacity fixtures were not registered with Alloy's load scraper; no historical
+  Grafana evidence for those runs is claimed. Cloud read access/URL not available;
+  URL requested asynchronously. Existing collector delivery counters are lifetime
+  totals, not per-stall success. No credentials/access changed or telemetry uploaded.
+- Detailed evidence/limits in `performance/cpu-stall-investigation.md`. Next control:
+  repeat unchanged limits/data/rate with concurrent analytical SQL suppressed as
+  the single workload change; compare CPU pressure/refusals before attribution.
+  The prior 6.9-second stall was not reproduced and remains unresolved.
+
 ### November 9 — 24-query gate experiment fails both repeats
 
 - User authorized gate 16 → 24 at eight connections, HTTP 128. Added isolated

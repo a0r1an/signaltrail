@@ -355,3 +355,16 @@ and the point at which an answer becomes necessary.
   further limit tuning, investigate scheduling/generator pressure and establish
   stable comparison conditions. Detailed counts/ambiguity are in the capacity
   report; no new user decision or paid infrastructure is assumed.
+
+## November 9 — telemetry access and observed scheduling pressure
+
+- Grafana dashboard/instance URL requested asynchronously; no open tab or recent
+  Grafana history found. Existing token is configured for writes; read access is
+  not assumed. Needed for direct cloud comparison; independent local work proceeds.
+  Capacity fixtures did not advertise load targets, so cloud coverage of prior
+  capacity runs is unverified and development graphs are not substitutes.
+- Interval diagnostic run captured one refusal with assigned CPUs around 91–92%
+  busy, CPU pressure and GC activity, without app throttle/memory events. Broader
+  CPU/scheduling contention is the lead; historical 6.9-second stall not reproduced.
+  Next reversible control suppresses concurrent analytical SQL at unchanged limits.
+  See `performance/cpu-stall-investigation.md`; no new paid/remote action authorized.

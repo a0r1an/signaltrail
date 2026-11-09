@@ -10,6 +10,13 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## Follow-up interval telemetry
+
+See [CPU stall investigation](cpu-stall-investigation.md) for the unchanged
+128/8/24 diagnostic run, correlated pressure/GC observations and the discovered
+Grafana scrape-coverage gap. It supports a scheduling-contention lead, without
+claiming a unique cause or reconstructing telemetry that was never captured.
+
 ## 24-query gate experiment — November 9
 
 User authorized increasing the total metadata gate from 16 to 24 at eight

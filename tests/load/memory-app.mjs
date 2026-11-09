@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { startStallObserver } from './stall-observer.mjs';
 import { measureSourceLag } from './pipeline-measurements.mjs';
 import { createPostgresMembershipDatabase } from '../../packages/project-access/dist/index.js';
 import {
@@ -89,7 +90,7 @@ const publisher = createRedpandaPublisher({
   maxOutstandingBytes: 8388608,
 });
 await publisher.connect();
-let observer, statusServer;
+let observer, statusServer, stallObserver, diagnosticDatabase;
 let activeRequests = 0,
   admissionRefused = 0;
 const statusClasses = {};
@@ -98,6 +99,24 @@ const recentHttpRefusals = [];
 const eventLoopDelay = capacity ? monitorEventLoopDelay({ resolution: 20 }) : undefined;
 eventLoopDelay?.enable();
 if (capacity) {
+  diagnosticDatabase = new Client({
+    connectionString: 'postgres://signaltrail:signaltrail_local@127.0.0.1:5432/signaltrail',
+    application_name: 'signaltrail-fixture-diagnostics',
+    connectionTimeoutMillis: 2000,
+    query_timeout: 1000,
+    statement_timeout: 500,
+  });
+  diagnosticDatabase.on('error', () => {});
+  await diagnosticDatabase.connect();
+  stallObserver = startStallObserver({
+    database: diagnosticDatabase,
+    snapshot: () => ({
+      metadata: metadataDatabase.snapshot(),
+      admission: { activeRequests, refused: admissionRefused },
+      publisher: publisher.snapshot(),
+      statusClasses: { ...statusClasses },
+    }),
+  });
   const { Kafka, logLevel } = createRequire(
     new URL('../../apps/ingestion/package.json', import.meta.url),
   )('kafkajs');
@@ -108,6 +127,12 @@ if (capacity) {
   }).admin();
   await observer.connect();
   statusServer = createServer((req, res) => {
+    if (req.url === '/diagnostics') {
+      res
+        .writeHead(200, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify(stallObserver.records()));
+      return;
+    }
     if (req.url !== '/status') {
       res.writeHead(404).end();
       return;
@@ -122,6 +147,7 @@ if (capacity) {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(
         JSON.stringify({
           source,
+          diagnostics: stallObserver.snapshot(),
           publisher: publisher.snapshot(),
           admission: {
             activeRequests,
@@ -192,6 +218,8 @@ for (const signal of ['SIGTERM', 'SIGINT'])
     if (stopping) return;
     stopping = true;
     const deadline = setTimeout(() => process.exit(1), 15000);
+    stallObserver?.stop();
+    await diagnosticDatabase?.end();
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
     worker.kill('SIGTERM');
