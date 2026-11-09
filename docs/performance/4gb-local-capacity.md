@@ -209,3 +209,51 @@ dashboard users, backups, monitoring collector, failure/restart drill or product
 disk is included. A local frontier is not a safe production operating ceiling.
 Repeat the relevant boundary and run endurance/maintenance tests on the actual
 candidate host before setting scaling thresholds or a supported user count.
+
+## Enhanced bottleneck observations — November 9
+
+Capacity samples/final pipeline status now include lifetime HTTP occupancy peaks,
+bounded timestamped HTTP refusals, and metadata diagnostics described in
+`packages/project-access/README.md`. Each database gate refusal captures queue
+occupancy immediately, so a five-second poll no longer has to coincide with it.
+The fixture also records cumulative ingestion-process event-loop delay mean/p99/max
+in milliseconds (20-ms histogram resolution). This measures ingestion scheduling,
+not the separate processor process or PostgreSQL scheduler. No limits changed.
+
+Interpret together rather than treating one metric as proof:
+
+| Observation | What to investigate |
+| --- | --- |
+| Connection acquisition time rises while execution stays low | Pool queueing, connection setup, arrival bursts |
+| Execution time rises | Database work, network or scheduling delays |
+| Event-loop delay rises | Ingestion scheduling/CPU contention or blocking work |
+| Metadata refusal event | Outstanding/executing/acquiring/waiting counts at that instant |
+| HTTP occupancy/publisher reservations rise | Body/auth/publication work and downstream pressure |
+
+Timings are cumulative count/total/max summaries, not percentiles; interval means
+can be calculated from deltas. Peaks survive polling gaps but have no full time
+trace. Recent refusal lists retain only the last 32 events, while counters retain
+the full count. Docker sampling remains approximately every five seconds and can
+miss resource spikes. Query timing is client-observed, not server-side execution.
+No query text, parameters or credentials are logged. More instrumentation adds
+some overhead; earlier runs do not contain these fields and cannot be reconstructed.
+
+Verification: access lint/79 unit tests/types/build pass. Real PostgreSQL adapter
+probe passes at `test-results/load/2026-11-09T19-30-21.554Z-project-access/result.json`,
+including deliberate queue wait, slow execution, cancellation and refusal capture.
+The timing test was first observed failing before timing fields were implemented;
+an intermediate test needed an explicit 150-ms contention interval because fixture
+SQL inspection could outlast the initial sleep. Failed artifacts remain failed.
+
+Instrumented unchanged 128/4/16 run:
+`test-results/load/2026-11-09T19-30-50.879Z-capacity-4gb-http128/result.json`.
+100 EPS for 120 seconds passes: 12001 accepted/unique stored, zero failures, retries,
+refusals or generator drops, final lag zero. HTTP p95 8.96 ms / p99 47.20 ms.
+Retained peaks: 13 HTTP requests, six outstanding metadata queries, four executing,
+three acquiring (separate maxima, not necessarily simultaneous). Acquisition
+mean 0.0415 ms / max 95.20 ms; execution mean 0.624 ms / max 53.25 ms, including
+the startup verification query. Event-loop histogram p99 24.04 ms / max 54.20 ms;
+its 20-ms resolution contributes to the baseline and is not pure excess delay.
+No refusal was reproduced, so this run validates observations rather than
+explaining the earlier transient. Both successful probes cleaned up and released
+the lock. Next reproduce a refusal with these diagnostics before tuning limits.

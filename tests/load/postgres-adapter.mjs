@@ -29,6 +29,7 @@ export async function exercisePostgresAdapter({ database, sql, poolErrors }) {
   const queuedController = new AbortController();
   const queued = observe(query('SELECT $1::text AS value', ['queued'], queuedController.signal));
   await waitFor(() => database.snapshot().waiting === 1);
+  await delay(150); // Keep real pool contention long enough to measure.
   queuedController.abort();
   assert.equal(await queued, false);
   assert.equal(
@@ -50,6 +51,16 @@ export async function exercisePostgresAdapter({ database, sql, poolErrors }) {
   values[0] = 'changed-after-submit';
   await hold;
   assert.deepEqual(await snapshotted, { rows: [{ value: 'original' }] });
+  const diagnostics = database.snapshot();
+  assert.ok(diagnostics.connectionWaitMs.max >= 100, 'Must retain connection queue wait');
+  assert.ok(diagnostics.queryExecutionMs.max >= 100, 'Must retain slow execution');
+  assert.ok(diagnostics.connectionWaitMs.count > 0);
+  assert.ok(diagnostics.queryExecutionMs.count > 0);
+  assert.ok(diagnostics.peakInFlight >= 2);
+  assert.ok(diagnostics.peakExecuting >= 1);
+  assert.ok(diagnostics.refused >= 1);
+  assert.ok(diagnostics.recentRefusals[0].waiting >= 1);
+  assert.equal(diagnostics.executing, 0);
   assert.deepEqual(await query('SHOW default_transaction_read_only'), {
     rows: [{ default_transaction_read_only: 'on' }],
   });

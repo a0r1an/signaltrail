@@ -19,6 +19,27 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — bottleneck diagnostics retain transients
+
+- Added PostgreSQL acquisition/execution cumulative timing summaries, occupancy
+  peaks and a bounded 32-event timestamped refusal list. Snapshots return copies
+  without query text, values or credentials. Capacity fixtures save HTTP peaks,
+  bounded HTTP refusal events and ingestion event-loop delay with existing samples.
+  Limits remain 128 HTTP / four connections / 16 outstanding queries.
+- Access lint, 79 tests, types and build pass. Real isolated PostgreSQL probe
+  verifies queue delay, slow execution, refusal capture and cancellation:
+  `test-results/load/2026-11-09T19-30-21.554Z-project-access/result.json`.
+- Instrumented 100-EPS/two-minute run passes: 12001 accepted/unique stored,
+  no failures/refusals/retries/drops, final lag zero. Peaks: 13 HTTP requests,
+  six outstanding queries, four executing. Acquisition mean 0.0415 ms / max
+  95.20 ms; execution mean 0.624 ms / max 53.25 ms. Report:
+  `test-results/load/2026-11-09T19-30-50.879Z-capacity-4gb-http128/result.json`.
+- Both probes cleaned up and released the lock. Earlier intended-failure and
+  intermediate timing-test failures remain failed artifacts. No production
+  limits changed. These measurements validate diagnostics, not the cause of an
+  earlier refusal. Next reproduce a refusal with enhanced instrumentation before
+  tuning pool or gate limits. See the capacity report for timing limitations.
+
 ### November 9 — fresh paired HTTP trials
 
 - Added repeatable `load capacity-4gb-http32` / `capacity-4gb-http128`, each

@@ -14,10 +14,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Repeat fresh cap-32/cap-128 trials at 100 EPS in the same session:
       cap 32 passes; cap 128 has one metadata-gate HTTP 503. No reproducible
       benefit from raising the HTTP cap is established.
-- [ ] Inspect timestamped metadata occupancy/query wait and CPU contention
-      around refusals, then select one metadata constraint for a controlled
-      experiment. Four connections / 16 queries remain unchanged. See
-      [capacity evidence](performance/4gb-local-capacity.md).
+- [x] Add retained metadata occupancy peaks, acquisition/execution timing and
+      timestamped refusals, plus HTTP peaks and ingestion event-loop delay.
+      Real PostgreSQL contention probe and unchanged 100-EPS trial pass.
+- [ ] Reproduce a refusal with enhanced diagnostics, correlate pool wait,
+      execution and event-loop measurements, then select one metadata constraint
+      for a controlled experiment. Four connections / 16 queries remain unchanged.
+      See [capacity evidence](performance/4gb-local-capacity.md).
 
 ## Completed slice: real local capture to dashboard
 

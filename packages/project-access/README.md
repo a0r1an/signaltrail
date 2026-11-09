@@ -172,3 +172,20 @@ set and a checksum manifest under ignored `test-results/migrations/`. It perform
 no database operation. Review/application boundaries are documented in
 `docs/setup/ingestion-data.md`; target selection, a separate operator identity
 and deployment evidence are still required before applying a plan.
+
+The PostgreSQL adapter's `snapshot()` also exposes cumulative diagnostics:
+`maxConnections`, `executing`, `acquiring`, `peakInFlight`, `peakExecuting`,
+`peakAcquiring`, `refused`, and `connectionWaitMs` / `queryExecutionMs` summaries
+(`count`, `total`, `max`, in milliseconds). Acquisition includes connection setup
+and waiting for a pool connection, including failed attempts. Execution is client
+query round-trip time, including failed attempts; it is not server-only SQL time.
+Totals/counts give means; differences between snapshots give interval means.
+Unfinished work is reflected in occupancy, not yet in timing summaries. Cancelling
+an acquisition retains its admission slot until the underlying work settles.
+
+`recentRefusals` retains at most 32 timestamped gate refusals with outstanding,
+executing, acquiring and pool-waiting counts. Snapshots return copies and contain
+no SQL, parameter values or credentials. Peaks/timings/counters cover this adapter
+instance's lifetime and reset when it is recreated. They retain transients between
+polls but do not establish whether CPU scheduling, network or server execution
+caused a delay.

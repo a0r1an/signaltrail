@@ -326,6 +326,11 @@ try {
         deadline = Date.now() + 60000;
       do {
         stage.pipeline = await status();
+        assert.equal(stage.pipeline.metadata.maxConnections, 4);
+        assert.ok(stage.pipeline.metadata.connectionWaitMs.count > 0);
+        assert.ok(stage.pipeline.metadata.queryExecutionMs.count > 0);
+        assert.ok(stage.pipeline.admission.peakActiveRequests > 0);
+        assert.ok(Number.isFinite(stage.pipeline.eventLoopDelayMs.max));
         stage.uniqueStored = Number(
           await query(
             `SELECT count() FROM signaltrail.analytics_events FINAL WHERE startsWith(event_id,'memory-${users}-')`,

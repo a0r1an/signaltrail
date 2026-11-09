@@ -70,3 +70,31 @@ it.each([
     await database.close();
   }
 });
+
+it('retains peak occupancy and bounded refusal diagnostics between snapshots', async () => {
+  const database = createPostgresMembershipDatabase({
+    ...configuration,
+    maxInFlight: 1,
+    timeoutMs: 50,
+  });
+  const first = database
+    .query({ text: 'SELECT 1', values: [], signal: new AbortController().signal })
+    .catch(() => {});
+  try {
+    for (let i = 0; i < 40; i++) {
+      await expect(
+        database.query({ text: 'SELECT 1', values: [], signal: new AbortController().signal }),
+      ).rejects.toThrow();
+    }
+    const state = database.snapshot();
+    expect(state.peakInFlight).toBe(1);
+    expect(state.refused).toBe(40);
+    expect(state.recentRefusals).toHaveLength(32);
+    expect(state.recentRefusals[0]).toMatchObject({ inFlight: 1, capacity: 1 });
+    state.recentRefusals.length = 0;
+    expect(database.snapshot().recentRefusals).toHaveLength(32);
+  } finally {
+    await first;
+    await database.close();
+  }
+});

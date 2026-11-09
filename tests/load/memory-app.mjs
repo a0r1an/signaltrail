@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { measureSourceLag } from './pipeline-measurements.mjs';
 import { createPostgresMembershipDatabase } from '../../packages/project-access/dist/index.js';
 import {
@@ -88,6 +89,10 @@ let observer, statusServer;
 let activeRequests = 0,
   admissionRefused = 0;
 const statusClasses = {};
+let peakActiveRequests = 0;
+const recentHttpRefusals = [];
+const eventLoopDelay = capacity ? monitorEventLoopDelay({ resolution: 20 }) : undefined;
+eventLoopDelay?.enable();
 if (capacity) {
   const { Kafka, logLevel } = createRequire(
     new URL('../../apps/ingestion/package.json', import.meta.url),
@@ -114,7 +119,17 @@ if (capacity) {
         JSON.stringify({
           source,
           publisher: publisher.snapshot(),
-          admission: { activeRequests, refused: admissionRefused },
+          admission: {
+            activeRequests,
+            peakActiveRequests,
+            refused: admissionRefused,
+            recentRefusals: recentHttpRefusals,
+          },
+          eventLoopDelayMs: {
+            mean: Number.isFinite(eventLoopDelay.mean) ? eventLoopDelay.mean / 1e6 : null,
+            p99: eventLoopDelay.percentile(99) / 1e6,
+            max: eventLoopDelay.max / 1e6,
+          },
           metadata: {
             ...metadataDatabase.snapshot(),
             failedQueries: metadataFailures,
@@ -153,7 +168,12 @@ const server = createIngestionServer({
     ? {
         observeAdmission(active, refused) {
           activeRequests = active;
-          if (refused) admissionRefused++;
+          peakActiveRequests = Math.max(peakActiveRequests, active);
+          if (refused) {
+            admissionRefused++;
+            recentHttpRefusals.push({ at: new Date().toISOString(), activeRequests });
+            if (recentHttpRefusals.length > 32) recentHttpRefusals.shift();
+          }
         },
         observeRequest(status) {
           const key = String(status);

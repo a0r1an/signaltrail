@@ -329,3 +329,9 @@ and the point at which an answer becomes necessary.
   timestamped database wait/occupancy and CPU contention before selecting one
   metadata constraint to change. Both stacks cleaned up; no user decision needed
   for read-only investigation.
+
+- Bottleneck visibility follow-up: retained occupancy peaks, bounded timestamped
+  refusals, database acquisition/execution timings and event-loop delay are now
+  implemented and verified. Instrumented 100-EPS trial passed without reproducing
+  a refusal, so the earlier cause remains unresolved. Reproduce with these
+  diagnostics before tuning; no new user decision is required for investigation.

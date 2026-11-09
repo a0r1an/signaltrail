@@ -65,6 +65,27 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
   }
   let closed = false;
   let inFlight = 0;
+  let peakInFlight = 0;
+  let refused = 0;
+  let executing = 0;
+  let peakExecuting = 0;
+  let acquiring = 0;
+  let peakAcquiring = 0;
+  const connectionWaitMs = { count: 0, total: 0, max: 0 };
+  const queryExecutionMs = { count: 0, total: 0, max: 0 };
+  const recordTiming = (metric: typeof connectionWaitMs, ms: number) => {
+    metric.count++;
+    metric.total += ms;
+    metric.max = Math.max(metric.max, ms);
+  };
+  const recentRefusals: Array<{
+    at: string;
+    inFlight: number;
+    capacity: number;
+    waiting: number;
+    executing: number;
+    acquiring: number;
+  }> = [];
   let closing: Promise<void> | undefined;
   const controllers = new Set<AbortController>();
   const pending = new Set<Promise<unknown>>();
@@ -98,6 +119,18 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
   return {
     async query(input: Parameters<AccessOptions['query']>[0]): Promise<{ rows: unknown[] }> {
       const failure = () => new Error('PostgreSQL query was not confirmed');
+      if (!closed && inFlight >= maxInFlight) {
+        refused++;
+        recentRefusals.push({
+          at: new Date().toISOString(),
+          inFlight,
+          capacity: maxInFlight,
+          waiting: pool.waitingCount,
+          executing,
+          acquiring,
+        });
+        if (recentRefusals.length > 32) recentRefusals.shift();
+      }
       if (
         closed ||
         inFlight >= maxInFlight ||
@@ -125,6 +158,7 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
       const controller = new AbortController();
       controllers.add(controller);
       inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
       let client: PoolClient | undefined;
       let released = false;
       const onClientError = () => {
@@ -161,11 +195,28 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
       const work = (async () => {
         try {
           controller.signal.throwIfAborted();
-          client = await pool.connect();
+          const acquireStart = performance.now();
+          acquiring++;
+          peakAcquiring = Math.max(peakAcquiring, acquiring);
+          try {
+            client = await pool.connect();
+          } finally {
+            acquiring--;
+            recordTiming(connectionWaitMs, performance.now() - acquireStart);
+          }
           client.on('error', onClientError);
           controller.signal.throwIfAborted();
           const queryConfig = { text, values, queryMode: 'extended' as const };
-          const result = await client.query<Record<string, unknown>>(queryConfig);
+          const executionStart = performance.now();
+          executing++;
+          peakExecuting = Math.max(peakExecuting, executing);
+          let result;
+          try {
+            result = await client.query<Record<string, unknown>>(queryConfig);
+          } finally {
+            executing--;
+            recordTiming(queryExecutionMs, performance.now() - executionStart);
+          }
           controller.signal.throwIfAborted();
           release(false);
           return { rows: result.rows };
@@ -190,7 +241,22 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
         signal.removeEventListener('abort', cancel);
       }
     },
-    snapshot: () => ({ closed, inFlight, capacity: maxInFlight, waiting: pool.waitingCount }),
+    snapshot: () => ({
+      closed,
+      inFlight,
+      capacity: maxInFlight,
+      waiting: pool.waitingCount,
+      maxConnections,
+      peakInFlight,
+      refused,
+      executing,
+      peakExecuting,
+      acquiring,
+      peakAcquiring,
+      connectionWaitMs: { ...connectionWaitMs },
+      queryExecutionMs: { ...queryExecutionMs },
+      recentRefusals: recentRefusals.map((event) => ({ ...event })),
+    }),
     close(): Promise<void> {
       if (closing) return closing;
       closed = true;
