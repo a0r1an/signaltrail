@@ -19,6 +19,26 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — analytical SQL control does not eliminate refusals
+
+- Added `load capacity-4gb-db8-q24-noqueries`: same five-minute 100-EPS workload,
+  128 HTTP / eight connections / 24 queries and instrumentation, suppressing only
+  repeated analytical SQL during traffic. Writes, metadata diagnostics and final
+  reconciliation remain. All 45 harness unit tests pass.
+- Control fails with 14 metadata 503s; 29987 accepted/unique stored, no HTTP-gate
+  refusals/retries/rejections/generator drops, final lag zero. No detected OOM or
+  restart; owned cleanup/lock release pass. HTTP p99 106.83 ms.
+- Report: `test-results/load/2026-11-09T20-52-16.741Z-capacity-4gb-db8-q24-noqueries/result.json`.
+  Approximate app CPU-pressure fraction stays about 13% with/without repeated
+  analytical SQL. Refusal interval includes CPU pressure, loop delay and GC;
+  no PostgreSQL lock/storage waits captured. One pair cannot establish causality.
+- Removing analytical SQL did not resolve the failure; it is not a sufficient
+  explanation. Next isolate generator placement/host conditions, preserving target
+  CPU count/limits/workload and unrelated development services. If pressure remains,
+  capture a bounded ingestion CPU/GC profile. Historical 6.9-second stall unresolved.
+- No production/default/credential/collector changes. Cloud read URL still pending;
+  local capacity fixture cloud coverage remains absent. Details in the stall report.
+
 ### November 9 — interval telemetry narrows the stall investigation
 
 - Added fixture-only one-second bounded GC/ELU/process-CPU, app cgroup pressure /

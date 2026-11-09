@@ -108,3 +108,56 @@ All 44 load-harness unit tests pass, including intended-failure checks for resou
 collection and a non-overlap/failure-handling observer test. The real unchanged
 load run verified file availability, SQL query compatibility, interval output,
 refusal capture and cleanup. The workload failure remains failed evidence.
+
+## Concurrent-analytics control
+
+Ran `load capacity-4gb-db8-q24-noqueries`: same limits, seed data, fixed session
+pool, singleton 100 EPS for 300 seconds and interval instrumentation. Suppressed
+only the repeated analytical SQL during traffic. Metadata lookup/diagnostics,
+ClickHouse writes and final reconciliation remain. Docker sample cadence shifts
+slightly because the sequential query time is absent; background ClickHouse
+merges and other host workloads remain, so this is not an idle-storage control.
+
+Report: `test-results/load/2026-11-09T20-52-16.741Z-capacity-4gb-db8-q24-noqueries/result.json`.
+The control fails with 14 metadata-gate HTTP 503s: 29987 accepted/unique stored,
+no HTTP-gate refusals/retries/rejections/generator drops, final source lag zero.
+HTTP p99 106.83 ms. Cleanup and lock release pass, no detected OOM/restart.
+
+| Measurement | With analytical SQL | Without analytical SQL |
+| --- | --- | --- |
+| Metadata gate refusals | 1 | 14 |
+| HTTP p99, ms | 105.79 | 106.83 |
+| App CPU-pressure `some` fraction across observed span | 12.73% | 13.07% |
+| Largest ingestion GC duration, ms | 39.74 | 41.81 |
+| Total observed ingestion GC time, ms | 4071 | 4181 |
+| App I/O-pressure `some` increase across observed span, ms | 7.81 | 3.45 |
+
+Pressure fraction uses cumulative kernel `some total` deltas over elapsed time
+between the first and last resource observations; collection is asynchronous,
+so this is approximate. Histories contain 306 and 308 records, including startup
+and final reporting, not identical traffic-only measurement windows. A one-pair
+comparison does not establish statistical significance or a causal degradation.
+
+The control's refusal burst is `20:53:55.189–20:53:55.288 UTC`. The enclosing
+interval ending `20:53:56.098` has app CPU-pressure delta 242.98 ms, assigned CPU
+busy about 82.1% / 82.8%, loop-delay maximum 139.72 ms and observed GC total
+69.90 ms (largest 22.90 ms). PostgreSQL is idle by its later wait observation.
+The initial refusal includes three executing / 21 acquiring (16 in pool wait);
+`acquiring` includes setup/settling as well as waiting, so eight configured
+connections must not be interpreted as eight queries always executing. Later
+refusals show eight executing / 16 waiting. No database lock/storage wait was
+captured in the 308 observations, which cannot exclude transient server waits.
+
+This control does not support concurrent analytical SQL as a sufficient explanation.
+The best measured lead remains runtime scheduling/CPU pressure with GC activity,
+without a unique source identified. Next isolate generator placement from target
+CPUs while keeping target CPU count, limits and workload fixed, and repeat under
+controlled host conditions. Do not stop or reconfigure unrelated development
+services to manufacture isolation. A separate generator/clean host may ultimately
+be needed; no purchase or deployment is authorized. If pressure remains, obtain a
+bounded ingestion CPU/GC profile and distinguish allocation/validation work from
+other target processes. Historical 6.9-second stall is still not reproduced.
+
+The control workload test was first observed failing before implementation; all
+45 harness unit tests pass. Both named profiles remain reproducible. No production
+defaults, credentials, collector configuration or external resources changed.

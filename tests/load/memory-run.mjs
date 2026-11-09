@@ -22,10 +22,12 @@ const dbConnections = [
   'capacity-4gb-db8',
   'capacity-4gb-db8-long',
   'capacity-4gb-db8-q24',
+  'capacity-4gb-db8-q24-noqueries',
 ].includes(profile)
   ? 8
   : 4;
-const dbQueries = profile === 'capacity-4gb-db8-q24' ? 24 : 16;
+const dbQueries = profile.startsWith('capacity-4gb-db8-q24') ? 24 : 16;
+const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
 const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
@@ -136,6 +138,7 @@ async function query(sql) {
 let result = {
   passed: false,
   profile,
+  analyticalQueriesDuringTraffic: analyticalLoad,
   applicationLimits: {
     httpConcurrentRequests: httpCap,
     metadataConnections: dbConnections,
@@ -162,7 +165,9 @@ let result = {
     `Not a ${totalGiB} GiB VM: separate cgroups, shared host CPU/disk, Docker kernel and host caches differ.`,
     `${capacity ? 1000000 : 100000} historical fixture rows; short runs do not qualify retention-scale, backups, replay or production endurance.`,
     'PostgreSQL stored-key lookup is real; synthetic fixture role/schema is not production authorization provisioning.',
-    'Valkey runs idle; dashboard query load is direct SQL, not the Clerk/Next.js UI.',
+    analyticalLoad
+      ? 'Valkey runs idle; dashboard query load is direct SQL, not the Clerk/Next.js UI.'
+      : 'Control suppresses analytical SQL during traffic; final reconciliation and metadata diagnostics remain. This does not qualify concurrent dashboard traffic.',
   ],
 };
 let runError,
@@ -303,9 +308,10 @@ try {
           observation.finishedAt = new Date().toISOString();
           observation.collectionMs = performance.now() - observation.monotonicStartMs;
           samples.push(observation);
-          await query(
-            'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name FORMAT JSONEachRow',
-          );
+          if (analyticalLoad)
+            await query(
+              'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name FORMAT JSONEachRow',
+            );
           await inspect();
         } catch (error) {
           samplingError = error;

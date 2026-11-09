@@ -29,9 +29,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       Reproduced one refusal with CPU pressure and GC activity in the same interval;
       no app quota throttling or memory-limit events. Historical long stall remains
       unresolved; capacity fixtures were not registered with Alloy load discovery.
-- [ ] Controlled workload comparison: suppress only concurrent analytical SQL,
-      retain limits/data/rate/instrumentation, repeat and compare pressure/refusals.
-      See [stall investigation](performance/cpu-stall-investigation.md).
+- [x] Suppress only concurrent analytical SQL at unchanged limits/data/rate:
+      control still fails with 14 metadata refusals and roughly 13% app CPU pressure.
+      Query workload is not a sufficient explanation; one pair is not causal proof.
+- [ ] Isolate generator placement/host conditions without changing target CPU count,
+      limits or workload or disturbing development services. If contention persists,
+      collect a bounded ingestion CPU/GC profile. See
+      [stall investigation](performance/cpu-stall-investigation.md).
 - [ ] Confirm Grafana dashboard URL/read access and capacity scrape coverage before
       using cloud graphs as evidence for isolated capacity trials; no token change
       or remote query success is assumed.

@@ -23,7 +23,14 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
-  if (['capacity-4gb-db4-long', 'capacity-4gb-db8-long', 'capacity-4gb-db8-q24'].includes(profile))
+  if (
+    [
+      'capacity-4gb-db4-long',
+      'capacity-4gb-db8-long',
+      'capacity-4gb-db8-q24',
+      'capacity-4gb-db8-q24-noqueries',
+    ].includes(profile)
+  )
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 300 }];
   if (['capacity-4gb-http32', 'capacity-4gb-http128', 'capacity-4gb-db8'].includes(profile))
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];

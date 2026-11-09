@@ -368,3 +368,9 @@ and the point at which an answer becomes necessary.
   CPU/scheduling contention is the lead; historical 6.9-second stall not reproduced.
   Next reversible control suppresses concurrent analytical SQL at unchanged limits.
   See `performance/cpu-stall-investigation.md`; no new paid/remote action authorized.
+
+- Analytical-SQL control completed with unchanged limits and instrumentation:
+  14 metadata refusals, all accepted events stored, CPU pressure remains about 13%.
+  Concurrent analytical reads are not a sufficient explanation. Next isolate
+  generator/host conditions, then profile ingestion CPU/GC if pressure remains.
+  No new paid or external action is assumed; cloud URL remains optional pending input.

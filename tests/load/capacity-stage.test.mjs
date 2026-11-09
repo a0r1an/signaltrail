@@ -82,3 +82,10 @@ test('24-query gate comparison preserves the five-minute eight-connection worklo
     capacityWorkloads('capacity-4gb-db8-long'),
   );
 });
+
+test('analytical-load control retains the five-minute 100 EPS workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-db8-q24-noqueries'),
+    capacityWorkloads('capacity-4gb-db8-q24'),
+  );
+});
