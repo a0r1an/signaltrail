@@ -89,3 +89,10 @@ test('analytical-load control retains the five-minute 100 EPS workload', () => {
     capacityWorkloads('capacity-4gb-db8-q24'),
   );
 });
+
+test('generator-isolation control keeps the five-minute full analytical workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-db8-q24-generator'),
+    capacityWorkloads('capacity-4gb-db8-q24'),
+  );
+});

@@ -4,6 +4,7 @@ export const memoryPlan = {
 };
 export const memoryPlans = {
   'memory-4gb': memoryPlan,
+  'capacity-4gb-db8-q24-generator': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb-db8-q24-noqueries': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb-db8-q24': { ...memoryPlan, cpuSet: '0,1' },
   'capacity-4gb-db4-long': { ...memoryPlan, cpuSet: '0,1' },

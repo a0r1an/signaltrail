@@ -161,3 +161,56 @@ other target processes. Historical 6.9-second stall is still not reproduced.
 The control workload test was first observed failing before implementation; all
 45 harness unit tests pass. Both named profiles remain reproducible. No production
 defaults, credentials, collector configuration or external resources changed.
+
+## Generator CPU isolation and ClickHouse headroom
+
+User authorized the isolation experiment and a Lightsail price comparison. Added
+`load capacity-4gb-db8-q24-generator`: target services remain on logical CPUs 0,1,
+with the same four-GiB budget, HTTP 128 / eight connections / 24 queries, one million
+rows, singleton 100 EPS for 300 seconds and full concurrent analytical SQL. Only the
+generator is pinned to 2,3 through a dedicated Compose override. Docker needs at
+least four logical CPUs; the test checks target constraints and generator affinity.
+The generator affinity was verified in all 59 resource observations. This avoids
+generator use of target logical CPUs, not all physical-host contention.
+
+Report: `test-results/load/2026-11-09T21-16-03.915Z-capacity-4gb-db8-q24-generator/result.json`.
+The run passes: 30001 accepted/unique stored, zero HTTP/metadata/publisher refusals,
+retries, rejections or generator drops, final source lag zero. HTTP p95 8.92 ms /
+p99 39.07 ms; analytical query maximum 332.11 ms. No detected OOM/restart; owned
+teardown and load-lock release pass. Peak outstanding metadata work is still 23 of
+24, leaving little instantaneous gate headroom. Ingestion loop-delay maximum
+125.17 ms, largest observed GC 34.66 ms; app CPU-pressure fraction approximately
+10.96% across the retained observation span (prior diagnostic full-query run 12.73%).
+This single pass is encouraging, not repeatable qualification or proof the generator
+caused prior failures. Additional Docker memory reads/affinity inspection also add
+sampling overhead and slightly alter the cadence of sequential analytical queries.
+Repeat with matched instrumentation before attributing causality.
+
+### ClickHouse pressure is now measured separately
+
+Capacity samples additionally retain ClickHouse `memory.events`, `memory.pressure`,
+`memory.current`, `memory.max` and `memory.stat`, with collection start/end timestamps.
+Reads are sequential, not atomic; raw fixed file order is recorded by the runner.
+This covers ClickHouse's cgroup, unlike the earlier app-only memory observations.
+
+- Peak sampled cgroup current: 1278.57 MiB against a 1280-MiB hard limit.
+- `memory.events:max` reaches 14233; first observed nonzero at 21:17:38.777 UTC.
+- No OOM or OOM-kill events; memory-pressure `some/full` totals reach 1.631/1.304
+  seconds. Direct reclaim scan/steal counters grow substantially.
+- Last observed current 1246.10 MiB, with anonymous, file-cache and kernel/slab
+  charges all present. Peak summed Docker-displayed target memory 1671.56 MiB
+  excludes some cache and guest overhead; it is not whole-host usage.
+
+The kernel defines `max` as allocations about to exceed the cgroup limit, with
+reclaim attempted before OOM; these are not 14233 process failures or lost events.
+See [kernel cgroup-v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+The per-service cap is actively causing reclaim despite no OOM. This supports
+reviewing ClickHouse's allocation within the four-GiB budget, not automatically
+buying more total RAM. It does not prove memory pressure caused any earlier 503.
+No memory cap was changed in this experiment.
+
+All 46 harness unit tests pass; the new profile's workload test was observed failing
+before implementation. No development/production defaults changed. Next repeat
+matched generator controls, and plan a separately verified memory redistribution
+within four GiB before stronger host-sizing claims. Current Lightsail price
+research is recorded in [Lightsail options](lightsail-options.md).

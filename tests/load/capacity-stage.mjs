@@ -29,6 +29,7 @@ export function capacityWorkloads(profile) {
       'capacity-4gb-db8-long',
       'capacity-4gb-db8-q24',
       'capacity-4gb-db8-q24-noqueries',
+      'capacity-4gb-db8-q24-generator',
     ].includes(profile)
   )
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 300 }];

@@ -19,6 +19,27 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — generator isolation passes; ClickHouse cap causes reclaim
+
+- Added `load capacity-4gb-db8-q24-generator`: targets still share CPUs 0,1;
+  generator pinned to 2,3 and verified in 59 observations. Four-GiB allocation,
+  128/8/24 gates, million-row data and full analytical workload unchanged.
+- Five-minute 100-EPS run passes: 30001 accepted/unique stored, zero refusals,
+  retries/rejections/drops, final lag zero; p95/p99 8.92/39.07 ms. Peak metadata
+  outstanding work still 23/24. Cleanup/lock release pass, no detected OOM/restart.
+  Report: `test-results/load/2026-11-09T21-16-03.915Z-capacity-4gb-db8-q24-generator/result.json`.
+- Added ClickHouse cgroup memory reads: peak current 1278.57 MiB of 1280 MiB;
+  14233 max-limit events with direct reclaim and 1.63-second memory-pressure some
+  total, but no OOM/kill. Its service cap is actively binding; whole-host RAM
+  insufficiency is not established. Summed Docker displayed peak 1671.56 MiB.
+- All 46 harness units pass. Single isolation pass is encouraging, not causal or
+  repeated qualification; added sampling also affects query cadence. Next matched
+  repeats and a separately verified memory redistribution within four GiB.
+- Checked official Lightsail bundles: no four-vCPU/four-GB option. Linux IPv4:
+  two/four general $24, two/four compute optimized $42; four/eight compute optimized
+  $84, four/16 general $84. See `performance/lightsail-options.md` for sources,
+  IPv6-only prices and credit limitations. No purchase/deployment/default changes.
+
 ### November 9 — analytical SQL control does not eliminate refusals
 
 - Added `load capacity-4gb-db8-q24-noqueries`: same five-minute 100-EPS workload,

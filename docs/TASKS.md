@@ -32,9 +32,16 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Suppress only concurrent analytical SQL at unchanged limits/data/rate:
       control still fails with 14 metadata refusals and roughly 13% app CPU pressure.
       Query workload is not a sufficient explanation; one pair is not causal proof.
-- [ ] Isolate generator placement/host conditions without changing target CPU count,
-      limits or workload or disturbing development services. If contention persists,
-      collect a bounded ingestion CPU/GC profile. See
+- [x] Pin generator to CPUs 2,3 while targets remain on 0,1: five-minute 100-EPS
+      full-query run passes with 30001 stored and zero refusals; affinity verified.
+- [x] Inspect ClickHouse memory counters: 1280-MiB cap causes reclaim/max-limit
+      events without OOM. Overall four-GiB insufficiency is not established.
+- [x] Research Lightsail CPU/RAM bundle prices: no four-vCPU/four-GB plan;
+      two/four IPv4 $24 general or $42 compute; smallest four-vCPU compute is
+      eight GB/$84. Sources in `performance/lightsail-options.md`.
+- [ ] Repeat matched generator controls before attributing improvement; plan and
+      verify separate ClickHouse memory redistribution within the four-GiB budget.
+      Preserve target CPU count, workload and unrelated development services. See
       [stall investigation](performance/cpu-stall-investigation.md).
 - [ ] Confirm Grafana dashboard URL/read access and capacity scrape coverage before
       using cloud graphs as evidence for isolated capacity trials; no token change

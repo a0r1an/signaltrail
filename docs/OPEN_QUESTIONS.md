@@ -374,3 +374,16 @@ and the point at which an answer becomes necessary.
   Concurrent analytical reads are not a sufficient explanation. Next isolate
   generator/host conditions, then profile ingestion CPU/GC if pressure remains.
   No new paid or external action is assumed; cloud URL remains optional pending input.
+
+## November 9 — generator isolation, memory allocation and Lightsail options
+
+- User authorized generator isolation and Lightsail price research. One matched-rate
+  five-minute run with generator CPUs separate passes, but needs repeatable controls
+  with matched instrumentation before a causal claim. No limits/defaults changed.
+- ClickHouse now has measured max-limit/reclaim events under its 1280-MiB cap,
+  without OOM. Review redistribution within four GiB before inferring larger host
+  RAM is required; any redistribution must preserve service safety and host reserve.
+- Official Lightsail has no four-vCPU/four-GB bundle; two/four IPv4 is $24 general
+  or $42 compute optimized; smallest four-vCPU compute is eight GB/$84, above the
+  recorded $50 VPS budget. No budget increase or provider purchase assumed. Sources
+  and CPU-credit limitations in `performance/lightsail-options.md`.

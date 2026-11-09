@@ -23,10 +23,13 @@ const dbConnections = [
   'capacity-4gb-db8-long',
   'capacity-4gb-db8-q24',
   'capacity-4gb-db8-q24-noqueries',
+  'capacity-4gb-db8-q24-generator',
 ].includes(profile)
   ? 8
   : 4;
 const dbQueries = profile.startsWith('capacity-4gb-db8-q24') ? 24 : 16;
+const isolatedGenerator = profile === 'capacity-4gb-db8-q24-generator';
+let generatorAffinityVerified = false;
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
@@ -81,6 +84,7 @@ const compose = (...args) =>
     'tests/load/compose.memory.yaml',
     ...(profile === 'memory-2gb' ? ['-f', 'tests/load/compose.memory-2gb.yaml'] : []),
     ...(capacity ? ['-f', 'tests/load/compose.capacity.yaml'] : []),
+    ...(isolatedGenerator ? ['-f', 'tests/load/compose.generator-isolation.yaml'] : []),
     ...args,
   ]);
 const services = Object.keys(memoryPlan.services);
@@ -138,6 +142,7 @@ async function query(sql) {
 let result = {
   passed: false,
   profile,
+  generatorCpuSet: isolatedGenerator ? '2,3' : null,
   analyticalQueriesDuringTraffic: analyticalLoad,
   applicationLimits: {
     httpConcurrentRequests: httpCap,
@@ -181,7 +186,7 @@ try {
   await compose('config', '--quiet');
   if (capacity) {
     const host = JSON.parse(await docker(['info', '--format', '{{json .}}']));
-    assert.ok(host.NCPU >= 2, 'Two logical CPUs must be available');
+    assert.ok(host.NCPU >= (isolatedGenerator ? 4 : 2), 'Enough logical CPUs must be available');
     result.dockerHost = {
       cpus: host.NCPU,
       memoryBytes: host.MemTotal,
@@ -307,6 +312,43 @@ try {
           if (capacity) observation.pipeline = await status();
           observation.finishedAt = new Date().toISOString();
           observation.collectionMs = performance.now() - observation.monotonicStartMs;
+          if (isolatedGenerator) {
+            const ids = (
+              await docker([
+                'ps',
+                '-q',
+                '--filter',
+                'label=com.docker.compose.project=signaltrail-memory',
+                '--filter',
+                'label=com.docker.compose.service=k6',
+              ])
+            )
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean);
+            if (ids.length) {
+              const generators = JSON.parse(await docker(['inspect', ...ids]));
+              for (const generator of generators)
+                assert.equal(generator.HostConfig.CpusetCpus, '2,3');
+              generatorAffinityVerified = true;
+              observation.generatorAffinityVerified = true;
+            }
+          }
+          if (capacity) {
+            observation.clickhouseMemoryStartedAt = new Date().toISOString();
+            observation.clickhouseMemory = await compose(
+              'exec',
+              '-T',
+              'clickhouse',
+              'cat',
+              '/sys/fs/cgroup/memory.events',
+              '/sys/fs/cgroup/memory.pressure',
+              '/sys/fs/cgroup/memory.current',
+              '/sys/fs/cgroup/memory.max',
+              '/sys/fs/cgroup/memory.stat',
+            );
+            observation.clickhouseMemoryFinishedAt = new Date().toISOString();
+          }
           samples.push(observation);
           if (analyticalLoad)
             await query(
@@ -374,6 +416,10 @@ try {
       if (stage.maxDiagnosticQueryMs > 2000)
         stage.reasons.push('Diagnostic query exceeded 2 seconds');
       await inspect();
+      if (isolatedGenerator) {
+        assert.ok(generatorAffinityVerified, 'Generator affinity was not verified');
+        result.generatorAffinityVerified = true;
+      }
       stage.sustained = stage.reasons.length === 0;
       if (stage.sustained) result.highestPassingEventsPerSecond = rate;
       await save('progress.json', { ...result, passed: false });
