@@ -146,7 +146,7 @@ worker.on('exit', (code) => {
   if (!stopping) process.exit(code || 1);
 });
 const server = createIngestionServer({
-  maxConcurrentRequests: 128,
+  maxConcurrentRequests: Number(process.env.SIGNALTRAIL_FIXTURE_HTTP_CAP ?? 128),
   resolveProjectKey: projects.resolveProjectKey,
   publish: publisher.publish,
   ...(capacity

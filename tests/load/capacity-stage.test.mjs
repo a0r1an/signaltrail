@@ -50,3 +50,9 @@ test('capacity requires complete measurements, no losses/refusals and bounded la
   delete s.metrics.http_req_duration;
   assert.ok(assessCapacityStage(s).length);
 });
+
+test('paired HTTP admission profiles use the identical two-minute 100 EPS workload', () => {
+  const expected = [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];
+  assert.deepEqual(capacityWorkloads('capacity-4gb-http32'), expected);
+  assert.deepEqual(capacityWorkloads('capacity-4gb-http128'), expected);
+});

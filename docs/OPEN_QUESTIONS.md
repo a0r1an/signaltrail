@@ -322,3 +322,10 @@ and the point at which an answer becomes necessary.
   remain unchanged. No user decision is required for paired local repetitions;
   repeat both HTTP caps in the same session before claiming a causal improvement
   or choosing production limits. See `performance/4gb-local-capacity.md`.
+
+- Follow-up fresh paired trials on November 9: cap 32 passes, cap 128 records
+  one metadata-gate HTTP 503. Earlier improvement is not reproducible on this
+  evidence; no HTTP-cap winner or production setting is established. Next inspect
+  timestamped database wait/occupancy and CPU contention before selecting one
+  metadata constraint to change. Both stacks cleaned up; no user decision needed
+  for read-only investigation.

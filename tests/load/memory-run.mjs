@@ -13,6 +13,7 @@ const profile = process.argv[2] ?? 'memory-4gb';
 assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
 const memoryPlan = memoryPlans[profile];
 const capacity = profile.startsWith('capacity-4gb');
+const httpCap = profile === 'capacity-4gb-http32' ? 32 : 128;
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
 const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
@@ -26,7 +27,10 @@ process.on('SIGINT', cancel);
 process.on('SIGTERM', cancel);
 function docker(args, timeout = 300000) {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('docker', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap) },
+    });
     let output = '',
       error = '';
     child.stdout.on('data', (data) => (output += data));
@@ -74,6 +78,13 @@ async function inspect() {
   assert.equal(ids.length, services.length);
   const values = JSON.parse(await docker(['inspect', ...ids]));
   verifyMemoryLimits(values, memoryPlan);
+  if (capacity) {
+    const app = values.find((v) => v.Config.Labels['com.docker.compose.service'] === 'app');
+    assert.ok(
+      app.Config.Env.includes(`SIGNALTRAIL_FIXTURE_HTTP_CAP=${httpCap}`),
+      'HTTP cap must match profile',
+    );
+  }
   // Do not persist expanded container environments or mounts.
   return values.map((v) => ({
     service: v.Config.Labels['com.docker.compose.service'],
@@ -108,6 +119,11 @@ async function query(sql) {
 let result = {
   passed: false,
   profile,
+  applicationLimits: {
+    httpConcurrentRequests: httpCap,
+    metadataConnections: 4,
+    metadataOutstandingQueries: 16,
+  },
   ...(capacity
     ? {
         highestPassingEventsPerSecond: 0,

@@ -10,6 +10,40 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## Fresh paired HTTP trials — 2026-11-09
+
+Added repeatable `load capacity-4gb-http32` and `load capacity-4gb-http128`
+operations. Each runs only 100 EPS for 120 seconds on a fresh isolated stack.
+Reports now record all three application limits; container inspection verifies
+that the HTTP cap matches the selected profile. Both retain four connections,
+16 outstanding metadata queries, identical CPU/memory limits and workload.
+
+| HTTP cap | Accepted / unique stored | HTTP 503s | HTTP p95 / p99, ms | Result |
+| --- | --- | --- | --- | --- |
+| 32 | 12001 / 12001 | 0 | 10.81 / 47.42 | Pass |
+| 128 | 12000 / 12000 | 1 (metadata gate) | 9.22 / 38.75 | Fail |
+
+Reports, in execution order:
+- `test-results/load/2026-11-09T18-59-51.499Z-capacity-4gb-http32/result.json`
+- `test-results/load/2026-11-09T19-02-56.585Z-capacity-4gb-http128/result.json`
+
+Neither trial had HTTP-admission refusals, event retries/rejections, generator
+drops, detected OOM or restart. Both reconciled accepted/unique stored counts and
+finished at zero source lag. The cap-128 observer recorded exactly one metadata
+failure/attempt at capacity and one HTTP 503; the generator's `malformed` counter
+counts that request-level error response, not proven corrupt JSON. Both owned
+stacks cleaned up and released the lock. All 38 harness unit tests pass; the new
+workload test was first observed failing for the unimplemented profiles.
+
+This reverses the prior pass/fail ordering: cap 32 now passes and cap 128 has a
+single refusal. One sequential pair on shared local CPUs does not prove either
+cap is better, but it rejects claiming a reproducible benefit from raising the
+HTTP cap on the available evidence. Neither cap makes 100 EPS reliably
+zero-refusal across all recorded trials. The 16-query metadata guard remains a
+measured refusal source. Next investigate timestamped pool occupancy/query wait
+and CPU contention around refusals before selecting one metadata constraint for
+a controlled experiment; production limits remain unchanged.
+
 ## HTTP admission comparison — 2026-11-09
 
 Changed only the fixture HTTP processing cap from 32 to 128 (the normal ingestion

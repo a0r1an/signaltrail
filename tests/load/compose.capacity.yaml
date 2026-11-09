@@ -14,3 +14,4 @@ services:
     cpuset: '0,1'
     environment:
       SIGNALTRAIL_CAPACITY_PROFILE: '1'
+      SIGNALTRAIL_FIXTURE_HTTP_CAP: '${SIGNALTRAIL_FIXTURE_HTTP_CAP:-128}'

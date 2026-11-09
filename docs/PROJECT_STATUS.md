@@ -19,6 +19,26 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — fresh paired HTTP trials
+
+- Added repeatable `load capacity-4gb-http32` / `capacity-4gb-http128`, each
+  100 EPS for 120 seconds on fresh isolated two-CPU/four-GiB infrastructure.
+  Reports record HTTP/pool/query limits and inspect the configured container cap.
+- Cap 32 passes: 12001 accepted/unique stored, zero failures/refusals, p95
+  10.81 ms / p99 47.42 ms. Cap 128 fails zero-refusal criterion with one
+  metadata-gate HTTP 503: 12000 accepted/unique stored, p95 9.22 / p99 38.75 ms.
+- Both have zero HTTP-admission refusals, event retries/rejections or generator
+  drops, final source lag zero, and no detected OOM/restart. Cleanup passed for
+  both and the lock was released. All 38 harness tests pass, including the new
+  workload test first observed failing before implementation.
+- Reports: `test-results/load/2026-11-09T18-59-51.499Z-capacity-4gb-http32/result.json`
+  and `test-results/load/2026-11-09T19-02-56.585Z-capacity-4gb-http128/result.json`.
+- The fresh pair reverses earlier ordering, so no reproducible benefit from 128
+  is established. Neither HTTP cap is reliably zero-refusal at 100 EPS across
+  recorded trials. Next inspect timestamped metadata occupancy/query wait and
+  CPU contention before choosing a single metadata constraint to change.
+  No production defaults changed. See the capacity report for limitations.
+
 ### November 9 — single-constraint HTTP admission comparison
 
 - User authorized changing one safeguard and reporting the result. Changed only

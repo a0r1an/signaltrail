@@ -11,10 +11,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       user authorized a single-constraint comparison.
 - [x] Raise only isolated fixture HTTP cap 32 → 128 and run boundary profile:
       100 EPS / 120 seconds passes; 150 EPS fails at metadata gate/latency.
-- [ ] Repeat fresh cap-32/cap-128 trials at 100 EPS in the same session before
-      attributing improvement to the cap. Keep four connections / 16 queries
-      unchanged. Then choose a single metadata constraint to investigate.
-      See [capacity evidence](performance/4gb-local-capacity.md).
+- [x] Repeat fresh cap-32/cap-128 trials at 100 EPS in the same session:
+      cap 32 passes; cap 128 has one metadata-gate HTTP 503. No reproducible
+      benefit from raising the HTTP cap is established.
+- [ ] Inspect timestamped metadata occupancy/query wait and CPU contention
+      around refusals, then select one metadata constraint for a controlled
+      experiment. Four connections / 16 queries remain unchanged. See
+      [capacity evidence](performance/4gb-local-capacity.md).
 
 ## Completed slice: real local capture to dashboard
 
