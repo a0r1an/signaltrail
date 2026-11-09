@@ -5,6 +5,16 @@ PROJECT_STATUS are session records, not instructions to repeat completed work.
 Evidence and limitations belong in PROJECT_STATUS; decisions awaiting the user
 belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked.
 
+## Next session — continue concurrency and capacity discussion
+
+- [ ] Resume the discussion of the provisional 32-request fixture gate versus
+      the normal 128-request default, and the four-connection/16-query metadata
+      bounds. Explain how each affects refusals, latency and resource pressure
+      before implementing further tuning. Then define a controlled comparison
+      using the same hardware/data/workload and changing one bound at a time.
+      Existing evidence supports a local 50-EPS reference, not a hardware ceiling
+      or production guarantee. See [capacity evidence](performance/4gb-local-capacity.md).
+
 ## Completed slice: real local capture to dashboard
 
 - [x] Configure development Clerk owner-only sign-in; user verified authorized

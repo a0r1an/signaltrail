@@ -19,6 +19,24 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-06
 
+### November 6 — end-of-day checkpoint and next discussion
+
+- Today's implementation and load evidence are committed in `ac653b9`,
+  `ba55d58` and `013c650`; the results and limitations are recorded below.
+- Clarified that concurrency limits were provisional engineering estimates,
+  not measured machine capacity. The fixture permits 32 simultaneous ingestion
+  requests; another request receives HTTP 503 while all slots are occupied.
+  Normal ingestion defaults to 128, so the fixture did not benchmark that default.
+  Metadata defaults are four PostgreSQL connections and 16 in-flight queries,
+  including executing and waiting queries. These bounds intentionally limit work.
+- Next session starts by continuing this discussion: distinguish safeguards from
+  hardware capacity, explain the tradeoffs of increasing each bound, and agree
+  on a controlled comparison with production defaults before changing settings.
+  Keep hardware, data and workload comparable; vary one limit at a time and use
+  trials long enough to catch the refusals missed by the original 60-second run.
+  No limit tuning, provider purchase or deployment was performed in this closing
+  discussion. The user requested stopping for today.
+
 ### November 6 — two-CPU/four-GiB offered-load frontier
 
 - Added `load capacity-4gb`, `capacity-4gb-boundary` and `capacity-4gb-confirm`.
