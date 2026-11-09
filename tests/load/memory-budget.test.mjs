@@ -68,3 +68,31 @@ test('refuses missing services, swap, restarts and out-of-memory termination', (
     assert.throws(() => verifyMemoryLimits(containers));
   }
 });
+
+test('rebalanced profile gives ClickHouse more room while preserving four GiB and host reserve', () => {
+  const plan = memoryPlans['capacity-4gb-db8-q24-rebalanced'];
+  assert.ok(plan);
+  assert.deepEqual(plan.services, {
+    redpanda: 1280,
+    clickhouse: 1536,
+    postgres: 128,
+    valkey: 128,
+    app: 384,
+  });
+  assert.equal(plan.hostReserveMiB, 640);
+  assert.equal(
+    Object.values(plan.services).reduce((sum, n) => sum + n, 0) + plan.hostReserveMiB,
+    4096,
+  );
+  assert.equal(plan.cpuSet, '0,1');
+  const containers = Object.entries(plan.services).map(([service, mib]) => ({
+    Config: { Labels: { 'com.docker.compose.service': service } },
+    HostConfig: { Memory: mib * 1048576, MemorySwap: mib * 1048576, CpusetCpus: '0,1' },
+    State: { Running: true, OOMKilled: false },
+    RestartCount: 0,
+  }));
+  assert.doesNotThrow(() => verifyMemoryLimits(containers, plan));
+  assert.throws(() =>
+    verifyMemoryLimits(containers, memoryPlans['capacity-4gb-db8-q24-generator']),
+  );
+});

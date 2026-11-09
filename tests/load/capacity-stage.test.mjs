@@ -96,3 +96,10 @@ test('generator-isolation control keeps the five-minute full analytical workload
     capacityWorkloads('capacity-4gb-db8-q24'),
   );
 });
+
+test('memory redistribution preserves the isolated-generator five-minute workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-db8-q24-rebalanced'),
+    capacityWorkloads('capacity-4gb-db8-q24-generator'),
+  );
+});

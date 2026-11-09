@@ -19,6 +19,21 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — generator repeat and four-GiB redistribution
+
+- User authorized baseline isolation repeat and a revised memory allocation.
+  Baseline repeat fails with 13 metadata 503s (29988 accepted/unique stored);
+  generator separation alone is not reliably sufficient. Cleanup passes.
+- Added isolated `capacity-4gb-db8-q24-rebalanced`: ClickHouse 1280→1536 MiB,
+  app 512→384 MiB, PostgreSQL 256→128 MiB; same 4096-MiB total and 640-MiB host
+  allowance, no other settings/workload changes. All 48 harness units pass.
+- First revised five-minute 100-EPS run passes with 30001 accepted/unique stored,
+  zero refusals/retries/rejections/drops, final lag zero and no OOM/restart.
+  HTTP p99 23.19 ms versus baseline repeat 35.67 ms. Actual caps/affinity verified,
+  cleanup passes. ClickHouse pressure some 1.161 s vs 1.982 s, still binding.
+- Reports and limitations in `performance/4gb-memory-rebalance.md`. A fresh revised
+  confirmation is in progress; no claim of repeatability or production adoption.
+
 ### November 9 — generator isolation passes; ClickHouse cap causes reclaim
 
 - Added `load capacity-4gb-db8-q24-generator`: targets still share CPUs 0,1;

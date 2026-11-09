@@ -24,11 +24,15 @@ const dbConnections = [
   'capacity-4gb-db8-q24',
   'capacity-4gb-db8-q24-noqueries',
   'capacity-4gb-db8-q24-generator',
+  'capacity-4gb-db8-q24-rebalanced',
 ].includes(profile)
   ? 8
   : 4;
 const dbQueries = profile.startsWith('capacity-4gb-db8-q24') ? 24 : 16;
-const isolatedGenerator = profile === 'capacity-4gb-db8-q24-generator';
+const isolatedGenerator = [
+  'capacity-4gb-db8-q24-generator',
+  'capacity-4gb-db8-q24-rebalanced',
+].includes(profile);
 let generatorAffinityVerified = false;
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
@@ -85,6 +89,9 @@ const compose = (...args) =>
     ...(profile === 'memory-2gb' ? ['-f', 'tests/load/compose.memory-2gb.yaml'] : []),
     ...(capacity ? ['-f', 'tests/load/compose.capacity.yaml'] : []),
     ...(isolatedGenerator ? ['-f', 'tests/load/compose.generator-isolation.yaml'] : []),
+    ...(profile === 'capacity-4gb-db8-q24-rebalanced'
+      ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
+      : []),
     ...args,
   ]);
 const services = Object.keys(memoryPlan.services);
