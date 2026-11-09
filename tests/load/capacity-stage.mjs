@@ -23,6 +23,8 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
+  if (['capacity-4gb-db4-long', 'capacity-4gb-db8-long'].includes(profile))
+    return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 300 }];
   if (['capacity-4gb-http32', 'capacity-4gb-http128', 'capacity-4gb-db8'].includes(profile))
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];
   if (profile === 'capacity-4gb-confirm')
@@ -39,4 +41,11 @@ export function capacityWorkloads(profile) {
     sessionCount: 1000,
     durationSeconds: profile === 'capacity-4gb-boundary' && index === 0 ? 120 : 60,
   }));
+}
+
+export function capacityCommandTimeoutMs(profile) {
+  return Math.max(
+    300000,
+    (Math.max(...capacityWorkloads(profile).map((s) => s.durationSeconds)) + 120) * 1000,
+  );
 }

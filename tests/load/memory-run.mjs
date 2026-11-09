@@ -7,14 +7,18 @@ import { acquireRunLock } from './run-lock.mjs';
 import { finishRun } from './run-result.mjs';
 import { cleanupResources } from './cleanup.mjs';
 import { teardownIsolatedRun } from './teardown.mjs';
-import { assessCapacityStage, capacityWorkloads } from './capacity-stage.mjs';
+import {
+  assessCapacityStage,
+  capacityWorkloads,
+  capacityCommandTimeoutMs,
+} from './capacity-stage.mjs';
 
 const profile = process.argv[2] ?? 'memory-4gb';
 assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
 const memoryPlan = memoryPlans[profile];
 const capacity = profile.startsWith('capacity-4gb');
 const httpCap = profile === 'capacity-4gb-http32' ? 32 : 128;
-const dbConnections = profile === 'capacity-4gb-db8' ? 8 : 4;
+const dbConnections = ['capacity-4gb-db8', 'capacity-4gb-db8-long'].includes(profile) ? 8 : 4;
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
 const directory = `test-results/load/${new Date().toISOString().replaceAll(':', '-')}-${profile}`;
@@ -26,7 +30,7 @@ const cancel = () => {
 };
 process.on('SIGINT', cancel);
 process.on('SIGTERM', cancel);
-function docker(args, timeout = 300000) {
+function docker(args, timeout = capacity ? capacityCommandTimeoutMs(profile) : 300000) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', args, {
       stdio: ['ignore', 'pipe', 'pipe'],

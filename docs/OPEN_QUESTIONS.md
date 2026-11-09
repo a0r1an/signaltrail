@@ -342,3 +342,9 @@ and the point at which an answer becomes necessary.
   eight remains experimental, with no production default change or proven
   superiority. Next matched longer repeats/higher-load diagnosis; no new user
   decision is required for local verification.
+
+- Five-minute repeated pool comparison completed at 100 EPS (4/8/4/8): metadata
+  refusals 0/64/10/3. Neither pool size is consistently zero-refusal; eight is not
+  a proven remedy. Accepted events reconcile and cleanup passed. Next investigate
+  timing/resource intervals around refusals before selecting another safeguard
+  experiment. Production settings remain undecided; no deployment/spending approved.

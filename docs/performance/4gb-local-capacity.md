@@ -10,6 +10,62 @@ This is an isolated local offered-load frontier search, not an AWS instance
 benchmark. It preserves development services and uses the shared load lock and
 owned teardown from the [memory screen](4gb-local-feasibility.md).
 
+## Alternating five-minute pool trials — November 9
+
+User authorized four fresh trials at 100 EPS for 300 seconds, in order 4 → 8 → 4 → 8
+connections. HTTP admission stayed 128; total outstanding-query gate stayed 16.
+Named runner operations: `load capacity-4gb-db4-long` / `capacity-4gb-db8-long`.
+Same two shared logical CPUs, four-GiB allocation, one million seeded rows,
+singleton requests, fixed session pool and concurrent analytical SQL throughout.
+
+| Trial | Connections | Accepted / unique stored | Metadata HTTP 503s | HTTP p95 / p99, ms | Generator drops | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 4 | 30001 / 30001 | 0 | 9.06 / 26.52 | 0 | Pass |
+| 2 | 8 | 29870 / 29870 | 64 | 15.38 / 513.39 | 67 | Fail |
+| 3 | 4 | 29991 / 29991 | 10 | 9.83 / 52.50 | 0 | Fail |
+| 4 | 8 | 29997 / 29997 | 3 | 9.75 / 47.07 | 0 | Fail |
+
+Reports in execution order:
+- `test-results/load/2026-11-09T19-49-36.584Z-capacity-4gb-db4-long/result.json`
+- `test-results/load/2026-11-09T19-55-32.326Z-capacity-4gb-db8-long/result.json`
+- `test-results/load/2026-11-09T20-01-37.904Z-capacity-4gb-db4-long/result.json`
+- `test-results/load/2026-11-09T20-07-43.225Z-capacity-4gb-db8-long/result.json`
+
+All four have zero HTTP-admission refusals, event retries or rejections, matching
+accepted/stored counts and zero final committed source lag. No detected OOM or
+restart. Every owned stack cleaned up and released the lock. Failure results stay
+failed; successful drain does not negate refusals or generator drops.
+
+Refusal events directly show 16 outstanding queries: four executing / 12 waiting
+in trial 3, eight executing / eight waiting in trials 2 and 4. Execution round-trip
+maxima by trial: 88.02 / 671.86 / 132.43 / 144.80 ms; acquisition maxima:
+64.93 / 89.72 / 117.70 / 93.72 ms. Ingestion event-loop histogram maxima:
+109.45 / 641.20 / 203.55 / 127.86 ms (20-ms histogram resolution).
+Trial 2 additionally had a 4041.55-ms analytical query, failing its two-second
+criterion. Sampled average service CPU for the first three trials was about
+1.08–1.12 cores, and displayed memory peaks about 1658–1705 MiB, excluding guest
+OS overhead/cache and generator resources. Averages cannot explain short stalls.
+
+These runs establish neither pool size as consistently zero-refusal at 100 EPS.
+Eight connections did not reliably eliminate the measured gate refusals. High
+execution/event-loop maxima suggest scheduling/shared-resource contention is worth
+investigating, but cumulative maxima do not prove simultaneity or identify a
+root cause. Two sequential repeats each are not a randomized production study.
+No production defaults changed. Next correlate interval-level timing and resource
+observations around refusal timestamps, then choose one further experiment (for
+example a larger outstanding-query gate at fixed pool size) rather than assuming
+more connections fixes it.
+
+Harness correction: the first attempt at
+`test-results/load/2026-11-09T19-43-07.050Z-capacity-4gb-db4-long/result.json`
+failed with an empty/truncated summary at the inherited 300-second Docker command
+deadline, which left no allowance for a 300-second traffic run and shutdown.
+It cleaned up and remains unusable failed evidence, outside the four trials.
+Command deadlines now allow the longest capacity stage plus 120 seconds, with a
+300-second minimum; long profiles get 420 seconds. Regression tests first failed
+for the missing profiles/timeout helper, then all 41 harness tests passed. This
+changes harness execution allowance, not application query/publication deadlines.
+
 ## Eight-connection comparison — November 9
 
 User authorized eight connections / 16 outstanding queries (up to eight executing

@@ -19,6 +19,31 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — alternating five-minute pool repeats completed
+
+- User authorized four five-minute trials at 100 EPS in order 4/8/4/8 connections,
+  HTTP cap 128, outstanding metadata gate 16. Added named long profiles and a
+  regression-tested command deadline allowance (420 seconds for 300-second load).
+  All 41 harness unit tests pass.
+- Results in order: four connections passes (30001 stored, zero refusals);
+  eight fails (29870 stored, 64 metadata 503s, 67 generator drops, slow SQL);
+  four fails (29991 stored, 10 metadata 503s); eight fails (29997 stored,
+  three metadata 503s). HTTP p99: 26.52 / 513.39 / 52.50 / 47.07 ms.
+- Every accepted count matches unique storage and final source lag zero. No
+  HTTP-admission refusals, event retries/rejections, detected OOM or restart.
+  All owned infrastructure cleaned up and load lock released.
+- Refusal events show full 16-query occupancy for both pool sizes (4 executing /
+  12 waiting or 8 / 8). Neither pool is consistently zero-refusal at 100 EPS;
+  eight has not established a reliable benefit. Trial 2 also has 641-ms event-loop
+  histogram maximum, 672-ms query round-trip maximum and 4.04-second analytics
+  query; these lifetime maxima suggest broader contention worth investigating
+  but do not prove a causal or simultaneous relationship.
+- Four authoritative reports and the separate failed initial harness-timeout
+  attempt are listed in `performance/4gb-local-capacity.md`. Initial attempt is
+  unusable capacity evidence and remains failed. No production defaults changed.
+- Next correlate intervals around refusal timestamps, then select one further
+  controlled change (potentially outstanding-query gate at fixed connections).
+
 ### November 9 — eight database connections / 16 total queries
 
 - User authorized 8/8 experiment; added `load capacity-4gb-db8`, preserving four

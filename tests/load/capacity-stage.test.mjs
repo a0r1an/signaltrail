@@ -63,3 +63,15 @@ test('eight-connection comparison preserves the two-minute 100 EPS workload', ()
     capacityWorkloads('capacity-4gb-http128'),
   );
 });
+
+test('long pool comparisons hold the same 100 EPS workload for five minutes', () => {
+  const expected = [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 300 }];
+  assert.deepEqual(capacityWorkloads('capacity-4gb-db4-long'), expected);
+  assert.deepEqual(capacityWorkloads('capacity-4gb-db8-long'), expected);
+});
+
+test('long capacity traffic has time for its duration and summary shutdown', async () => {
+  const { capacityCommandTimeoutMs } = await import('./capacity-stage.mjs');
+  assert.equal(capacityCommandTimeoutMs('capacity-4gb-db4-long'), 420000);
+  assert.equal(capacityCommandTimeoutMs('capacity-4gb-http128'), 300000);
+});
