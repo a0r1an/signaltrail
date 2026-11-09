@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, rename, readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { readCollectorDelivery } from './collector-delivery.mjs';
+import { missingDashboardMetrics } from './dashboard-metrics.mjs';
+import { createCapacityTelemetry } from './capacity-telemetry.mjs';
+import { capacityTargets } from './capacity-targets.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { memoryPlans, verifyMemoryLimits } from './memory-budget.mjs';
 import { acquireRunLock } from './run-lock.mjs';
@@ -25,13 +30,16 @@ const dbConnections = [
   'capacity-4gb-db8-q24-noqueries',
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
+  'capacity-4gb-telemetry',
 ].includes(profile)
   ? 8
   : 4;
-const dbQueries = profile.startsWith('capacity-4gb-db8-q24') ? 24 : 16;
+const dbQueries =
+  profile.startsWith('capacity-4gb-db8-q24') || profile === 'capacity-4gb-telemetry' ? 24 : 16;
 const isolatedGenerator = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
+  'capacity-4gb-telemetry',
 ].includes(profile);
 let generatorAffinityVerified = false;
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
@@ -89,7 +97,7 @@ const compose = (...args) =>
     ...(profile === 'memory-2gb' ? ['-f', 'tests/load/compose.memory-2gb.yaml'] : []),
     ...(capacity ? ['-f', 'tests/load/compose.capacity.yaml'] : []),
     ...(isolatedGenerator ? ['-f', 'tests/load/compose.generator-isolation.yaml'] : []),
-    ...(profile === 'capacity-4gb-db8-q24-rebalanced'
+    ...(['capacity-4gb-db8-q24-rebalanced', 'capacity-4gb-telemetry'].includes(profile)
       ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
       : []),
     ...args,
@@ -100,6 +108,23 @@ const save = (name, value) =>
     `${directory}/${name}`,
     typeof value === 'string' ? value : JSON.stringify(value, null, 2),
   );
+const hostTelemetry = capacity ? createCapacityTelemetry() : undefined;
+let hostMetricsServer,
+  targetsAdvertised = false,
+  collectorBefore;
+const runStartedAt = Date.now() / 1000;
+const runId = directory.split('/').at(-1);
+const advertiseTargets = async (targets) => {
+  await writeFile('test-results/load-targets.json.tmp', JSON.stringify(targets));
+  await rename('test-results/load-targets.json.tmp', 'test-results/load-targets.json');
+};
+const telemetryConfig = {
+  startedAt: runStartedAt,
+  active: true,
+  connections: dbConnections,
+  queryLimit: dbQueries,
+  httpLimit: httpCap,
+};
 const samples = [];
 const stages = [];
 const queries = [];
@@ -242,6 +267,45 @@ try {
       }
     }
   }
+  if (capacity) {
+    hostTelemetry.setRun(telemetryConfig);
+    hostMetricsServer = createServer((request, response) => {
+      if (request.method !== 'GET' || request.url !== '/metrics') {
+        response.writeHead(404).end();
+        return;
+      }
+      void hostTelemetry.registry
+        .metrics()
+        .then((body) =>
+          response.writeHead(200, { 'Content-Type': hostTelemetry.registry.contentType }).end(body),
+        )
+        .catch(() => response.writeHead(503).end());
+    });
+    await new Promise((resolve, reject) => {
+      hostMetricsServer.once('error', reject);
+      hostMetricsServer.listen(34107, '127.0.0.1', resolve);
+    });
+    collectorBefore = await readCollectorDelivery();
+    await advertiseTargets(capacityTargets({ profile, runId }));
+    targetsAdvertised = true;
+    // Check each exposed protocol before starting traffic; remote delivery is a separate check.
+    for (const path of ['/metrics', '/processor-metrics', '/broker-metrics']) {
+      const response = await fetch(`http://127.0.0.1:34105${path}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(response.status, 200, `Metrics endpoint unavailable: ${path}`);
+      const body = await response.text();
+      assert.ok(body.includes('# TYPE'), `No Prometheus metric types: ${path}`);
+      await save(path.slice(1) + '.initial.prom', body);
+    }
+    const hostResponse = await fetch('http://127.0.0.1:34107/metrics', {
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(hostResponse.status, 200);
+    await save('capacity-host.initial.prom', await hostResponse.text());
+    result.telemetryVerification = { localEndpoints: true, cloudQueryVerified: false };
+    result.telemetryTargets = capacityTargets({ profile, runId });
+  }
   result.enforcedLimits = await inspect();
   assert.equal(
     Number(
@@ -261,6 +325,7 @@ try {
         ? `Capacity stage: ${rate} events/s for ${durationSeconds} seconds`
         : `Testing ${users} active-user equivalent: ${rate} events/s for 60 seconds`,
     );
+    hostTelemetry?.setRun({ ...telemetryConfig, offeredRate: rate });
     const queryStart = queries.length;
     let done = false,
       samplingError,
@@ -356,6 +421,7 @@ try {
             );
             observation.clickhouseMemoryFinishedAt = new Date().toISOString();
           }
+          hostTelemetry?.updateSample(observation, memoryPlan);
           samples.push(observation);
           if (analyticalLoad)
             await query(
@@ -427,6 +493,13 @@ try {
         assert.ok(generatorAffinityVerified, 'Generator affinity was not verified');
         result.generatorAffinityVerified = true;
       }
+      hostTelemetry?.setRun({
+        ...telemetryConfig,
+        offeredRate: rate,
+        accepted,
+        stored: stage.uniqueStored,
+        dropped: stage.droppedIterations,
+      });
       stage.sustained = stage.reasons.length === 0;
       if (stage.sustained) result.highestPassingEventsPerSecond = rate;
       await save('progress.json', { ...result, passed: false });
@@ -504,24 +577,86 @@ await finishRun({
         );
       }
     } catch {}
-    if (capacity) {
-      try {
-        const response = await fetch('http://127.0.0.1:34105/diagnostics', {
-          signal: AbortSignal.timeout(10000),
-        });
-        assert.equal(response.status, 200);
-        const diagnostics = await response.json();
-        assert.ok(diagnostics.totalRecords > 0, 'Missing interval diagnostics');
-        await save('stall-diagnostics.json', diagnostics);
-      } catch (error) {
-        result.passed = false;
-        await save('stall-diagnostics-error.json', { message: error.message });
-      }
-    }
     try {
       await save('services.log', await compose('logs', '--no-color', '--tail', '100'));
     } catch {}
     await cleanupResources([
+      ...(capacity
+        ? [
+            {
+              name: 'save interval diagnostics',
+              timeoutMs: 15000,
+              run: async () => {
+                const response = await fetch('http://127.0.0.1:34105/diagnostics', {
+                  signal: AbortSignal.timeout(10000),
+                });
+                assert.equal(response.status, 200);
+                const diagnostics = await response.json();
+                assert.ok(diagnostics.totalRecords > 0);
+                await save('stall-diagnostics.json', diagnostics);
+              },
+            },
+            {
+              name: 'save final capacity metrics',
+              timeoutMs: 20000,
+              run: async () => {
+                hostTelemetry.setRun({
+                  ...telemetryConfig,
+                  active: false,
+                  endedAt: Date.now() / 1000,
+                });
+                if (hostMetricsServer) {
+                  const finalBodies = [await hostTelemetry.registry.metrics()];
+                  await save('capacity-host.final.prom', finalBodies[0]);
+                  for (const path of ['/metrics', '/processor-metrics', '/broker-metrics']) {
+                    const response = await fetch(`http://127.0.0.1:34105${path}`, {
+                      signal: AbortSignal.timeout(5000),
+                    });
+                    assert.equal(response.status, 200);
+                    const body = await response.text();
+                    finalBodies.push(body);
+                    await save(path.slice(1) + '.final.prom', body);
+                  }
+                  // Leave the final marker available for at least one five-second scrape.
+                  if (targetsAdvertised) await delay(6000);
+                  const collectorAfter = await readCollectorDelivery();
+                  result.telemetryVerification.alloyLoadForwardingObserved = !!(
+                    collectorBefore?.available &&
+                    collectorAfter.available &&
+                    collectorAfter.loadForwarded > collectorBefore.loadForwarded
+                  );
+                  await save('collector-delivery.json', {
+                    before: collectorBefore,
+                    after: collectorAfter,
+                    note: 'Remote write counters aggregate all jobs; they are not proof of cloud query results for this run.',
+                  });
+                  if (profile === 'capacity-4gb-telemetry' && stages.length) {
+                    const dashboard = JSON.parse(
+                      await readFile('infra/monitoring/capacity-dashboard.json', 'utf8'),
+                    );
+                    const missing = missingDashboardMetrics(dashboard, finalBodies);
+                    assert.deepEqual(missing, [], 'Dashboard references unexposed metrics');
+                    result.telemetryVerification.dashboardMetricContract = true;
+                  }
+                }
+              },
+            },
+            {
+              name: 'withdraw capacity scrape targets',
+              run: async () => {
+                if (targetsAdvertised) await advertiseTargets([]);
+              },
+            },
+            {
+              name: 'close capacity host exporter',
+              run: async () => {
+                if (hostMetricsServer)
+                  await new Promise((resolve) => hostMetricsServer.close(resolve));
+                hostTelemetry.close();
+              },
+            },
+          ]
+        : []),
       { name: 'save memory samples', run: () => save('samples.json', samples) },
       { name: 'save query timings', run: () => save('queries.json', queries) },
       {

@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
+import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { startStallObserver } from './stall-observer.mjs';
 import { measureSourceLag } from './pipeline-measurements.mjs';
 import { createPostgresMembershipDatabase } from '../../packages/project-access/dist/index.js';
@@ -48,6 +50,7 @@ await query(await readFile('infra/clickhouse/001-analytics-events.sql', 'utf8'))
 await query(
   `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
 );
+let applicationMetrics, capacityMetrics;
 let metadataDatabase,
   metadataFailures = 0,
   metadataAtCapacity = 0;
@@ -63,6 +66,8 @@ const projects = createProjectRuntime(
         createDatabase(options) {
           const database = createPostgresMembershipDatabase({
             ...options,
+            onQueryTiming: (phase, seconds) =>
+              capacityMetrics?.observeDatabaseTiming(phase, seconds),
             maxConnections: Number(process.env.SIGNALTRAIL_FIXTURE_DB_CONNECTIONS ?? 4),
             maxInFlight: Number(process.env.SIGNALTRAIL_FIXTURE_DB_QUERIES ?? 16),
           });
@@ -88,7 +93,20 @@ const publisher = createRedpandaPublisher({
   topic: 'signaltrail.analytics.v1',
   maxOutstandingEvents: 1000,
   maxOutstandingBytes: 8388608,
+  onPublicationSettled: (seconds, failed) =>
+    applicationMetrics?.observePublication(seconds, failed),
 });
+if (capacity) {
+  applicationMetrics = createIngestionMetrics(publisher.snapshot, {
+    maxEvents: 1000,
+    maxBytes: 8388608,
+    maxConcurrentRequests: Number(process.env.SIGNALTRAIL_FIXTURE_HTTP_CAP ?? 128),
+  });
+  capacityMetrics = createCapacityTelemetry({
+    registry: applicationMetrics.registry,
+    kind: 'ingestion',
+  });
+}
 await publisher.connect();
 let observer, statusServer, stallObserver, diagnosticDatabase;
 let activeRequests = 0,
@@ -110,6 +128,7 @@ if (capacity) {
   await diagnosticDatabase.connect();
   stallObserver = startStallObserver({
     database: diagnosticDatabase,
+    onRecord: (record) => capacityMetrics.updateInterval(record),
     snapshot: () => ({
       metadata: metadataDatabase.snapshot(),
       admission: { activeRequests, refused: admissionRefused },
@@ -127,6 +146,38 @@ if (capacity) {
   }).admin();
   await observer.connect();
   statusServer = createServer((req, res) => {
+    if (req.method !== 'GET') {
+      res.writeHead(405).end();
+      return;
+    }
+    if (req.url === '/metrics') {
+      capacityMetrics.updateApplication({
+        metadata: metadataDatabase.snapshot(),
+        admission: { activeRequests, refused: admissionRefused, peakActiveRequests },
+      });
+      void applicationMetrics.registry
+        .metrics()
+        .then((body) =>
+          res.writeHead(200, { 'Content-Type': applicationMetrics.registry.contentType }).end(body),
+        )
+        .catch(() => res.writeHead(503).end());
+      return;
+    }
+    if (req.url === '/processor-metrics' || req.url === '/broker-metrics') {
+      const url =
+        req.url === '/processor-metrics'
+          ? 'http://127.0.0.1:4107/metrics'
+          : 'http://redpanda:9644/public_metrics';
+      void fetch(url, { signal: AbortSignal.timeout(2000) })
+        .then(async (response) => {
+          res.writeHead(response.status, {
+            'Content-Type': response.headers.get('content-type') ?? 'text/plain',
+          });
+          res.end(await response.text());
+        })
+        .catch(() => res.writeHead(503).end());
+      return;
+    }
     if (req.url === '/diagnostics') {
       res
         .writeHead(200, { 'Content-Type': 'application/json' })
@@ -181,6 +232,7 @@ const worker = spawn(process.execPath, ['workers/event-processor/dist/main.js'],
     SIGNALTRAIL_REDPANDA_TOPIC: 'signaltrail.analytics.v1',
     SIGNALTRAIL_REDPANDA_DLQ_TOPIC: 'signaltrail.analytics.dlq.v1',
     SIGNALTRAIL_PROCESSOR_GROUP_ID: 'memory-budget',
+    ...(capacity ? { SIGNALTRAIL_PROCESSOR_METRICS_PORT: '4107' } : {}),
     SIGNALTRAIL_CLICKHOUSE_URL: 'http://clickhouse:8123',
     SIGNALTRAIL_CLICKHOUSE_USERNAME: 'signaltrail',
     SIGNALTRAIL_CLICKHOUSE_PASSWORD: 'signaltrail_local',
@@ -197,6 +249,7 @@ const server = createIngestionServer({
   ...(capacity
     ? {
         observeAdmission(active, refused) {
+          applicationMetrics.observeAdmission(active, refused);
           activeRequests = active;
           peakActiveRequests = Math.max(peakActiveRequests, active);
           if (refused) {
@@ -205,7 +258,8 @@ const server = createIngestionServer({
             if (recentHttpRefusals.length > 32) recentHttpRefusals.shift();
           }
         },
-        observeRequest(status) {
+        observeRequest(status, seconds) {
+          applicationMetrics.observeRequest(status, seconds);
           const key = String(status);
           statusClasses[key] = (statusClasses[key] ?? 0) + 1;
         },
@@ -219,6 +273,7 @@ for (const signal of ['SIGTERM', 'SIGINT'])
     stopping = true;
     const deadline = setTimeout(() => process.exit(1), 15000);
     stallObserver?.stop();
+    capacityMetrics?.close();
     await diagnosticDatabase?.end();
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

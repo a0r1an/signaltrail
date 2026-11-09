@@ -223,3 +223,13 @@ allocation trials pass. The changes preserve the four-GiB total and 640-MiB rese
 with ClickHouse/app/PostgreSQL caps 1536/384/128 MiB. This improves local evidence
 without proving a unique root cause or production capacity; ClickHouse still
 performs reclaim and host/long-duration limitations remain.
+
+## Capacity telemetry now registered with Alloy
+
+The historical scrape-coverage gap above has been addressed for future runs. See
+[capacity monitoring](../setup/capacity-monitoring.md): capacity targets now export
+ingestion/DB/host/worker/broker metrics with explicit profile/run labels, and the
+existing Alloy file discovery collects them. Local endpoints, actual load-forwarding
+counter growth and dashboard metric-reference checks pass. Cloud query/render
+verification still requires the user's Grafana URL/access; historical missing
+metrics have not been backfilled or reclassified as captured.

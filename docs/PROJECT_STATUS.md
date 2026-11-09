@@ -19,6 +19,32 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — capacity telemetry wired to Alloy; dashboard prepared
+
+- Capacity fixtures now export ingestion HTTP/publication/Node runtime metrics,
+  acquisition/execution histograms, occupancy/refusals, interval pressure and GC,
+  and fixture worker/broker metrics. Runner exporter adds Docker service/generator
+  resources, ClickHouse memory pressure/events/caps, lag, limits and run/stage totals.
+- Temporary discovery targets are separated by test/profile/run labels and withdrawn
+  on cleanup; existing Alloy file discovery picks them up at five-second scrapes.
+  No collector restart, credentials or application limits changed. Observer failures
+  (including rejected promises) cannot affect database query outcomes.
+- Prepared 28-panel `infra/monitoring/capacity-dashboard.json` with run/profile/CPU
+  filters, timestamps/completion marker and availability/freshness views. Real
+  exporter metric-reference contract passes; cloud import/render not verified.
+- Two 30-second telemetry smoke runs pass with 3001 accepted/unique stored each.
+  Final report: `test-results/load/2026-11-09T23-41-10.327Z-capacity-4gb-telemetry/result.json`.
+  Local endpoint checks, dashboard metric contract and Alloy forwarding observed.
+  Load-forwarded counter rises 768765→793045; aggregate remote-written counter rises
+  with unchanged failure/retry counters. Cloud query verification remains false.
+- Targets withdrawn to [], owned exporters/containers removed and lock released.
+  Access lint/81 tests/types/build, 54 harness units and Alloy validation pass.
+  Detailed setup/semantics/evidence: `setup/capacity-monitoring.md`.
+- Next: obtain Grafana instance URL/existing read access to import and visually/query
+  verify the prepared dashboard. No open Grafana tab or UI URL found; write-token
+  scope was not expanded or assumed to allow reads. Independent longer load work
+  can use the now-wired telemetry; historical cloud data cannot be reconstructed.
+
 ### November 9 — generator repeat and four-GiB redistribution
 
 - User authorized baseline isolation repeat and a revised memory allocation.

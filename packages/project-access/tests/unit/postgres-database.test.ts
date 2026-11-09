@@ -98,3 +98,43 @@ it('retains peak occupancy and bounded refusal diagnostics between snapshots', a
     await database.close();
   }
 });
+
+it('reports connection-acquisition timings without exposing query inputs or changing failures', async () => {
+  const timings: Array<[string, number]> = [];
+  const database = createPostgresMembershipDatabase({
+    ...configuration,
+    timeoutMs: 50,
+    onQueryTiming(phase, seconds) {
+      timings.push([phase, seconds]);
+      throw new Error('observer failure');
+    },
+  });
+  try {
+    await expect(
+      database.query({ text: 'SELECT 1', values: [], signal: new AbortController().signal }),
+    ).rejects.toThrow('PostgreSQL query was not confirmed');
+    expect(timings.length).toBeGreaterThan(0);
+    expect(timings[0]?.[0]).toBe('acquisition');
+    expect(timings[0]?.[1]).toBeGreaterThanOrEqual(0);
+  } finally {
+    await database.close();
+  }
+});
+
+it('contains rejected asynchronous timing observers', async () => {
+  const database = createPostgresMembershipDatabase({
+    ...configuration,
+    timeoutMs: 50,
+    onQueryTiming: async () => {
+      throw new Error('async observer failure');
+    },
+  });
+  try {
+    await expect(
+      database.query({ text: 'SELECT 1', values: [], signal: new AbortController().signal }),
+    ).rejects.toThrow('PostgreSQL query was not confirmed');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    await database.close();
+  }
+});

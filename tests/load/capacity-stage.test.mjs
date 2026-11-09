@@ -103,3 +103,9 @@ test('memory redistribution preserves the isolated-generator five-minute workloa
     capacityWorkloads('capacity-4gb-db8-q24-generator'),
   );
 });
+
+test('telemetry smoke uses a bounded 30-second 100 EPS workload', () => {
+  assert.deepEqual(capacityWorkloads('capacity-4gb-telemetry'), [
+    { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 30 },
+  ]);
+});

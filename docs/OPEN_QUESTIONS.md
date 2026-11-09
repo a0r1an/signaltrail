@@ -401,3 +401,17 @@ and the point at which an answer becomes necessary.
   Longer retained-data/maintenance tests and actual-host qualification remain.
   No application defaults, paid resources, deployment or budget changed. Evidence
   and exact next step: `performance/4gb-memory-rebalance.md`.
+
+## November 9 — Grafana capacity telemetry follow-up
+
+- User authorized implementing the missing telemetry wiring/dashboard. Capacity
+  targets now register with Alloy and observed load forwarding increases; local
+  endpoint and real dashboard metric-reference checks pass. Prepared dashboard
+  is `infra/monitoring/capacity-dashboard.json`. Historical capacity cloud coverage
+  remains absent; new runs now advertise their targets.
+- Live Grafana import/render/query verification still needs the instance/dashboard
+  URL and existing usable access. Browser tab discovery again finds no Grafana tab;
+  local configuration contains only the remote-write endpoint. No credential or
+  scope change assumed; no tokens should be sent in chat. Independent load work
+  continues using local and collector evidence. Exact evidence/semantics are in
+  `setup/capacity-monitoring.md`.

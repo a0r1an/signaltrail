@@ -9,6 +9,7 @@ export interface PostgresDatabaseOptions {
   maxInFlight?: number;
   timeoutMs?: number;
   onPoolError?(): void | Promise<void>;
+  onQueryTiming?(phase: 'acquisition' | 'execution', seconds: number): void | Promise<void>;
 }
 
 export function createPostgresMembershipDatabase(options: PostgresDatabaseOptions) {
@@ -77,6 +78,15 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
     metric.count++;
     metric.total += ms;
     metric.max = Math.max(metric.max, ms);
+    try {
+      const observation = options.onQueryTiming?.(
+        metric === connectionWaitMs ? 'acquisition' : 'execution',
+        ms / 1000,
+      );
+      if (observation !== undefined) void Promise.resolve(observation).catch(() => {});
+    } catch {
+      /* Observations cannot change query outcomes. */
+    }
   };
   const recentRefusals: Array<{
     at: string;

@@ -6,6 +6,7 @@ export function startStallObserver({
   database,
   snapshot,
   readResources = readResourceDiagnostics,
+  onRecord = () => {},
 }) {
   const records = [];
   let totalRecords = 0,
@@ -79,6 +80,11 @@ export function startStallObserver({
     } finally {
       record.finishedAt = new Date().toISOString();
       record.collectionMs = performance.now() - started;
+      try {
+        onRecord(record);
+      } catch {
+        record.metricsObservationFailed = true;
+      }
       records.push(record);
       totalRecords++;
       if (records.length > 600) records.shift();

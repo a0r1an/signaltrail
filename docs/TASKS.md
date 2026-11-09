@@ -48,9 +48,14 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.
       See [memory redistribution](performance/4gb-memory-rebalance.md).
-- [ ] Confirm Grafana dashboard URL/read access and capacity scrape coverage before
-      using cloud graphs as evidence for isolated capacity trials; no token change
-      or remote query success is assumed.
+- [x] Register isolated capacity ingestion/host/processor/broker metrics with Alloy;
+      export DB histograms/pressure, run labels/config and test lifecycle metrics.
+      Two telemetry smoke runs pass; actual Alloy load forwarding observed.
+- [x] Prepare 28-panel capacity dashboard and validate metric names against real
+      endpoint output. Add scrape availability/freshness and measurement semantics.
+- [ ] Import/render/query-verify dashboard in the user's Grafana instance once its
+      URL/existing access is available. No read-token permission or cloud query
+      result is assumed. See [capacity monitoring](setup/capacity-monitoring.md).
 
 ## Completed slice: real local capture to dashboard
 

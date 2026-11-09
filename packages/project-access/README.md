@@ -189,3 +189,9 @@ no SQL, parameter values or credentials. Peaks/timings/counters cover this adapt
 instance's lifetime and reset when it is recreated. They retain transients between
 polls but do not establish whether CPU scheduling, network or server execution
 caused a delay.
+
+For histogram instrumentation, `onQueryTiming(phase, seconds)` can observe each
+settled acquisition/execution attempt (`phase` is `acquisition` or `execution`).
+It receives no SQL or values. Synchronous exceptions and rejected promises are
+contained; observers cannot change the query result. Observers should be fast
+and nonblocking. The capacity fixture uses a local histogram observer.
