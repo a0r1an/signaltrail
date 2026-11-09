@@ -39,10 +39,15 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Research Lightsail CPU/RAM bundle prices: no four-vCPU/four-GB plan;
       two/four IPv4 $24 general or $42 compute; smallest four-vCPU compute is
       eight GB/$84. Sources in `performance/lightsail-options.md`.
-- [ ] Repeat matched generator controls before attributing improvement; plan and
-      verify separate ClickHouse memory redistribution within the four-GiB budget.
-      Preserve target CPU count, workload and unrelated development services. See
-      [stall investigation](performance/cpu-stall-investigation.md).
+- [x] Repeat generator-isolated original allocation: fails with 13 metadata 503s;
+      isolation alone is not reliably sufficient. All accepted events stored.
+- [x] Test separate four-GiB redistribution (ClickHouse 1536 / app 384 / PostgreSQL
+      128 MiB, other caps/reserve unchanged). Two fresh five-minute 100-EPS runs
+      pass with zero refusals, exact storage/drain and no detected OOM/restart.
+- [ ] Extend the revised profile to longer retained-data/maintenance measurements;
+      qualify actual-host CPU credits/disk/OS overhead before supported capacity
+      or production sizing claims. No paid target/default change is authorized.
+      See [memory redistribution](performance/4gb-memory-rebalance.md).
 - [ ] Confirm Grafana dashboard URL/read access and capacity scrape coverage before
       using cloud graphs as evidence for isolated capacity trials; no token change
       or remote query success is assumed.

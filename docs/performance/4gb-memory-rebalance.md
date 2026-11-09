@@ -61,7 +61,7 @@ is not the experiment's goal. The cap still causes reclaim, without OOM.
 
 First-run result is encouraging but does not establish causation or an optimum;
 shared-host variation remains, and prior first passes did not always repeat.
-A fresh confirmation run is in progress before deciding whether the result repeats.
+A fresh confirmation run also passes, as recorded below.
 
 ## Verification
 
@@ -69,3 +69,48 @@ The allocation test and workload-profile test were each observed failing before
 implementation. All 48 harness unit tests pass. The runner inspects actual caps,
 swap/CPU affinity and lifecycle; the new profile is a separate Compose override.
 Reports retain failed results as failed evidence. No production limits changed.
+
+## Revised allocation confirmation
+
+Fresh report:
+`test-results/load/2026-11-09T21-41-43.622Z-capacity-4gb-db8-q24-rebalanced/result.json`.
+
+Passes again: 30001 accepted/unique stored, zero HTTP/metadata/publisher refusals,
+retries/rejections/generator drops and final source lag zero. HTTP p95/p99
+7.20/17.62 ms. Metadata outstanding peak 14/24; loop-delay maximum 121.96 ms.
+Actual target memory/swap/CPU limits and generator placement verified. No detected
+OOM/restart; all owned resources removed and load lock released.
+
+ClickHouse max-limit events reach 15497, pressure `some/full` totals 1.029/0.835 s.
+Docker-displayed individual peaks: ClickHouse 1502.21 MiB of 1536, app 155.1 MiB
+of 384, PostgreSQL 39.93 MiB of 128. Summed displayed target peak 1927.61 MiB;
+this excludes guest OS/some cache and can miss brief peaks.
+
+| Measurement | Original allocation repeat | Revised 1 | Revised 2 |
+| --- | --- | --- | --- |
+| Result | Fail | Pass | Pass |
+| Metadata HTTP 503s | 13 | 0 | 0 |
+| Accepted / unique stored | 29988 / 29988 | 30001 / 30001 | 30001 / 30001 |
+| HTTP p99, ms | 35.67 | 23.19 | 17.62 |
+| Peak outstanding metadata queries | 24 | 14 | 14 |
+| ClickHouse memory-pressure some total, seconds | 1.982 | 1.161 | 1.029 |
+| ClickHouse max-limit event count | 15475 | 15239 | 15497 |
+
+### Working conclusion
+
+The revised distribution is the more promising local experimental allocation:
+two fresh five-minute 100-EPS zero-refusal trials, without observed OOM/restarts
+in the reduced donor budgets. Retain it as the named comparison profile, not a
+production default or certified host size. Shared-host variation, sequential order
+and limited duration prevent a causal/optimality claim; the original generator-
+isolated allocation itself had one pass before this failed repeat.
+
+The larger ClickHouse cap does not eliminate reclaim or max-limit events. Similar
+event counts with lower pressure duration show why those counts alone are not
+failure counts or a latency metric. Cache/memory utilization can expand to fill
+the allowance. Two short passes do not qualify retention, maintenance/backup
+pressure, replay, idle Valkey becoming active, OS reserve or burst-credit limits.
+
+Next: use the revised profile for longer retained-data/maintenance measurements
+and targeted CPU/GC observation; qualify the actual candidate host before purchase/
+production claims. No paid target, deployment or production defaults are approved.

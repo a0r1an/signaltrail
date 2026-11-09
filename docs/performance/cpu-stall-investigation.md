@@ -214,3 +214,12 @@ before implementation. No development/production defaults changed. Next repeat
 matched generator controls, and plan a separately verified memory redistribution
 within four GiB before stronger host-sizing claims. Current Lightsail price
 research is recorded in [Lightsail options](lightsail-options.md).
+
+## Follow-up memory redistribution
+
+See [four-GiB memory redistribution](4gb-memory-rebalance.md): the isolated-generator
+original allocation repeat fails with 13 metadata refusals, while two fresh revised
+allocation trials pass. The changes preserve the four-GiB total and 640-MiB reserve,
+with ClickHouse/app/PostgreSQL caps 1536/384/128 MiB. This improves local evidence
+without proving a unique root cause or production capacity; ClickHouse still
+performs reclaim and host/long-duration limitations remain.

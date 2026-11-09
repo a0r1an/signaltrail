@@ -31,8 +31,15 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   zero refusals/retries/rejections/drops, final lag zero and no OOM/restart.
   HTTP p99 23.19 ms versus baseline repeat 35.67 ms. Actual caps/affinity verified,
   cleanup passes. ClickHouse pressure some 1.161 s vs 1.982 s, still binding.
-- Reports and limitations in `performance/4gb-memory-rebalance.md`. A fresh revised
-  confirmation is in progress; no claim of repeatability or production adoption.
+- Fresh revised confirmation also passes: 30001 accepted/unique stored, zero
+  refusals/retries/rejections/drops, final lag zero, p99 17.62 ms and metadata peak
+  14/24. No OOM/restart; actual caps/affinity and cleanup/lock release verified.
+  ClickHouse pressure some 1.029 s, max-limit events still 15497; cap still binds.
+- Reports and limitations in `performance/4gb-memory-rebalance.md`. Two fresh
+  short revised passes make this a more promising local experimental allocation,
+  not causal/optimality proof or production qualification. Next longer retained-
+  data/maintenance measurements and real-host qualification before sizing claims.
+  No normal application/development/production defaults changed.
 
 ### November 9 — generator isolation passes; ClickHouse cap causes reclaim
 

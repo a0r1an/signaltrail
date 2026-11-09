@@ -387,3 +387,17 @@ and the point at which an answer becomes necessary.
   or $42 compute optimized; smallest four-vCPU compute is eight GB/$84, above the
   recorded $50 VPS budget. No budget increase or provider purchase assumed. Sources
   and CPU-credit limitations in `performance/lightsail-options.md`.
+
+## November 9 — four-GiB allocation follow-up
+
+- User authorized baseline repeat and revised allocation. Original generator-
+  isolated repeat fails with 13 metadata refusals, so isolation alone is not a
+  reliable fix. Revised ClickHouse/app/PostgreSQL caps 1536/384/128 MiB preserve
+  the same four-GiB total, 640-MiB reserve and other settings. Two fresh five-minute
+  100-EPS runs pass with 30001 accepted/unique stored each, zero refusals and no
+  detected OOM/restart; cleanup passed. More promising local experimental profile,
+  not a proven optimum or production host recommendation.
+- ClickHouse still hits its cap, but measured memory-pressure duration is lower.
+  Longer retained-data/maintenance tests and actual-host qualification remain.
+  No application defaults, paid resources, deployment or budget changed. Evidence
+  and exact next step: `performance/4gb-memory-rebalance.md`.
