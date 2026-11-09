@@ -53,9 +53,12 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       Two telemetry smoke runs pass; actual Alloy load forwarding observed.
 - [x] Prepare 28-panel capacity dashboard and validate metric names against real
       endpoint output. Add scrape availability/freshness and measurement semantics.
-- [ ] Import/render/query-verify dashboard in the user's Grafana instance once its
-      URL/existing access is available. No read-token permission or cloud query
-      result is assumed. See [capacity monitoring](setup/capacity-monitoring.md).
+- [ ] Import/render/query-verify in `https://dashingjackal3083.grafana.net`.
+      URL supplied; blocked by browser page-control TypeError despite working
+      tab discovery and documented recovery attempts. Resume when browser control
+      works; no Grafana plugin alternative found. Do not request the URL again or
+      assume telemetry write-token permissions. See
+      [capacity monitoring](setup/capacity-monitoring.md).
 
 ## Completed slice: real local capture to dashboard
 

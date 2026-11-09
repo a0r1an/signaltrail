@@ -408,9 +408,11 @@ and the point at which an answer becomes necessary.
   endpoint and real dashboard metric-reference checks pass. Prepared dashboard
   is `infra/monitoring/capacity-dashboard.json`. Historical capacity cloud coverage
   remains absent; new runs now advertise their targets.
-- Live Grafana import/render/query verification still needs the instance/dashboard
-  URL and existing usable access. Browser tab discovery again finds no Grafana tab;
-  local configuration contains only the remote-write endpoint. No credential or
-  scope change assumed; no tokens should be sent in chat. Independent load work
-  continues using local and collector evidence. Exact evidence/semantics are in
-  `setup/capacity-monitoring.md`.
+- Resolved: user supplied `https://dashingjackal3083.grafana.net` and existing
+  ingestion dashboard URL. Do not ask for it again. Cloud import/render/query
+  verification is now blocked by browser control, not a missing URL: Chrome finds
+  the tab but page/screenshot/accessibility/fresh-tab actions fail with a TypeError
+  reading `timeoutMs`. Supported recovery alternatives failed; no other browser
+  session or Grafana plugin is available. Needed: functioning browser page control
+  to resume the prepared import. No credential extraction/scope change assumed;
+  no tokens should be sent in chat. See `setup/capacity-monitoring.md`.

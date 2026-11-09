@@ -118,6 +118,16 @@ Access-package lint/81 tests/types/build, all 54 harness unit tests and Alloy
 configuration validation pass. New behavior tests were observed failing before
 implementation, including asynchronous observer failure containment. The dashboard
 JSON and metric contract are verified; cloud import/render/PromQL execution have
-not been verified. No signed-in Grafana tab or instance URL is currently available;
-provide the instance/dashboard URL to complete that read/import verification using
-existing access. Do not send tokens in chat or assume the write token grants reads.
+not been verified. The user supplied the instance URL on November 9:
+`https://dashingjackal3083.grafana.net`, with the existing `signaltrail-ingestion`
+dashboard. Chrome tab discovery finds that page, but DOM, screenshot, accessibility
+and fresh-tab control fail with `Cannot read properties of undefined (reading
+'timeoutMs')`. Explicit execution timeout and documented recovery alternatives do
+not resolve it. Chrome is the only available browser session; Grafana plugin search
+returns no available integration. Authentication/permissions were not inferred from
+the tab title. No cloud dashboard changes have occurred.
+
+Remaining dependency: restore working browser page control, then import the JSON,
+select the account datasource and verify actual PromQL/rendering for the saved test
+window. The URL is resolved; it must not be requested again. Do not send tokens in
+chat, extract browser credentials, or assume the telemetry write token grants reads.

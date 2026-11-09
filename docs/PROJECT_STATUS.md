@@ -19,6 +19,22 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — Grafana URL supplied; browser control blocks cloud import
+
+- User supplied `https://dashingjackal3083.grafana.net` and existing ingestion
+  dashboard URL. That dependency is resolved. Chrome tab discovery confirms the
+  requested dashboard tab; this does not independently verify authentication.
+- Browser DOM/screenshot/accessibility/fresh-tab controls consistently fail with
+  `Cannot read properties of undefined (reading 'timeoutMs')`, including explicit
+  execution timeout. Documented troubleshooting alternatives attempted. Only one
+  Chrome session is available; plugin search finds no Grafana integration.
+- No cloud import, modification, query or render verification is claimed. Prepared
+  local dashboard and prior exporter/Alloy evidence remain valid. No credential
+  extraction, new token or permission change attempted.
+- Exact next step: once browser page control works, import the prepared capacity
+  dashboard, bind the existing datasource and verify saved smoke-run data. Do not
+  ask again for the already supplied instance URL. Details in capacity setup doc.
+
 ### November 9 — capacity telemetry wired to Alloy; dashboard prepared
 
 - Capacity fixtures now export ingestion HTTP/publication/Node runtime metrics,
