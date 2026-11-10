@@ -26,6 +26,7 @@ it('reads explicit dependency coordinates and preserves password bytes', () => {
       username: 'writer',
       password: ' local-password ',
       timeoutMs: 5000,
+      asyncInsert: false,
     },
   });
 });
@@ -77,6 +78,22 @@ it('supports explicit bounded collection and a zero-wait compatibility control',
         SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS: String(batchWaitMs),
       }).consumer.batchWaitMs,
     ).toBe(batchWaitMs);
+});
+it('keeps synchronous ClickHouse inserts unless async inserts are enabled', () => {
+  expect(parseProcessorEnvironment(environment).clickhouse.asyncInsert).toBe(false);
+  expect(
+    parseProcessorEnvironment({ ...environment, SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT: '1' })
+      .clickhouse.asyncInsert,
+  ).toBe(true);
+  expect(
+    parseProcessorEnvironment({ ...environment, SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT: '0' })
+      .clickhouse.asyncInsert,
+  ).toBe(false);
+});
+it.each(['', 'true', 'yes', '2'])('rejects an invalid async insert setting', (value) => {
+  expect(() =>
+    parseProcessorEnvironment({ ...environment, SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT: value }),
+  ).toThrow('Invalid SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT');
 });
 it.each(['', '-1', '1.5', '1001', 'secret-invalid-wait'])(
   'rejects an invalid collection window',

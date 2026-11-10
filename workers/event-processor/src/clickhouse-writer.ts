@@ -8,6 +8,8 @@ export interface ClickHouseWriterOptions {
   password: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  // Server-side buffering; the response still waits for the flushed part.
+  asyncInsert?: boolean;
   onAttempt?(outcome: 'confirmed' | 'failed', seconds: number): void;
 }
 async function readAcknowledgement(response: Response, signal: AbortSignal): Promise<void> {
@@ -75,7 +77,8 @@ export function createClickHouseBatchWriter(options: ClickHouseWriterOptions) {
     'Basic ' + Buffer.from(options.username + ':' + options.password).toString('base64');
   endpoint.searchParams.set('query', `INSERT INTO ${database}.${table} FORMAT JSONEachRow`);
   endpoint.searchParams.set('wait_end_of_query', '1');
-  endpoint.searchParams.set('async_insert', '0');
+  endpoint.searchParams.set('async_insert', options.asyncInsert ? '1' : '0');
+  if (options.asyncInsert) endpoint.searchParams.set('wait_for_async_insert', '1');
   endpoint.searchParams.set('date_time_input_format', 'best_effort');
   const send = options.fetch ?? globalThis.fetch;
   return async (records: readonly PublishedAnalyticsEvent[]) => {

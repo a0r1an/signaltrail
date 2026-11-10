@@ -110,3 +110,8 @@ test('step-down endurance keeps the revised four-GiB allocation and CPU affinity
     memoryPlans['capacity-4gb-db8-q24-endurance'],
   );
 });
+
+test('async insert profiles keep the revised four-GiB allocation and CPU affinity', () => {
+  for (const name of ['capacity-4gb-memory-trace-async', 'capacity-4gb-memory-trace-async-smoke'])
+    assert.deepEqual(memoryPlans[name], memoryPlans['capacity-4gb-memory-trace']);
+});

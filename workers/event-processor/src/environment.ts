@@ -25,6 +25,9 @@ export function parseProcessorEnvironment(
     batchWaitMs > 1000
   )
     throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS');
+  const rawAsyncInsert = environment.SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT;
+  if (rawAsyncInsert !== undefined && !['0', '1'].includes(rawAsyncInsert))
+    throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT');
   const rawPort = environment.SIGNALTRAIL_PROCESSOR_METRICS_PORT;
   const port = rawPort === undefined ? undefined : Number(rawPort);
   if (port !== undefined && (!Number.isSafeInteger(port) || port < 1 || port > 65535))
@@ -47,6 +50,7 @@ export function parseProcessorEnvironment(
       username: required('SIGNALTRAIL_CLICKHOUSE_USERNAME'),
       password: environment.SIGNALTRAIL_CLICKHOUSE_PASSWORD ?? '',
       timeoutMs,
+      asyncInsert: rawAsyncInsert === '1',
     },
   };
 }

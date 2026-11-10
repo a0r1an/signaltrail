@@ -126,6 +126,17 @@ test('step-down endurance holds 50 EPS for 30 minutes on the same allocation', a
   assert.equal(capacityCommandTimeoutMs('capacity-4gb-db8-q24-endurance-50'), 1920000);
 });
 
+test('async insert trace matches the 15-minute memory trace and has a short smoke', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async'),
+    capacityWorkloads('capacity-4gb-memory-trace'),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-smoke'),
+    capacityWorkloads('capacity-4gb-memory-trace-smoke'),
+  );
+});
+
 test('query-memory investigation uses a bounded two-minute revised workload', () => {
   assert.deepEqual(capacityWorkloads('capacity-4gb-query-memory'), [
     { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 },

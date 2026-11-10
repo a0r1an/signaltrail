@@ -22,6 +22,7 @@ import {
   capacityWorkloads,
   capacityCommandTimeoutMs,
 } from './capacity-stage.mjs';
+import { assessInsertMode, insertEventsQuery, parseInsertEvents } from './insert-mode.mjs';
 
 const profile = process.argv[2] ?? 'memory-4gb';
 assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
@@ -42,6 +43,8 @@ const dbConnections = [
   'capacity-4gb-memory-trace-heap-batched-smoke',
   'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
+  'capacity-4gb-memory-trace-async',
+  'capacity-4gb-memory-trace-async-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -67,6 +70,8 @@ const isolatedGenerator = [
   'capacity-4gb-memory-trace-heap-batched-smoke',
   'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
+  'capacity-4gb-memory-trace-async',
+  'capacity-4gb-memory-trace-async-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -77,6 +82,8 @@ let generatorAffinityVerified = false;
 const heapProfile = profile.includes('memory-trace-heap');
 const heapSmoke = heapProfile && profile.endsWith('smoke');
 const batchWaitMs = profile.includes('heap-batched') ? 200 : 0;
+// Async-insert profiles also apply the small-server ClickHouse configuration.
+const asyncInsert = profile.includes('memory-trace-async');
 const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
@@ -98,6 +105,7 @@ function docker(args, timeout = capacity ? capacityCommandTimeoutMs(profile) : 3
         ...process.env,
         SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap),
         SIGNALTRAIL_FIXTURE_BATCH_WAIT_MS: String(batchWaitMs),
+        SIGNALTRAIL_FIXTURE_ASYNC_INSERT: asyncInsert ? '1' : '0',
         SIGNALTRAIL_FIXTURE_DB_CONNECTIONS: String(dbConnections),
         SIGNALTRAIL_FIXTURE_DB_QUERIES: String(dbQueries),
       },
@@ -143,6 +151,8 @@ const compose = (...args) =>
       'capacity-4gb-memory-trace-heap-batched-smoke',
       'capacity-4gb-memory-trace-heap-smoke',
       'capacity-4gb-memory-trace-smoke',
+      'capacity-4gb-memory-trace-async',
+      'capacity-4gb-memory-trace-async-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
@@ -156,6 +166,7 @@ const compose = (...args) =>
       ? ['-f', 'tests/load/compose.no-text-log.yaml']
       : []),
     ...(heapProfile ? ['-f', 'tests/load/compose.heap.yaml'] : []),
+    ...(asyncInsert ? ['-f', 'tests/load/compose.small-server.yaml'] : []),
     ...args,
   ]);
 const services = Object.keys(memoryPlan.services);
@@ -261,6 +272,10 @@ async function inspect() {
       'Batch collection must match profile',
     );
     assert.ok(
+      app.Config.Env.includes(`SIGNALTRAIL_FIXTURE_ASYNC_INSERT=${asyncInsert ? '1' : '0'}`),
+      'Async insert mode must match profile',
+    );
+    assert.ok(
       app.Config.Env.includes(`SIGNALTRAIL_FIXTURE_HTTP_CAP=${httpCap}`),
       'HTTP cap must match profile',
     );
@@ -308,6 +323,8 @@ let result = {
     metadataConnections: dbConnections,
     metadataOutstandingQueries: dbQueries,
     workerBatchWaitMs: batchWaitMs,
+    clickhouseAsyncInsert: asyncInsert,
+    clickhouseSmallServerConfig: asyncInsert,
   },
   ...(capacity
     ? {
@@ -782,6 +799,12 @@ try {
       if (stage.maxDiagnosticQueryMs > 2000)
         stage.reasons.push('Diagnostic query exceeded 2 seconds');
       await inspect();
+      stage.clickhouseInsertEvents = parseInsertEvents(
+        await query(insertEventsQuery, undefined, { recordTiming: false }),
+      );
+      stage.reasons.push(
+        ...assessInsertMode({ asyncInsert, events: stage.clickhouseInsertEvents }),
+      );
       if (isolatedGenerator) {
         assert.ok(generatorAffinityVerified, 'Generator affinity was not verified');
         result.generatorAffinityVerified = true;

@@ -189,6 +189,25 @@ it('keeps SQL-like event names in row data rather than interpolating them into t
   expect(new URL(target).searchParams.get('async_insert')).toBe('0');
 });
 
+it('opts into server-side async inserts that still wait for the durable flush', async () => {
+  let target = '';
+  const write = createClickHouseWriter({
+    endpoint: 'http://clickhouse:8123',
+    username: 'writer',
+    password: 'test-password',
+    asyncInsert: true,
+    fetch: async (url) => {
+      target = String(url);
+      return new Response(null);
+    },
+  });
+  await write(record);
+  const params = new URL(target).searchParams;
+  expect(params.get('async_insert')).toBe('1');
+  expect(params.get('wait_for_async_insert')).toBe('1');
+  expect(params.get('wait_end_of_query')).toBe('1');
+});
+
 it.each([202, 204])('does not infer a durable ClickHouse insert from HTTP %i', async (status) => {
   const write = createClickHouseWriter({
     endpoint: 'http://clickhouse:8123',

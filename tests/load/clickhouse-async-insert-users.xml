@@ -1,0 +1,11 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- Flush buffered async inserts about once per second instead of the
+                 adaptive 50–200 ms window, and parse small inserts in one thread. -->
+            <async_insert_use_adaptive_busy_timeout>0</async_insert_use_adaptive_busy_timeout>
+            <async_insert_busy_timeout_max_ms>1000</async_insert_busy_timeout_max_ms>
+            <input_format_parallel_parsing>0</input_format_parallel_parsing>
+        </default>
+    </profiles>
+</clickhouse>

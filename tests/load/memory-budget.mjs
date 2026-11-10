@@ -23,6 +23,16 @@ export const memoryPlans = {
     cpuSet: '0,1',
     services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
   },
+  'capacity-4gb-memory-trace-async': {
+    hostReserveMiB: 640,
+    cpuSet: '0,1',
+    services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
+  },
+  'capacity-4gb-memory-trace-async-smoke': {
+    hostReserveMiB: 640,
+    cpuSet: '0,1',
+    services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
+  },
   'capacity-4gb-memory-trace-heap': {
     hostReserveMiB: 640,
     cpuSet: '0,1',
