@@ -19,6 +19,20 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 10 — heap attribution in progress
+
+- User explicitly selected allocation profiling before the proposed logging control.
+  Isolated startup config enables sparse global sampling (lg_sample22), with no
+  exhaustive JemallocSample trace-log collection. SQL collapsed heap stacks verified
+  on pinned 26.8; newer 26.9 fragmentation tables are not used.
+- TDD stack-delta/validation/profile tests and all 70 harness tests pass. Thirty-second
+  capability probe passes with 3000 accepted/stored, three nonempty symbolized
+  profiles (startup/load/10-second idle), full interval export and clean teardown.
+  Artifact: `2026-11-10T18-19-02.695Z-capacity-4gb-memory-trace-heap-smoke`.
+- Fifteen-minute same-budget run plus three-minute idle is now in progress;
+  additional snapshots planned at five and eleven minutes. No performance-capacity
+  equivalence assumed with profiling enabled. No production default changed.
+
 ### November 10 — 15-minute memory trace reproduces rejection with complete evidence
 
 - 900-second 100-EPS run fails: 1285 metadata/82 HTTP refusals, 361 generator drops,

@@ -147,3 +147,14 @@ test('memory trace holds unchanged 100 EPS for fifteen minutes, with a short ins
     capacityWorkloads('capacity-4gb-telemetry'),
   );
 });
+
+test('heap profiling retains fifteen-minute traffic and offers a thirty-second capability probe', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-heap'),
+    capacityWorkloads('capacity-4gb-memory-trace'),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-heap-smoke'),
+    capacityWorkloads('capacity-4gb-telemetry'),
+  );
+});

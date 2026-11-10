@@ -7,6 +7,7 @@ import { persistIntervalBatch } from './interval-history.mjs';
 import { observeUntil } from './observation-loop.mjs';
 import { investigateQueryMemory } from './query-memory.mjs';
 import { captureMemoryTrace } from './memory-trace.mjs';
+import { parseHeap, diffHeaps } from './heap-profile.mjs';
 import { missingDashboardMetrics } from './dashboard-metrics.mjs';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { capacityTargets } from './capacity-targets.mjs';
@@ -36,6 +37,8 @@ const dbConnections = [
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
   'capacity-4gb-memory-trace',
+  'capacity-4gb-memory-trace-heap',
+  'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
@@ -56,6 +59,8 @@ const isolatedGenerator = [
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
   'capacity-4gb-memory-trace',
+  'capacity-4gb-memory-trace-heap',
+  'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
@@ -63,6 +68,8 @@ const isolatedGenerator = [
   'capacity-4gb-db8-q24-endurance',
 ].includes(profile);
 let generatorAffinityVerified = false;
+const heapProfile = profile.includes('memory-trace-heap');
+const heapSmoke = profile.endsWith('heap-smoke');
 const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
@@ -123,6 +130,8 @@ const compose = (...args) =>
       'capacity-4gb-db8-q24-rebalanced',
       'capacity-4gb-telemetry',
       'capacity-4gb-memory-trace',
+      'capacity-4gb-memory-trace-heap',
+      'capacity-4gb-memory-trace-heap-smoke',
       'capacity-4gb-memory-trace-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
@@ -134,6 +143,7 @@ const compose = (...args) =>
     ...(profile === 'capacity-4gb-query-memory-no-text-log'
       ? ['-f', 'tests/load/compose.no-text-log.yaml']
       : []),
+    ...(heapProfile ? ['-f', 'tests/load/compose.heap.yaml'] : []),
     ...args,
   ]);
 const services = Object.keys(memoryPlan.services);
@@ -176,6 +186,39 @@ const samples = [];
 const stages = [];
 const queries = [];
 const observationFailures = {};
+const heaps = {};
+async function heapSnapshot(label) {
+  const startedAt = new Date().toISOString();
+  const body = await query(
+    "SELECT line FROM system.jemalloc_profile_text SETTINGS jemalloc_profile_text_output_format='collapsed', jemalloc_profile_text_symbolize_with_inline=0, max_threads=1, max_memory_usage=134217728 FORMAT JSONEachRow",
+    undefined,
+    { timeoutMs: 120000, recordTiming: false },
+  );
+  await save(`heap-${label}.jsonl`, body);
+  heaps[label] = parseHeap(body);
+  result.heapSnapshots ??= [];
+  result.heapSnapshots.push({
+    label,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    totalSampledBytes: heaps[label].totalBytes,
+    stacks: Object.keys(heaps[label].stacks).length,
+  });
+  await save('heap-snapshots.json', result.heapSnapshots);
+  const before = heaps.startup;
+  if (before && label !== 'startup')
+    await save(`heap-growth-${label}.json`, diffHeaps(before, heaps[label]));
+  console.log(
+    `Heap ${label}: ${Object.keys(heaps[label].stacks).length} stacks, ${Math.round(heaps[label].totalBytes / 1048576)} sampled MiB`,
+  );
+}
+async function tryHeap(label) {
+  try {
+    await heapSnapshot(label);
+  } catch (error) {
+    await reportObservationError('heap', error);
+  }
+}
 async function traceMemory() {
   const record = await captureMemoryTrace({
     request: query,
@@ -223,7 +266,7 @@ async function status() {
   assert.equal(response.status, 200, 'Capacity observer unavailable');
   return response.json();
 }
-async function query(sql, queryId) {
+async function query(sql, queryId, { timeoutMs = 15000, recordTiming = true } = {}) {
   const start = performance.now();
   const endpoint = new URL('http://127.0.0.1:38124/?wait_end_of_query=1');
   if (queryId) endpoint.searchParams.set('query_id', queryId);
@@ -231,12 +274,12 @@ async function query(sql, queryId) {
     method: 'POST',
     headers: { 'X-ClickHouse-User': 'signaltrail', 'X-ClickHouse-Key': 'signaltrail_local' },
     body: sql,
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const value = await r.text();
   assert.equal(r.status, 200, value);
   assert.ok([null, '0'].includes(r.headers.get('X-ClickHouse-Exception-Code')));
-  queries.push({ at: new Date().toISOString(), ms: performance.now() - start });
+  if (recordTiming) queries.push({ at: new Date().toISOString(), ms: performance.now() - start });
   return value;
 }
 let result = {
@@ -413,6 +456,15 @@ try {
     ),
     capacity ? 1000000 : 100000,
   );
+  if (heapProfile) {
+    await save(
+      'heap-settings.jsonl',
+      await query(
+        "SELECT name,value FROM system.server_settings WHERE startsWith(name,'jemalloc_') FORMAT JSONEachRow",
+      ),
+    );
+    await heapSnapshot('startup');
+  }
   const workloads = capacity
     ? capacityWorkloads(profile)
     : [10, 25, 50].map((users) => ({ users, rate: users / 10, sessionCount: users }));
@@ -565,11 +617,27 @@ try {
       : Promise.resolve();
     let analyticalError;
     let analyticalAttempts = 0;
+    const heapMilestones = new Set();
     const tracing = memoryTrace
       ? observeUntil({
           done: () => done,
           intervalMs: 15000,
-          observe: traceMemory,
+          observe: async () => {
+            await traceMemory();
+            if (heapProfile && !heapSmoke)
+              for (const [label, seconds] of [
+                ['five-minutes', 300],
+                ['eleven-minutes', 660],
+              ]) {
+                if (
+                  performance.now() - trafficStarted >= seconds * 1000 &&
+                  !heapMilestones.has(label)
+                ) {
+                  heapMilestones.add(label);
+                  await tryHeap(label);
+                }
+              }
+          },
           onError: async (error) => {
             samplingError ??= error;
             await reportObservationError('clickhouse-memory-export', error);
@@ -630,6 +698,21 @@ try {
       if (failed) throw failed.reason;
     }
     await save(`k6-${users}.json`, output);
+    if (heapProfile) {
+      await tryHeap('after-load');
+      const idleStarted = performance.now(),
+        idleMs = heapSmoke ? 10000 : 180000;
+      console.log(`Heap idle observation: ${idleMs / 1000} seconds; analytical load stopped`);
+      while (performance.now() - idleStarted < idleMs && !cancelled) {
+        await traceMemory();
+        await flushIntervals();
+        await delay(Math.min(15000, Math.max(0, idleMs - (performance.now() - idleStarted))));
+      }
+      result.heapIdleSeconds = (performance.now() - idleStarted) / 1000;
+      await tryHeap('after-idle');
+      if (heaps['after-load'] && heaps['after-idle'])
+        await save('heap-idle-delta.json', diffHeaps(heaps['after-load'], heaps['after-idle']));
+    }
     const summary = JSON.parse(output);
     const accepted = summary.metrics.events_accepted.values.count;
     if (capacity) {
@@ -653,6 +736,7 @@ try {
       if (analyticalError)
         stage.reasons.push(`Analytical query failed: ${analyticalError.message}`);
       stage.analyticalAttempts = analyticalAttempts;
+      if (observationFailures.heap) stage.reasons.push('Heap evidence incomplete');
       if (observationFailures['clickhouse-memory'])
         stage.reasons.push('ClickHouse memory snapshots have unavailable categories');
       const drainStart = performance.now(),

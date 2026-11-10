@@ -61,6 +61,10 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       rejections with 15–17 MiB query memory; all 387 IDs/61 snapshots retained.
       Large query-log merge (402 MiB), live allocation and fragmentation measured.
       See [memory trace](performance/4gb-memory-trace.md); no single-cause proof.
+- [ ] In progress: user prioritized heap attribution before a logging control.
+      Capture startup/five-/eleven-minute/end/idle allocation profiles on 26.8,
+      then compare stack growth and three-minute post-load recovery. Sparse
+      sampling changes observer overhead; keep defaults and limits unchanged.
 - [ ] Compare reduced routine insert query-log volume with 100% tagged analytical
       logging at unchanged 15-minute workload/budget; verify every analytical ID.
       If growth persists, capture allocation stacks/heap for retained consumers.
