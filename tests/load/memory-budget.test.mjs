@@ -103,3 +103,10 @@ test('endurance preserves the verified revised four-GiB allocation and CPU affin
     memoryPlans['capacity-4gb-db8-q24-rebalanced'],
   );
 });
+
+test('step-down endurance keeps the revised four-GiB allocation and CPU affinity', () => {
+  assert.deepEqual(
+    memoryPlans['capacity-4gb-db8-q24-endurance-50'],
+    memoryPlans['capacity-4gb-db8-q24-endurance'],
+  );
+});

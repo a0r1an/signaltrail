@@ -118,6 +118,14 @@ test('endurance holds 100 EPS for 30 minutes with shutdown allowance', async () 
   assert.equal(capacityCommandTimeoutMs('capacity-4gb-db8-q24-endurance'), 1920000);
 });
 
+test('step-down endurance holds 50 EPS for 30 minutes on the same allocation', async () => {
+  assert.deepEqual(capacityWorkloads('capacity-4gb-db8-q24-endurance-50'), [
+    { users: 500, rate: 50, sessionCount: 1000, durationSeconds: 1800 },
+  ]);
+  const { capacityCommandTimeoutMs } = await import('./capacity-stage.mjs');
+  assert.equal(capacityCommandTimeoutMs('capacity-4gb-db8-q24-endurance-50'), 1920000);
+});
+
 test('query-memory investigation uses a bounded two-minute revised workload', () => {
   assert.deepEqual(capacityWorkloads('capacity-4gb-query-memory'), [
     { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 },

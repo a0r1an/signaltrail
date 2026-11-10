@@ -46,6 +46,7 @@ const dbConnections = [
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
   'capacity-4gb-db8-q24-endurance',
+  'capacity-4gb-db8-q24-endurance-50',
 ].includes(profile)
   ? 8
   : 4;
@@ -70,6 +71,7 @@ const isolatedGenerator = [
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
   'capacity-4gb-db8-q24-endurance',
+  'capacity-4gb-db8-q24-endurance-50',
 ].includes(profile);
 let generatorAffinityVerified = false;
 const heapProfile = profile.includes('memory-trace-heap');
@@ -145,6 +147,8 @@ const compose = (...args) =>
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
       'capacity-4gb-db8-q24-endurance',
+      'capacity-4gb-db8-q24-endurance-50',
+  'capacity-4gb-db8-q24-endurance-50',
     ].includes(profile)
       ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
       : []),
