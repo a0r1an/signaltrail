@@ -439,3 +439,15 @@ and the point at which an answer becomes necessary.
   adopted. Exact next diagnostic scope and remaining attribution uncertainty are
   in `performance/4gb-query-memory.md`; no new user choice is needed for local
   category/allocator/background observation. Target-host qualification remains.
+
+## November 10 — sustained memory trace completed
+
+- User-authorized 15-minute diagnostic reproduces analytical total-memory rejection.
+  Failed queries use 15–17 MiB; allocator allocations grow ~611 MiB, fragmentation
+  ~130 MiB, and a system.query_log merge is captured using ~402 MiB. Its timing
+  does not prove it caused the rejections or account for all growth. Complete
+  observation survives failures; accepted/stored reconcile, capacity still fails.
+- Next local control is reduced routine fixture insert query logging while preserving
+  tagged analytical evidence, same limits/budget. No production logging change,
+  higher gates, memory increase, paid host or deployment assumed. Source/evidence
+  and unresolved attribution: `performance/4gb-memory-trace.md`.

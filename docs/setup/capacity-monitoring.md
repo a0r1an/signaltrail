@@ -176,3 +176,16 @@ internal ClickHouse text_log removed via an isolated XML mount. It is a control,
 not an operational default. Both phases retain query logging and validate one
 QueryFinish/memory measurement per query ID. Results and limits are in
 [query-memory evidence](../performance/4gb-query-memory.md).
+
+## Continuous server/allocator trace
+
+`load capacity-4gb-memory-trace-smoke` runs 30 seconds; `load capacity-4gb-memory-trace`
+runs 900 seconds at the unchanged revised four-GiB budget and 100 EPS. Independent
+15-second, one-thread/64-MiB-bounded SQL snapshots append server/allocator/cache,
+merge and part evidence to `clickhouse-memory.jsonl`. Each category has a timestamp;
+partial failures remain explicit. This observer adds SQL and has non-atomic reads.
+Tagged attempts append immediately to `analytical-attempts.jsonl`; cleanup flushes
+and exports matching terminal records to `analytical-query-log.jsonl`, even after
+stage failure. Neither loop changes limits or masks failure. See
+[memory-trace evidence](../performance/4gb-memory-trace.md) for verified outcomes,
+metric semantics, shared-host limits and the next controlled comparison.

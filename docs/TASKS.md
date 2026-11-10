@@ -57,9 +57,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       one-variable text-log control. Query peaks ~14–15 MiB; no thread/spill memory
       benefit observed, text-log disabling does not reduce broader tracked growth.
       Evidence: [query memory](performance/4gb-query-memory.md).
-- [ ] In progress: attribute server memory growth with continuous category/allocator/background/
-      log-buffer snapshots and query IDs through a bounded 12–15-minute reproduction
-      using the repaired loops before choosing a control or repeating endurance.
+- [x] Complete 15-minute allocator/background trace: reproduce two server-wide
+      rejections with 15–17 MiB query memory; all 387 IDs/61 snapshots retained.
+      Large query-log merge (402 MiB), live allocation and fragmentation measured.
+      See [memory trace](performance/4gb-memory-trace.md); no single-cause proof.
+- [ ] Compare reduced routine insert query-log volume with 100% tagged analytical
+      logging at unchanged 15-minute workload/budget; verify every analytical ID.
+      If growth persists, capture allocation stacks/heap for retained consumers.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.

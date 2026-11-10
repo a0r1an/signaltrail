@@ -19,19 +19,23 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
-### November 10 — continuous ClickHouse memory trace in progress
+### November 10 — 15-minute memory trace reproduces rejection with complete evidence
 
-- User authorized a bounded 15-minute 100-EPS reproduction. New memory-trace
-  profiles retain revised allocation, gates and generator isolation; independent
-  15-second snapshots capture allocator/server categories, active merges and parts.
-  Every analytical attempt has a unique ID/outcome/timing and final query-log match.
-- TDD partial-evidence/profile regression and all 67 harness tests pass. Real
-  30-second instrument check collects four error-free memory snapshots, 14/14
-  matching attempts/query-log rows and complete interval export; cleanup succeeds.
-  Traffic itself fails (120 metadata refusals, 137 generator drops, 2744 accepted/
-  stored, p95 873.37 ms); retained as failed evidence, not a passing smoke.
-  Artifact: `2026-11-10T17-49-28.181Z-capacity-4gb-memory-trace-smoke`.
-- Fifteen-minute diagnostic run now in progress. No limit/default changes.
+- 900-second 100-EPS run fails: 1285 metadata/82 HTTP refusals, 361 generator drops,
+  two analytical total-memory exceptions. 88272 accepted/unique stored, zero final
+  source lag, no publication cancellations/late completions or detected OOM/restart.
+- All 387 analytical IDs match terminal logs; failed-query memory only 15.10/17.21
+  MiB versus successful 12.49–17.80 MiB. Repaired observation continues through both
+  rejections. 61 complete memory snapshots, 171 resource samples and 895 contiguous
+  intervals; cleanup succeeds, targets [] and lock released. All 67 units pass.
+- Jemalloc allocated grows ~611 MiB and fragmentation ~130 MiB. Captured actual
+  system.query_log merge uses 401.60 MiB, much larger than the analytical queries;
+  occurred earlier than failures, so not proof of direct causation or all growth.
+  Named read caches are small; virtual retained memory is not physical RAM.
+- Evidence: `performance/4gb-memory-trace.md`. Exact next control: reduce routine
+  fixture insert query-log volume while retaining 100% tagged analytical logging,
+  same workload/budget and verify IDs. If growth persists, allocation-stack/heap
+  evidence needed. No production logging policy, higher gates or default changed.
 
 ### November 9 — telemetry recovery and bounded query-memory investigation complete
 
