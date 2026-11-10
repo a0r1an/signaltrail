@@ -416,3 +416,14 @@ and the point at which an answer becomes necessary.
   session or Grafana plugin is available. Needed: functioning browser page control
   to resume the prepared import. No credential extraction/scope change assumed;
   no tokens should be sent in chat. See `setup/capacity-monitoring.md`.
+
+## November 9 — endurance qualification failed
+
+- User-authorized 30-minute revised-allocation 100-EPS trial fails. ClickHouse
+  aggregation memory rejection precedes sampling stoppage; later traffic hits
+  metadata/HTTP gates with severe scheduling stalls. Five-minute passes do not
+  establish stable capacity. No higher DB/HTTP limits, paid host or deployment
+  assumed. Internal query memory, scheduling contention and harness observation
+  failure need separate follow-up; evidence in `performance/4gb-endurance.md`.
+- No new user decision is needed for the next local harness reliability fix.
+  Production sizing still requires actual-host/retention/maintenance evidence.

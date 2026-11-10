@@ -114,3 +114,11 @@ pressure, replay, idle Valkey becoming active, OS reserve or burst-credit limits
 Next: use the revised profile for longer retained-data/maintenance measurements
 and targeted CPU/GC observation; qualify the actual candidate host before purchase/
 production claims. No paid target, deployment or production defaults are approved.
+
+## Longer follow-up supersedes the short-pass inference
+
+The subsequent 30-minute offered 100-EPS run fails with an analytical ClickHouse
+memory rejection, later HTTP/metadata refusals, latency and generator drops.
+Its sampling loop also stops on the analytical failure, so it cannot establish
+continuous full-query endurance. See [endurance evidence](4gb-endurance.md).
+Retain the short passes as evidence of those trials, not stable capacity.

@@ -19,20 +19,26 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
-### November 9 — 30-minute endurance run in progress
+### November 9 — 30-minute revised-allocation run fails
 
-- User authorized 100 EPS for 1800 seconds under the revised four-GiB plan,
-  target CPUs 0,1 / generator 2,3, HTTP 128 / pool 8 / outstanding gate 24.
-  Profile: `load capacity-4gb-db8-q24-endurance`; full analytical SQL retained.
-- Added contiguous, cursor-based interval export to `stall-intervals.jsonl`
-  so the 600-record in-memory ring does not truncate a 30-minute history.
-  Collector detects overwritten/gapped history; minute progress checkpoints saved.
-- TDD failures observed before implementation; all 58 load-harness tests pass.
-  Fresh 30-second integration passes with 3001 accepted/unique stored, no refusals,
-  all 40 exported intervals contiguous and observed Alloy forwarding.
-  Report: `test-results/load/2026-11-10T00-03-36.737Z-capacity-4gb-telemetry/result.json`.
-- Endurance result pending. No production defaults or external resources changed.
-  Grafana cloud import/query remains separately blocked by browser control.
+- Completed authorized 1800-second offered 100-EPS trial. Failed: 168505 HTTP
+  accepted, 169217 unique stored, 824 metadata and 2038 HTTP admission refusals,
+  6081 generator drops, HTTP p99 5191.51 ms. Source lag drains to zero, but equality
+  check fails amid cancelled/late publications; no per-ID loss proof claimed.
+- ClickHouse rejects analytical aggregation at about 11 minutes with code 241
+  total-memory limit exceeded (~1.33 GiB internal limit). Sampling loop stops on
+  that error; continuous analytical SQL/ Docker samples do not cover 30 minutes.
+  Later recovered intervals show severe scheduling stalls and both gates filling.
+- Automatic history export fails rather than claiming completeness. Separate
+  read-only recovery preserves contiguous sequences 1–1760 through traffic/part
+  of drain, not final cleanup. All owned resources removed, targets [] and lock
+  released; zero detected OOM/restarts. Result remains failed with diagnostics error.
+- TDD and all 58 harness tests plus pre-run 30-second integration pass. Alloy load
+  forwarding observed; remote retries increase; Grafana cloud query not verified.
+- Evidence: `performance/4gb-endurance.md`. Next: decouple telemetry from analytical
+  failures, report failures immediately, verify that failure path, then investigate
+  query-memory behavior before another controlled endurance comparison. Do not
+  increase gates or declare 100 EPS stable from the earlier five-minute passes.
 
 ### November 9 — Grafana URL supplied; browser control blocks cloud import
 

@@ -46,8 +46,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       pass with zero refusals, exact storage/drain and no detected OOM/restart.
 - [x] Add 30-minute revised-allocation profile, complete streamed interval history
       and minute checkpoints; 58 units and fresh telemetry integration pass.
-- [ ] Complete authorized 30-minute 100-EPS endurance run (currently running),
-      analyze whole-run interval history and record failures as measured evidence.
+- [x] Complete authorized 30-minute 100-EPS endurance run: fails with ClickHouse
+      analytical memory rejection, later metadata/HTTP refusals and generator drops.
+      Recovered traffic intervals; automatic export and exact reconciliation fail.
+      See [endurance evidence](performance/4gb-endurance.md).
+- [ ] Decouple interval collection from analytical-query errors; persist/report errors
+      immediately and continue telemetry/query attempts. Verify failure path before
+      another endurance run; investigate aggregation memory before changing limits.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.
