@@ -158,3 +158,14 @@ test('heap profiling retains fifteen-minute traffic and offers a thirty-second c
     capacityWorkloads('capacity-4gb-telemetry'),
   );
 });
+
+test('batching comparison preserves the fifteen-minute heap workload and short capability probe', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-heap-batched'),
+    capacityWorkloads('capacity-4gb-memory-trace-heap'),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-heap-batched-smoke'),
+    capacityWorkloads('capacity-4gb-telemetry'),
+  );
+});

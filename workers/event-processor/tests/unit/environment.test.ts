@@ -17,6 +17,7 @@ it('reads explicit dependency coordinates and preserves password bytes', () => {
       topic: 'analytics',
       deadLetterTopic: 'analytics.dlq',
       groupId: 'processor-test',
+      batchWaitMs: 200,
     },
     clickhouse: {
       endpoint: 'http://127.0.0.1:38123',
@@ -65,5 +66,23 @@ it.each(['', '0', '-1', '65536', '1.5', 'invalid-secret-port'])(
     expect(() =>
       parseProcessorEnvironment({ ...environment, SIGNALTRAIL_PROCESSOR_METRICS_PORT: port }),
     ).toThrow('Invalid SIGNALTRAIL_PROCESSOR_METRICS_PORT');
+  },
+);
+
+it('supports explicit bounded collection and a zero-wait compatibility control', () => {
+  for (const batchWaitMs of [0, 200, 1000])
+    expect(
+      parseProcessorEnvironment({
+        ...environment,
+        SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS: String(batchWaitMs),
+      }).consumer.batchWaitMs,
+    ).toBe(batchWaitMs);
+});
+it.each(['', '-1', '1.5', '1001', 'secret-invalid-wait'])(
+  'rejects an invalid collection window',
+  (value) => {
+    expect(() =>
+      parseProcessorEnvironment({ ...environment, SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS: value }),
+    ).toThrow('Invalid SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS');
   },
 );

@@ -19,6 +19,24 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 10 — bounded fetch batching implemented; comparisons in progress
+
+- User authorized building/testing effective worker batching. Batch-capable consumer
+  now collects broker fetches toward64 KiB for at most200ms (configurable0–1000ms,
+  zero restores immediate-fetch settings). Existing100-record/1-MiB chunk ceiling,
+  manual commits, heartbeats, ownership checks, ack/retry paths remain.
+- Entry-point batch wait defaults200ms; direct single-event-only consumer remains
+  immediate. Historical memory/load profiles explicitly pass0; new named batched
+  profiles pass200. HTTP/DB/CPU/RAM limits unchanged. No deployed process changed.
+- TDD intended failures observed; processor lint/120 units/types/build and71 harness
+  units pass. Real isolated pipeline paused-storage/restart/ambiguous-ack recovery
+  passes: `2026-11-10T19-02-01.953Z-pipeline`. Resources cleaned up.
+- Short batching probe passes:3001 accepted/stored,411 chunks (~7.30 records/write),
+  no refusals/drops/errors, three heap profiles and clean teardown. Artifact:
+  `2026-11-10T19-04-24.065Z-capacity-4gb-memory-trace-heap-batched-smoke`.
+  Fresh zero-wait baseline then200-ms candidate comparison now in progress; no
+  sustained benefit or capacity increase claimed yet.
+
 ### November 10 — heap attribution identifies retained part metadata as the leading growth source
 
 - User-prioritized sparse heap profiling complete: 15-minute 100-EPS load plus

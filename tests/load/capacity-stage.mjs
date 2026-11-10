@@ -23,9 +23,21 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
-  if (['capacity-4gb-memory-trace', 'capacity-4gb-memory-trace-heap'].includes(profile))
+  if (
+    [
+      'capacity-4gb-memory-trace',
+      'capacity-4gb-memory-trace-heap',
+      'capacity-4gb-memory-trace-heap-batched',
+    ].includes(profile)
+  )
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 900 }];
-  if (['capacity-4gb-memory-trace-smoke', 'capacity-4gb-memory-trace-heap-smoke'].includes(profile))
+  if (
+    [
+      'capacity-4gb-memory-trace-smoke',
+      'capacity-4gb-memory-trace-heap-smoke',
+      'capacity-4gb-memory-trace-heap-batched-smoke',
+    ].includes(profile)
+  )
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 30 }];
   if (profile.startsWith('capacity-4gb-query-memory'))
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];

@@ -8,6 +8,8 @@ export interface RedpandaEventConsumerOptions {
   topic: string;
   deadLetterTopic: string;
   groupId: string;
+  /** Bounded broker-fetch collection; zero preserves immediate-fetch behavior. */
+  batchWaitMs?: number;
   writeEvent: ProcessorOptions['writeEvent'];
   writeEvents?: BatchProcessorOptions['writeEvents'];
   onChunk?(records: number, sourceBytes: number): void;
@@ -37,6 +39,11 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
     options.groupId.length > 255
   )
     throw new TypeError('Invalid processor group ID');
+  const batchWaitMs = options.batchWaitMs ?? (options.writeEvents ? 200 : 0);
+  if (!Number.isSafeInteger(batchWaitMs) || batchWaitMs < 0 || batchWaitMs > 1000)
+    throw new TypeError('Invalid processor batch wait');
+  if (batchWaitMs > 0 && !options.writeEvents)
+    throw new TypeError('Batch collection requires a batch writer');
   const kafka = new Kafka({
     brokers: [...options.brokers],
     clientId: 'signaltrail-event-processor',
@@ -58,6 +65,8 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
     heartbeatInterval: 3000,
     maxBytesPerPartition: 1024 * 1024,
     maxBytes: 2 * 1024 * 1024,
+    minBytes: batchWaitMs > 0 ? 64 * 1024 : 1,
+    maxWaitTimeInMs: batchWaitMs > 0 ? batchWaitMs : 5000,
     retry: {
       retries: 2,
       initialRetryTime: 100,

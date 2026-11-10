@@ -38,6 +38,8 @@ const dbConnections = [
   'capacity-4gb-telemetry',
   'capacity-4gb-memory-trace',
   'capacity-4gb-memory-trace-heap',
+  'capacity-4gb-memory-trace-heap-batched',
+  'capacity-4gb-memory-trace-heap-batched-smoke',
   'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
@@ -60,6 +62,8 @@ const isolatedGenerator = [
   'capacity-4gb-telemetry',
   'capacity-4gb-memory-trace',
   'capacity-4gb-memory-trace-heap',
+  'capacity-4gb-memory-trace-heap-batched',
+  'capacity-4gb-memory-trace-heap-batched-smoke',
   'capacity-4gb-memory-trace-heap-smoke',
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
@@ -69,7 +73,8 @@ const isolatedGenerator = [
 ].includes(profile);
 let generatorAffinityVerified = false;
 const heapProfile = profile.includes('memory-trace-heap');
-const heapSmoke = profile.endsWith('heap-smoke');
+const heapSmoke = heapProfile && profile.endsWith('smoke');
+const batchWaitMs = profile.includes('heap-batched') ? 200 : 0;
 const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
@@ -90,6 +95,7 @@ function docker(args, timeout = capacity ? capacityCommandTimeoutMs(profile) : 3
       env: {
         ...process.env,
         SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap),
+        SIGNALTRAIL_FIXTURE_BATCH_WAIT_MS: String(batchWaitMs),
         SIGNALTRAIL_FIXTURE_DB_CONNECTIONS: String(dbConnections),
         SIGNALTRAIL_FIXTURE_DB_QUERIES: String(dbQueries),
       },
@@ -131,6 +137,8 @@ const compose = (...args) =>
       'capacity-4gb-telemetry',
       'capacity-4gb-memory-trace',
       'capacity-4gb-memory-trace-heap',
+      'capacity-4gb-memory-trace-heap-batched',
+      'capacity-4gb-memory-trace-heap-batched-smoke',
       'capacity-4gb-memory-trace-heap-smoke',
       'capacity-4gb-memory-trace-smoke',
       'capacity-4gb-telemetry-failure',
@@ -245,6 +253,10 @@ async function inspect() {
   if (capacity) {
     const app = values.find((v) => v.Config.Labels['com.docker.compose.service'] === 'app');
     assert.ok(
+      app.Config.Env.includes(`SIGNALTRAIL_FIXTURE_BATCH_WAIT_MS=${batchWaitMs}`),
+      'Batch collection must match profile',
+    );
+    assert.ok(
       app.Config.Env.includes(`SIGNALTRAIL_FIXTURE_HTTP_CAP=${httpCap}`),
       'HTTP cap must match profile',
     );
@@ -291,6 +303,7 @@ let result = {
     httpConcurrentRequests: httpCap,
     metadataConnections: dbConnections,
     metadataOutstandingQueries: dbQueries,
+    workerBatchWaitMs: batchWaitMs,
   },
   ...(capacity
     ? {

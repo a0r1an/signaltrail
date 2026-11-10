@@ -65,7 +65,7 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       stacks dominate estimated growth; inactive analytics parts reach ~55k, worker
       averages 1.13 records/write, part counts and memory fall in idle. All 70 units.
       Evidence: [heap attribution](performance/4gb-heap-profile.md).
-- [ ] Inspect effective worker batching and compare bounded coalescing or acknowledged
+- [ ] In progress: inspect effective worker batching and compare bounded coalescing or acknowledged
       async inserts at unchanged workload/budget. Preserve partition/offset/ack/retry
       safety; measure writes, records/write, inactive parts, memory, lag and latency.
 - [ ] Full post-load cleanup qualification needs idle beyond 480s plus cleanup delay.

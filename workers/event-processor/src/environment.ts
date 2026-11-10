@@ -16,6 +16,15 @@ export function parseProcessorEnvironment(
   const timeoutMs = Number(environment.SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS ?? 5000);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
     throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS');
+  const rawBatchWait = environment.SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS;
+  const batchWaitMs = rawBatchWait === undefined ? 200 : Number(rawBatchWait);
+  if (
+    rawBatchWait?.trim() === '' ||
+    !Number.isSafeInteger(batchWaitMs) ||
+    batchWaitMs < 0 ||
+    batchWaitMs > 1000
+  )
+    throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS');
   const rawPort = environment.SIGNALTRAIL_PROCESSOR_METRICS_PORT;
   const port = rawPort === undefined ? undefined : Number(rawPort);
   if (port !== undefined && (!Number.isSafeInteger(port) || port < 1 || port > 65535))
@@ -29,6 +38,7 @@ export function parseProcessorEnvironment(
       topic: required('SIGNALTRAIL_REDPANDA_TOPIC'),
       deadLetterTopic: required('SIGNALTRAIL_REDPANDA_DLQ_TOPIC'),
       groupId: required('SIGNALTRAIL_PROCESSOR_GROUP_ID'),
+      batchWaitMs,
     },
     clickhouse: {
       endpoint: required('SIGNALTRAIL_CLICKHOUSE_URL'),

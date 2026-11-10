@@ -16,6 +16,7 @@ const clients = vi.hoisted(() => ({
     events: { CRASH: 'consumer.crash' },
   },
   admin: { connect: vi.fn(), disconnect: vi.fn(), listTopics: vi.fn() },
+  consumerConfig: vi.fn(),
 }));
 vi.mock('kafkajs', () => ({
   logLevel: { ERROR: 1 },
@@ -23,7 +24,8 @@ vi.mock('kafkajs', () => ({
     producer() {
       return clients.producer;
     }
-    consumer() {
+    consumer(config: unknown) {
+      clients.consumerConfig(config);
       return clients.consumer;
     }
     admin() {
@@ -451,4 +453,60 @@ it('does not start another sink write after a partition batch becomes stale', as
   } finally {
     await worker.close();
   }
+});
+
+it('collects batch-capable fetches for at most 200ms without changing byte ceilings', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['localhost:9092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'batch',
+    writeEvent: async () => {},
+    writeEvents: async () => {},
+  });
+  try {
+    await worker.start();
+    expect(clients.consumerConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minBytes: 65536,
+        maxWaitTimeInMs: 200,
+        maxBytesPerPartition: 1048576,
+        maxBytes: 2097152,
+      }),
+    );
+  } finally {
+    await worker.close();
+  }
+});
+it('can disable collection for a controlled legacy comparison', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['localhost:9092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'batch',
+    batchWaitMs: 0,
+    writeEvent: async () => {},
+    writeEvents: async () => {},
+  });
+  try {
+    await worker.start();
+    expect(clients.consumerConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ minBytes: 1, maxWaitTimeInMs: 5000 }),
+    );
+  } finally {
+    await worker.close();
+  }
+});
+it.each([-1, 1001, 1.5, NaN])('rejects an invalid collection window %s', (batchWaitMs) => {
+  expect(() =>
+    createRedpandaEventConsumer({
+      brokers: ['localhost:9092'],
+      topic: 'analytics',
+      deadLetterTopic: 'analytics.dlq',
+      groupId: 'batch',
+      batchWaitMs,
+      writeEvent: async () => {},
+      writeEvents: async () => {},
+    }),
+  ).toThrow('Invalid processor batch wait');
 });
