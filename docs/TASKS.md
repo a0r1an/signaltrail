@@ -70,6 +70,11 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       probe passes; fresh long pair shows7.31 vs1.10 records/write but candidate
       fails reliability during severe scheduling stalls. Keep opt-in; see
       [batching evidence](performance/4gb-worker-batching.md).
+- [x] Step-down sustained search, run 1: 50 EPS for 30 minutes passes with
+      exact storage, zero refusals and a ClickHouse heap plateau (~760 MiB).
+      See [step-down endurance](performance/4gb-step-down-endurance.md).
+- [ ] Repeat 50 EPS / 30 minutes. If it passes, record 50 EPS as the local
+      sustained limit; if it fails, step down to 25 EPS.
 - [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-
       isolated controlled repeat before promoting batching. No stable100-EPS claim;
       preserve full failed results and per-ID/ack/offset evidence. Add an acceptance-ID

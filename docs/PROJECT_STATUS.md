@@ -19,6 +19,21 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-10
 
+### November 10 — 50-EPS step-down endurance passes (run 1)
+
+- User asked whether to accept 100 EPS as the limit; 100 EPS has failed every
+  sustained run, so it is above the limit. User chose a step-down search at 50 EPS.
+- Added `load capacity-4gb-db8-q24-endurance-50` (same allocation/gates/queries/
+  affinity as the 100-EPS endurance, rate 50). TDD: two new units failed first;
+  all 73 harness units pass. Commit af4e392.
+- 1800-second run passed: 90001 accepted/unique stored, zero refusals/retries/
+  drops/cancellations, p95 11.3 / p99 54.3 ms, 846 analytical queries without
+  error, lag 0, no OOM/restart, cleanup passed. ClickHouse heap plateaus ~760 MiB
+  after ~10 min; cgroup at cap reclaims page cache (56k `max` events, no OOM).
+- Single pass only; local shared Mac, not a VPS. Evidence:
+  `performance/4gb-step-down-endurance.md`. Next: repeat 50 EPS; if it passes,
+  record 50 EPS as the local sustained limit (≈25 EPS operating ceiling).
+
 ### November 10 — session closed at user request
 
 - Final analysis: batching mechanically reduces writes per processed record by
