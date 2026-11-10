@@ -1,0 +1,4 @@
+services:
+  clickhouse:
+    volumes:
+      - ./clickhouse-no-text-log.xml:/etc/clickhouse-server/config.d/disable-text-log.xml:ro

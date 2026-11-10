@@ -13,6 +13,21 @@ export const memoryPlans = {
     cpuSet: '0,1',
     services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
   },
+  'capacity-4gb-query-memory': {
+    hostReserveMiB: 640,
+    cpuSet: '0,1',
+    services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
+  },
+  'capacity-4gb-query-memory-no-text-log': {
+    hostReserveMiB: 640,
+    cpuSet: '0,1',
+    services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
+  },
+  'capacity-4gb-telemetry-failure': {
+    hostReserveMiB: 640,
+    cpuSet: '0,1',
+    services: { redpanda: 1280, clickhouse: 1536, postgres: 128, valkey: 128, app: 384 },
+  },
   'capacity-4gb-db8-q24-rebalanced': {
     hostReserveMiB: 640,
     cpuSet: '0,1',

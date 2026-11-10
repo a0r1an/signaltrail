@@ -4,6 +4,8 @@ import { mkdir, writeFile, rename, readFile, appendFile } from 'node:fs/promises
 import { createServer } from 'node:http';
 import { readCollectorDelivery } from './collector-delivery.mjs';
 import { persistIntervalBatch } from './interval-history.mjs';
+import { observeUntil } from './observation-loop.mjs';
+import { investigateQueryMemory } from './query-memory.mjs';
 import { missingDashboardMetrics } from './dashboard-metrics.mjs';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { capacityTargets } from './capacity-targets.mjs';
@@ -32,16 +34,26 @@ const dbConnections = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-telemetry-failure',
+  'capacity-4gb-query-memory',
+  'capacity-4gb-query-memory-no-text-log',
   'capacity-4gb-db8-q24-endurance',
 ].includes(profile)
   ? 8
   : 4;
 const dbQueries =
-  profile.startsWith('capacity-4gb-db8-q24') || profile === 'capacity-4gb-telemetry' ? 24 : 16;
+  profile.startsWith('capacity-4gb-db8-q24') ||
+  profile.startsWith('capacity-4gb-telemetry') ||
+  profile.startsWith('capacity-4gb-query-memory')
+    ? 24
+    : 16;
 const isolatedGenerator = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-telemetry-failure',
+  'capacity-4gb-query-memory',
+  'capacity-4gb-query-memory-no-text-log',
   'capacity-4gb-db8-q24-endurance',
 ].includes(profile);
 let generatorAffinityVerified = false;
@@ -103,9 +115,15 @@ const compose = (...args) =>
     ...([
       'capacity-4gb-db8-q24-rebalanced',
       'capacity-4gb-telemetry',
+      'capacity-4gb-telemetry-failure',
+      'capacity-4gb-query-memory',
+      'capacity-4gb-query-memory-no-text-log',
       'capacity-4gb-db8-q24-endurance',
     ].includes(profile)
       ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
+      : []),
+    ...(profile === 'capacity-4gb-query-memory-no-text-log'
+      ? ['-f', 'tests/load/compose.no-text-log.yaml']
       : []),
     ...args,
   ]);
@@ -148,6 +166,14 @@ async function flushIntervals() {
 const samples = [];
 const stages = [];
 const queries = [];
+const observationFailures = {};
+async function reportObservationError(kind, error) {
+  const record = { at: new Date().toISOString(), kind, message: error.message };
+  await appendFile(`${directory}/observation-errors.jsonl`, JSON.stringify(record) + '\n');
+  observationFailures[kind] = (observationFailures[kind] ?? 0) + 1;
+  result.observationFailures = { ...observationFailures };
+  console.error(`${kind} observation failed: ${error.message}`);
+}
 async function inspect() {
   const ids = (await compose('ps', '-q', ...services)).trim().split(/\s+/).filter(Boolean);
   assert.equal(ids.length, services.length);
@@ -177,9 +203,11 @@ async function status() {
   assert.equal(response.status, 200, 'Capacity observer unavailable');
   return response.json();
 }
-async function query(sql) {
+async function query(sql, queryId) {
   const start = performance.now();
-  const r = await fetch('http://127.0.0.1:38124/?wait_end_of_query=1', {
+  const endpoint = new URL('http://127.0.0.1:38124/?wait_end_of_query=1');
+  if (queryId) endpoint.searchParams.set('query_id', queryId);
+  const r = await fetch(endpoint, {
     method: 'POST',
     headers: { 'X-ClickHouse-User': 'signaltrail', 'X-ClickHouse-Key': 'signaltrail_local' },
     body: sql,
@@ -215,6 +243,12 @@ let result = {
       }
     : {}),
   memoryPlan,
+  ...(profile === 'capacity-4gb-telemetry-failure'
+    ? {
+        faultInjection:
+          'First analytical query uses max_memory_usage=1; expected failed capacity result',
+      }
+    : {}),
   stages,
   directory,
   limitations: [
@@ -227,6 +261,29 @@ let result = {
       : 'Control suppresses analytical SQL during traffic; final reconciliation and metadata diagnostics remain. This does not qualify concurrent dashboard traffic.',
   ],
 };
+async function collectQueryMemory(phase) {
+  if (!profile.startsWith('capacity-4gb-query-memory')) return;
+  const evidence = await investigateQueryMemory({
+    request: query,
+    save: (report) => save(`query-memory-${phase}.json`, report),
+    runId: `${runId}-${phase}`,
+  });
+  result.queryMemoryInvestigation ??= {};
+  result.queryMemoryInvestigation[phase] = evidence;
+  assert.equal(evidence.errors.length, 0, 'Query-memory evidence unavailable');
+  assert.ok(
+    evidence.variants.every((variant) => variant.ok),
+    'A query-memory control failed',
+  );
+  const logs = evidence.snapshots.find((snapshot) => snapshot.name === 'query-log').data;
+  for (const variant of evidence.variants) {
+    const matching = logs.filter(
+      (row) => row.query_id === variant.queryId && row.type === 'QueryFinish',
+    );
+    assert.equal(matching.length, 1, 'Expected one query-log finish per diagnostic query');
+    assert.ok(matching[0].memory_usage > 0, 'Query memory was not measured');
+  }
+}
 let runError,
   ownsInfrastructure = false;
 try {
@@ -326,6 +383,7 @@ try {
     result.telemetryVerification = { localEndpoints: true, cloudQueryVerified: false };
     result.telemetryTargets = capacityTargets({ profile, runId });
   }
+  await collectQueryMemory('before');
   result.enforcedLimits = await inspect();
   assert.equal(
     Number(
@@ -390,103 +448,132 @@ try {
       return error.stdout ?? '';
     });
     traffic.finally(() => (done = true)).catch(() => {});
-    const sampling = (async () => {
-      while (!done) {
-        try {
-          const observation = {
-            at: new Date().toISOString(),
-            monotonicStartMs: performance.now(),
-            users,
-            stats: (await compose('stats', '--no-stream', '--format', 'json'))
-              .trim()
-              .split('\n')
-              .filter(Boolean)
-              .map(JSON.parse),
-          };
-          if (capacity) observation.pipeline = await status();
-          observation.finishedAt = new Date().toISOString();
-          observation.collectionMs = performance.now() - observation.monotonicStartMs;
-          if (isolatedGenerator) {
-            const ids = (
-              await docker([
-                'ps',
-                '-q',
-                '--filter',
-                'label=com.docker.compose.project=signaltrail-memory',
-                '--filter',
-                'label=com.docker.compose.service=k6',
-              ])
-            )
-              .trim()
-              .split(/\s+/)
-              .filter(Boolean);
-            if (ids.length) {
-              const generators = JSON.parse(await docker(['inspect', ...ids]));
-              for (const generator of generators)
-                assert.equal(generator.HostConfig.CpusetCpus, '2,3');
-              generatorAffinityVerified = true;
-              observation.generatorAffinityVerified = true;
-            }
+    const sampling = observeUntil({
+      done: () => done,
+      onError: async (error) => {
+        samplingError ??= error;
+        await reportObservationError('resources', error);
+      },
+      observe: async () => {
+        const observation = {
+          at: new Date().toISOString(),
+          monotonicStartMs: performance.now(),
+          users,
+          stats: (await compose('stats', '--no-stream', '--format', 'json'))
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map(JSON.parse),
+        };
+        if (capacity) observation.pipeline = await status();
+        observation.finishedAt = new Date().toISOString();
+        observation.collectionMs = performance.now() - observation.monotonicStartMs;
+        if (isolatedGenerator) {
+          const ids = (
+            await docker([
+              'ps',
+              '-q',
+              '--filter',
+              'label=com.docker.compose.project=signaltrail-memory',
+              '--filter',
+              'label=com.docker.compose.service=k6',
+            ])
+          )
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+          if (ids.length) {
+            const generators = JSON.parse(await docker(['inspect', ...ids]));
+            for (const generator of generators)
+              assert.equal(generator.HostConfig.CpusetCpus, '2,3');
+            generatorAffinityVerified = true;
+            observation.generatorAffinityVerified = true;
           }
-          if (capacity) {
-            observation.clickhouseMemoryStartedAt = new Date().toISOString();
-            observation.clickhouseMemory = await compose(
-              'exec',
-              '-T',
-              'clickhouse',
-              'cat',
-              '/sys/fs/cgroup/memory.events',
-              '/sys/fs/cgroup/memory.pressure',
-              '/sys/fs/cgroup/memory.current',
-              '/sys/fs/cgroup/memory.max',
-              '/sys/fs/cgroup/memory.stat',
-            );
-            observation.clickhouseMemoryFinishedAt = new Date().toISOString();
-          }
-          hostTelemetry?.updateSample(observation, memoryPlan);
-          if (capacity) await flushIntervals();
-          samples.push(observation);
-          if (capacity && (!lastProgressAt || performance.now() - lastProgressAt >= 60000)) {
-            const state = observation.pipeline;
-            const checkpoint = {
-              phase: 'running',
-              at: new Date().toISOString(),
-              profile,
-              elapsedSeconds: (performance.now() - trafficStarted) / 1000,
-              offeredEventsPerSecond: rate,
-              brokerAcknowledged: state.publisher.completed,
-              metadataRefused: state.metadata.refused,
-              metadataFailures: state.metadata.failedQueries,
-              httpRefused: state.admission.refused,
-              sourceLag: state.source.total,
-              peakOutstandingQueries: state.metadata.peakInFlight,
-              loopMaxMs: state.eventLoopDelayMs.max,
-              intervalRecordsSaved: intervalCursor,
-            };
-            await save('capacity-progress.json', checkpoint);
-            console.log(
-              `Progress ${Math.round(checkpoint.elapsedSeconds)}s: broker_acknowledged=${checkpoint.brokerAcknowledged}, metadata_refused=${checkpoint.metadataRefused}, http_refused=${checkpoint.httpRefused}, lag=${checkpoint.sourceLag}`,
-            );
-            lastProgressAt = performance.now();
-          }
-          if (analyticalLoad)
-            await query(
-              'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name FORMAT JSONEachRow',
-            );
-          await inspect();
-        } catch (error) {
-          samplingError = error;
-          break;
         }
-        await delay(2000);
-      }
-    })();
+        if (capacity) {
+          observation.clickhouseMemoryStartedAt = new Date().toISOString();
+          observation.clickhouseMemory = await compose(
+            'exec',
+            '-T',
+            'clickhouse',
+            'cat',
+            '/sys/fs/cgroup/memory.events',
+            '/sys/fs/cgroup/memory.pressure',
+            '/sys/fs/cgroup/memory.current',
+            '/sys/fs/cgroup/memory.max',
+            '/sys/fs/cgroup/memory.stat',
+          );
+          observation.clickhouseMemoryFinishedAt = new Date().toISOString();
+        }
+        hostTelemetry?.updateSample(observation, memoryPlan);
+        samples.push(observation);
+        if (capacity && (!lastProgressAt || performance.now() - lastProgressAt >= 60000)) {
+          const state = observation.pipeline;
+          const checkpoint = {
+            phase: 'running',
+            at: new Date().toISOString(),
+            profile,
+            elapsedSeconds: (performance.now() - trafficStarted) / 1000,
+            offeredEventsPerSecond: rate,
+            brokerAcknowledged: state.publisher.completed,
+            metadataRefused: state.metadata.refused,
+            metadataFailures: state.metadata.failedQueries,
+            httpRefused: state.admission.refused,
+            sourceLag: state.source.total,
+            peakOutstandingQueries: state.metadata.peakInFlight,
+            loopMaxMs: state.eventLoopDelayMs.max,
+            intervalRecordsSaved: intervalCursor,
+          };
+          await save('capacity-progress.json', checkpoint);
+          console.log(
+            `Progress ${Math.round(checkpoint.elapsedSeconds)}s: broker_acknowledged=${checkpoint.brokerAcknowledged}, metadata_refused=${checkpoint.metadataRefused}, http_refused=${checkpoint.httpRefused}, lag=${checkpoint.sourceLag}`,
+          );
+          lastProgressAt = performance.now();
+        }
+        await inspect();
+      },
+    });
+    const intervals = capacity
+      ? observeUntil({
+          done: () => done,
+          observe: flushIntervals,
+          onError: async (error) => {
+            samplingError ??= error;
+            await reportObservationError('intervals', error);
+          },
+        })
+      : Promise.resolve();
+    let analyticalError;
+    let analyticalAttempts = 0;
+    const analytical = analyticalLoad
+      ? observeUntil({
+          done: () => done,
+          observe: async () => {
+            analyticalAttempts++;
+            const injectFailure =
+              profile === 'capacity-4gb-telemetry-failure' && analyticalAttempts === 1;
+            await query(
+              'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name' +
+                (injectFailure ? ' SETTINGS max_memory_usage=1' : '') +
+                ' FORMAT JSONEachRow',
+            );
+          },
+          onError: async (error) => {
+            analyticalError ??= error;
+            await reportObservationError('analytical', error);
+          },
+        })
+      : Promise.resolve();
+    // Attach rejection handlers immediately; artifact-write errors still fail the run.
+    const observations = Promise.allSettled([sampling, intervals, analytical]);
     let output;
     try {
       output = await traffic;
     } finally {
       done = true;
-      await sampling;
+      const outcomes = await observations;
+      const failed = outcomes.find((outcome) => outcome.status === 'rejected');
+      if (failed) throw failed.reason;
     }
     await save(`k6-${users}.json`, output);
     const summary = JSON.parse(output);
@@ -509,6 +596,9 @@ try {
       stages.push(stage);
       if (trafficError) stage.reasons.push(`k6 exit ${trafficError.exitCode}`);
       if (samplingError) stage.reasons.push(`Sampling failed: ${samplingError.message}`);
+      if (analyticalError)
+        stage.reasons.push(`Analytical query failed: ${analyticalError.message}`);
+      stage.analyticalAttempts = analyticalAttempts;
       const drainStart = performance.now(),
         deadline = Date.now() + 60000;
       do {
@@ -561,6 +651,7 @@ try {
       continue;
     }
     if (samplingError) throw samplingError;
+    if (analyticalError) throw analyticalError;
     if (trafficError) throw trafficError;
     assert.ok(accepted > 0);
     for (const name of [
@@ -590,6 +681,7 @@ try {
       httpDurationMs: summary.metrics.http_req_duration.values,
     });
   }
+  await collectQueryMemory('after');
   result.enforcedLimits = await inspect();
   if (capacity) result.ceilingNotReached = true;
   result.passed = true;

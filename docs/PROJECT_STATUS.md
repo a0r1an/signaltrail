@@ -19,6 +19,27 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — telemetry recovery and bounded query-memory investigation complete
+
+- Independent serial resource/interval/analytical loops continue after analytical
+  failure; errors persist/print immediately and still fail qualification. TDD and
+  all 65 harness tests pass. Real 30-second forced-memory failure verifies one
+  error, 16 attempts, 3001 accepted/stored and complete continued telemetry/cleanup.
+- Corrected before/after query-memory probe passes two minutes at 100 EPS:
+  12001 accepted/stored, zero refusals/drops, 30 validated query-log measurements.
+  Aggregation peaks only 14–15 MiB; one thread and 16-MiB spill setting do not
+  lower it, with zero actual spill events. No-FINAL/count-only controls change
+  semantics and are not adopted. Server-wide error is not a 1.33-GiB query claim.
+- Server-tracked memory grows 285.53→446.37 MiB. Single-variable no-text-log
+  control also passes but grows 292.93→457.65 MiB; does not support text_log as
+  dominant cause. Shared-host short trials do not qualify sustained capacity.
+- All owned resources removed, targets [] and lock released; no OOM/restart.
+  Alloy forwarding observed, remote retries increase; cloud queries not verified.
+- Evidence/commands/artifacts: `performance/4gb-query-memory.md`. Next: instrument
+  server memory categories/allocator/background/log buffers and query IDs through
+  a bounded 12–15-minute reproduction before choosing a memory control or another
+  endurance comparison. Application/default limits remain unchanged.
+
 ### November 9 — 30-minute revised-allocation run fails
 
 - Completed authorized 1800-second offered 100-EPS trial. Failed: 168505 HTTP

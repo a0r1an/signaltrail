@@ -427,3 +427,15 @@ and the point at which an answer becomes necessary.
   failure need separate follow-up; evidence in `performance/4gb-endurance.md`.
 - No new user decision is needed for the next local harness reliability fix.
   Production sizing still requires actual-host/retention/maintenance evidence.
+
+## November 9 — query-memory follow-up resolved locally
+
+- User authorized repairing observation and investigating aggregation memory.
+  Real forced-memory failure confirms telemetry/attempts continue while result
+  stays failed. Short before/after controls find ~14–15 MiB query peaks; earlier
+  ~1.33-GiB error is a server-wide total limit, not that query's allocation.
+- Server-tracked growth persists with internal text_log disabled. No query semantic
+  change, higher application gates, logging default, production change or purchase
+  adopted. Exact next diagnostic scope and remaining attribution uncertainty are
+  in `performance/4gb-query-memory.md`; no new user choice is needed for local
+  category/allocator/background observation. Target-host qualification remains.

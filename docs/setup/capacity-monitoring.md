@@ -143,3 +143,36 @@ and drain through export; the later scrape-hold shutdown window is excluded.
 `stall-diagnostics.json` still contains only the final 600 intervals. Use the
 NDJSON file for whole-run analysis. `capacity-progress.json` is a minute checkpoint;
 its broker-acknowledged count is not the final HTTP accepted/stored reconciliation.
+
+## Observation failure recovery
+
+Resource sampling, interval export and analytical requests now run in separate
+serial loops. Each loop waits two seconds after its own attempt; requests within
+a loop never overlap. A slow/failed analytical request cannot stop interval
+export. Errors append immediately to `observation-errors.jsonl` with kind and
+timestamp and print to stderr. Attempts continue, but any observed error still
+fails the run; artifact-write failures also surface. The separate loops change
+analytical cadence relative to historical combined-loop runs, so throughput
+comparisons must account for that instrumentation/workload change.
+
+`load capacity-4gb-telemetry-failure` is a 30-second real-database fault probe:
+only its first analytical request gets `max_memory_usage=1`. Its expected process
+exit is 1 and capacity report is failed. Verify the report has only the injected
+analytical error, later successful attempts, exact accepted/stored counts, resource
+samples after the error, contiguous complete interval export and successful resource
+cleanup. This is failure-path evidence, never a passing capacity trial.
+
+`load capacity-4gb-query-memory` runs the same revised budget for 120 seconds,
+collecting server/query memory settings, system memory/part snapshots and
+three rounds of five query controls before and after traffic into
+`query-memory-before.json` / `query-memory-after.json`. It records real
+query IDs and matching query-log memory/duration/read/spill evidence. Controls
+are baseline, one thread, a 16-MiB external-aggregation threshold, count-only and
+a no-FINAL diagnostic control. The latter changes semantics and is not a product
+optimization. No measured settings are adopted into application defaults.
+
+`load capacity-4gb-query-memory-no-text-log` repeats that diagnostic with only
+internal ClickHouse text_log removed via an isolated XML mount. It is a control,
+not an operational default. Both phases retain query logging and validate one
+QueryFinish/memory measurement per query ID. Results and limits are in
+[query-memory evidence](../performance/4gb-query-memory.md).

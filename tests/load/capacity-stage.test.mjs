@@ -117,3 +117,23 @@ test('endurance holds 100 EPS for 30 minutes with shutdown allowance', async () 
   const { capacityCommandTimeoutMs } = await import('./capacity-stage.mjs');
   assert.equal(capacityCommandTimeoutMs('capacity-4gb-db8-q24-endurance'), 1920000);
 });
+
+test('query-memory investigation uses a bounded two-minute revised workload', () => {
+  assert.deepEqual(capacityWorkloads('capacity-4gb-query-memory'), [
+    { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 },
+  ]);
+});
+
+test('fault recovery probe retains the 30-second telemetry workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-telemetry-failure'),
+    capacityWorkloads('capacity-4gb-telemetry'),
+  );
+});
+
+test('text-log control keeps the same bounded query-memory workload', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-query-memory-no-text-log'),
+    capacityWorkloads('capacity-4gb-query-memory'),
+  );
+});

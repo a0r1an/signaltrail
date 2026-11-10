@@ -50,9 +50,16 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       analytical memory rejection, later metadata/HTTP refusals and generator drops.
       Recovered traffic intervals; automatic export and exact reconciliation fail.
       See [endurance evidence](performance/4gb-endurance.md).
-- [ ] Decouple interval collection from analytical-query errors; persist/report errors
-      immediately and continue telemetry/query attempts. Verify failure path before
-      another endurance run; investigate aggregation memory before changing limits.
+- [x] Decouple interval collection from analytical-query errors; persist/report errors
+      immediately and continue attempts. 65 units and real 30-second forced-memory
+      failure verify later attempts, exact storage, continued/complete telemetry.
+- [x] Complete bounded query-memory/threads/spill/count/FINAL investigation and
+      one-variable text-log control. Query peaks ~14–15 MiB; no thread/spill memory
+      benefit observed, text-log disabling does not reduce broader tracked growth.
+      Evidence: [query memory](performance/4gb-query-memory.md).
+- [ ] Attribute server memory growth with continuous category/allocator/background/
+      log-buffer snapshots and query IDs through a bounded 12–15-minute reproduction
+      using the repaired loops before choosing a control or repeating endurance.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.

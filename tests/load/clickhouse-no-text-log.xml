@@ -1,0 +1,4 @@
+<clickhouse>
+    <!-- Isolated diagnostic control only; application/server logs stay available. -->
+    <text_log remove="1" />
+</clickhouse>
