@@ -451,3 +451,15 @@ and the point at which an answer becomes necessary.
   tagged analytical evidence, same limits/budget. No production logging change,
   higher gates, memory increase, paid host or deployment assumed. Source/evidence
   and unresolved attribution: `performance/4gb-memory-trace.md`.
+
+## November 10 — heap attribution changes the next experiment
+
+- User selected allocation profiling before query-log changes. Five profiles and
+  inactive-part observations identify retained part metadata as the leading measured
+  sustained-growth source. Effective worker writes average ~1.13 events, inactive
+  analytics parts reach ~55k, and part-related memory recovers during idle.
+- Next comparison is effective bounded batching with acknowledged storage/offset
+  safety; no production batching/logging/retention change inferred. Three-minute
+  idle is shorter than 480s part lifetime and cannot rule out every persistent
+  consumer. Query-log spikes/scheduling remain separate potential contributors.
+  Evidence/limits: `performance/4gb-heap-profile.md`.

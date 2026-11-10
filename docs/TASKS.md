@@ -61,13 +61,17 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       rejections with 15–17 MiB query memory; all 387 IDs/61 snapshots retained.
       Large query-log merge (402 MiB), live allocation and fragmentation measured.
       See [memory trace](performance/4gb-memory-trace.md); no single-cause proof.
-- [ ] In progress: user prioritized heap attribution before a logging control.
-      Capture startup/five-/eleven-minute/end/idle allocation profiles on 26.8,
-      then compare stack growth and three-minute post-load recovery. Sparse
-      sampling changes observer overhead; keep defaults and limits unchanged.
-- [ ] Compare reduced routine insert query-log volume with 100% tagged analytical
-      logging at unchanged 15-minute workload/budget; verify every analytical ID.
-      If growth persists, capture allocation stacks/heap for retained consumers.
+- [x] Complete sparse heap attribution plus three-minute idle recovery. Part-related
+      stacks dominate estimated growth; inactive analytics parts reach ~55k, worker
+      averages 1.13 records/write, part counts and memory fall in idle. All 70 units.
+      Evidence: [heap attribution](performance/4gb-heap-profile.md).
+- [ ] Inspect effective worker batching and compare bounded coalescing or acknowledged
+      async inserts at unchanged workload/budget. Preserve partition/offset/ack/retry
+      safety; measure writes, records/write, inactive parts, memory, lag and latency.
+- [ ] Full post-load cleanup qualification needs idle beyond 480s plus cleanup delay.
+      Three minutes shows partial recovery, not complete release or leak exclusion.
+- [ ] Query-log-volume comparison deferred behind the stronger part-metadata lead;
+      retain 100% tagged analytical logging if that control becomes necessary.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.

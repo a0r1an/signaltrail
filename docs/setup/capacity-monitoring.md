@@ -189,3 +189,17 @@ and exports matching terminal records to `analytical-query-log.jsonl`, even afte
 stage failure. Neither loop changes limits or masks failure. See
 [memory-trace evidence](../performance/4gb-memory-trace.md) for verified outcomes,
 metric semantics, shared-host limits and the next controlled comparison.
+
+## Sparse heap attribution and idle recovery
+
+`load capacity-4gb-memory-trace-heap-smoke` checks 30-second traffic/10-second idle;
+`load capacity-4gb-memory-trace-heap` runs 900-second traffic/180-second idle. Isolated
+XML enables global lg_sample 22 sampling without exhaustive trace-log sample writes.
+Five phase profiles use the 26.8 SQL collapsed-stack interface; raw rows and weighted
+stack differences are saved. Sampling is statistical and affects timing/placement.
+
+`load part-memory` performs read-only all-state part/retention inspection of the
+currently advertised isolated capacity fixture (requires its live load lock).
+Future continuous traces include inactive as well as active parts. Previous
+active-only artifacts remain unchanged. Evidence and semantics:
+[heap attribution](../performance/4gb-heap-profile.md).

@@ -11,7 +11,7 @@ export async function captureMemoryTrace({ request, append }) {
     ],
     [
       'parts',
-      'SELECT database, table, count() AS parts, sum(rows) AS rows, sum(bytes_on_disk) AS bytes FROM system.parts WHERE active GROUP BY database, table ORDER BY bytes DESC',
+      'SELECT database, table, active, count() AS parts, sum(rows) AS rows, sum(bytes_on_disk) AS bytes FROM system.parts GROUP BY database, table, active ORDER BY parts DESC',
     ],
   ];
   for (const [name, sql] of statements) {

@@ -19,19 +19,27 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
-### November 10 — heap attribution in progress
+### November 10 — heap attribution identifies retained part metadata as the leading growth source
 
-- User explicitly selected allocation profiling before the proposed logging control.
-  Isolated startup config enables sparse global sampling (lg_sample22), with no
-  exhaustive JemallocSample trace-log collection. SQL collapsed heap stacks verified
-  on pinned 26.8; newer 26.9 fragmentation tables are not used.
-- TDD stack-delta/validation/profile tests and all 70 harness tests pass. Thirty-second
-  capability probe passes with 3000 accepted/stored, three nonempty symbolized
-  profiles (startup/load/10-second idle), full interval export and clean teardown.
-  Artifact: `2026-11-10T18-19-02.695Z-capacity-4gb-memory-trace-heap-smoke`.
-- Fifteen-minute same-budget run plus three-minute idle is now in progress;
-  additional snapshots planned at five and eleven minutes. No performance-capacity
-  equivalence assumed with profiling enabled. No production default changed.
+- User-prioritized sparse heap profiling complete: 15-minute 100-EPS load plus
+  three-minute idle, same revised budget/gates. 90001 accepted/stored, no admission
+  refusals/drops; overall report fails only its 5.96-second analytical latency.
+  Worker has one failed write/retry; all 404 analytical IDs match, no analytical
+  memory rejection in this run. No capacity claim from this variable profiled trial.
+- Five symbolized profiles: estimated part-related stack growth ~700 MiB of ~766
+  MiB total at eleven minutes. HTTP insert origins ~480 MiB, merge origins ~160 MiB;
+  part objects/estimates/serialization/checksum paths dominate sustained growth.
+- New read-only part-memory command finds 40584 then 54907 inactive analytics parts
+  despite only 8–10 active. Effective old_parts_lifetime 480s. After load, inactive
+  parts fall 48132→34288; heap drops 869→567 MiB during idle, ~272 MiB of the ~302-MiB
+  reduction from part-related stacks. Sampling estimates, not an exact RSS census.
+- Effective 90001 records/79922 confirmed writes (~1.13/write) explains part churn.
+  Existing chunk ceilings do not guarantee useful write batching. Next: inspect/
+  compare bounded effective batching with source-offset/ack/retry safety; defer
+  query-log-only control. Do not shorten part retention or raise gates blindly.
+- All 70 units, real heap capability probe and full artifact checks pass. 73 memory
+  snapshots, 1086 contiguous intervals, no OOM/restart, owned cleanup succeeds.
+  Evidence: `performance/4gb-heap-profile.md`; no production/default policy changed.
 
 ### November 10 — 15-minute memory trace reproduces rejection with complete evidence
 
