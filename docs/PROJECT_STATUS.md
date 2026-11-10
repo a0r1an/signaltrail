@@ -19,7 +19,7 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-10
 
-### November 10 — 50-EPS step-down endurance passes (run 1)
+### November 10 — 50-EPS step-down endurance: one pass, one fail
 
 - User asked whether to accept 100 EPS as the limit; 100 EPS has failed every
   sustained run, so it is above the limit. User chose a step-down search at 50 EPS.
@@ -30,9 +30,13 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   drops/cancellations, p95 11.3 / p99 54.3 ms, 846 analytical queries without
   error, lag 0, no OOM/restart, cleanup passed. ClickHouse heap plateaus ~760 MiB
   after ~10 min; cgroup at cap reclaims page cache (56k `max` events, no OOM).
-- Single pass only; local shared Mac, not a VPS. Evidence:
-  `performance/4gb-step-down-endurance.md`. Next: repeat 50 EPS; if it passes,
-  record 50 EPS as the local sustained limit (≈25 EPS operating ceiling).
+- Repeat failed: 89670 accepted/stored, 270 metadata refusals (~243 in a sub-minute
+  stall at ~22 min: CPU pressure 10→52%, event-loop delay 2.1 s), 61 drops, one
+  9.9-s analytical query. ClickHouse memory plateau unchanged (~760 MiB); isolated
+  generator spiked simultaneously, suggesting host/VM-wide contention, unproven.
+- Local result: 50 EPS not repeatably sustained on this shared Mac; memory is no
+  longer the limiting factor at 50 EPS, CPU stalls are. Evidence:
+  `performance/4gb-step-down-endurance.md`. Next decision in TASKS.
 
 ### November 10 — session closed at user request
 

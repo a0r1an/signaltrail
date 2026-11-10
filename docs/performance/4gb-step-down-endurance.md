@@ -53,10 +53,47 @@ growth continued until a server-wide memory rejection. The cgroup stayed at its
 cap throughout: the kernel reclaimed page cache (`max` events climbed steadily,
 no `high`/OOM events). Docker-displayed usage (~1.44 GiB) includes that cache.
 
+## Result — run 2: failed
+
+Report: `test-results/load/2026-11-10T23-10-40.464Z-capacity-4gb-db8-q24-endurance-50/result.json`.
+Same checkout, profile and host conditions, started immediately after run 1.
+
+| Measurement | Result |
+| --- | --- |
+| Accepted / unique stored | 89670 / 89670 |
+| Metadata-gate refusals (HTTP 503) / HTTP-gate refusals | 270 / 0 |
+| Generator drops / retries / rejected | 61 / 0 / 0 |
+| Publication cancellations / late completions | 0 / 0 |
+| HTTP p95 / p99 / max | 27.09 / 459.40 / 3252.17 ms |
+| Analytical queries | 826, 0 errors; max 9892 ms (gate 2000 ms) |
+| Final source lag / OOM kills / restarts | 0 / 0 / 0 |
+
+Failure reasons: refused responses, generator drops, HTTP failures, k6 threshold
+exit and a diagnostic query over two seconds. Accepted events were all stored.
+
+Refusal timeline (interval history, 1645 records): 18 at 23:12:00 during warm-up
+(a 2-second interval, 553-ms event-loop delay, 385 ms GC); 5 at 23:18:48; then
+about 243 between 23:32:56 and 23:33:36. During that window app-cgroup CPU
+pressure `some` avg10 rose from ~10% to 39–52%, event-loop delay reached 2124 ms
+and intervals stretched to 2–3 s.
+
+Docker samples show ClickHouse CPU rising from ~40–70% to 114–154% from 23:32:49
+for about a minute, while the app reached 52–79%. At 23:33:02 the generator
+(separate CPUs 2,3) also showed 130% and Redpanda 31%, and sampling gaps widened
+from ~5 s to 7–9 s. ClickHouse anonymous memory stayed ~755–830 MiB, matching run
+1's plateau. Simultaneous spikes on the isolated generator suggest a host- or
+Docker-VM-wide event, possibly combined with ClickHouse background work; the
+data cannot separate these causes. The isolated stack was removed before part
+logs could be inspected.
+
 ## Interpretation and limitations
 
-- One passing 30-minute run. A capacity ceiling needs repeated passes; run 2 is
-  the next step before stating 50 EPS as the local limit.
+- 50 EPS is not a repeated pass: one pass, one failure from a sub-minute CPU
+  stall. Memory behaved the same in both runs (plateau ~760 MiB), so the failure
+  is CPU scheduling, not ClickHouse memory.
+- This Mac, with the development stack running, is too noisy to pin a precise
+  sustained limit. Stepping down to 25 EPS locally would test stall tolerance,
+  not a VPS limit.
 - The heap plateau is observed over 30 minutes only. Retained inactive-part
   metadata (see [heap attribution](4gb-heap-profile.md)) may still grow over
   hours; multi-hour soak remains unverified.
@@ -65,5 +102,5 @@ no `high`/OOM events). Docker-displayed usage (~1.44 GiB) includes that cache.
 - Local Docker on an Apple M3 Pro with shared host activity, not a 4 GiB VPS.
   Candidate-host CPU, disk and steal time can change the result.
 - Per the qualification rule, the initial operating ceiling would be about half
-  the lowest repeated passing rate (≈25 EPS if 50 repeats), still ~5× the
+  the lowest repeated passing rate (≈25 EPS had 50 repeated), still ~5× the
   10–50-user launch estimate of 1–5 EPS.
