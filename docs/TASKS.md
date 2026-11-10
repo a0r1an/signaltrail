@@ -65,9 +65,14 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       stacks dominate estimated growth; inactive analytics parts reach ~55k, worker
       averages 1.13 records/write, part counts and memory fall in idle. All 70 units.
       Evidence: [heap attribution](performance/4gb-heap-profile.md).
-- [ ] In progress: inspect effective worker batching and compare bounded coalescing or acknowledged
-      async inserts at unchanged workload/budget. Preserve partition/offset/ack/retry
-      safety; measure writes, records/write, inactive parts, memory, lag and latency.
+- [x] Build/test bounded fetch collection (200-ms candidate,0 default/opt-out).
+      121 processor tests/checks,71 harness units and real recovery pass. Short
+      probe passes; fresh long pair shows7.31 vs1.10 records/write but candidate
+      fails reliability during severe scheduling stalls. Keep opt-in; see
+      [batching evidence](performance/4gb-worker-batching.md).
+- [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-
+      isolated controlled repeat before promoting batching. No stable100-EPS claim;
+      preserve full failed results and per-ID/ack/offset evidence.
 - [ ] Full post-load cleanup qualification needs idle beyond 480s plus cleanup delay.
       Three minutes shows partial recovery, not complete release or leak exclusion.
 - [ ] Query-log-volume comparison deferred behind the stronger part-metadata lead;

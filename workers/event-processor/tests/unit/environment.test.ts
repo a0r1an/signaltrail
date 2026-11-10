@@ -17,7 +17,7 @@ it('reads explicit dependency coordinates and preserves password bytes', () => {
       topic: 'analytics',
       deadLetterTopic: 'analytics.dlq',
       groupId: 'processor-test',
-      batchWaitMs: 200,
+      batchWaitMs: 0,
     },
     clickhouse: {
       endpoint: 'http://127.0.0.1:38123',

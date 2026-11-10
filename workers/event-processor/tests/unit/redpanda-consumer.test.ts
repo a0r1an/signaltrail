@@ -455,12 +455,13 @@ it('does not start another sink write after a partition batch becomes stale', as
   }
 });
 
-it('collects batch-capable fetches for at most 200ms without changing byte ceilings', async () => {
+it('collects explicitly enabled fetches for at most 200ms without changing byte ceilings', async () => {
   const worker = createRedpandaEventConsumer({
     brokers: ['localhost:9092'],
     topic: 'analytics',
     deadLetterTopic: 'analytics.dlq',
     groupId: 'batch',
+    batchWaitMs: 200,
     writeEvent: async () => {},
     writeEvents: async () => {},
   });
@@ -509,4 +510,23 @@ it.each([-1, 1001, 1.5, NaN])('rejects an invalid collection window %s', (batchW
       writeEvents: async () => {},
     }),
   ).toThrow('Invalid processor batch wait');
+});
+
+it('leaves unqualified batch collection opt-in for batch-capable callers', async () => {
+  const worker = createRedpandaEventConsumer({
+    brokers: ['localhost:9092'],
+    topic: 'analytics',
+    deadLetterTopic: 'analytics.dlq',
+    groupId: 'batch',
+    writeEvent: async () => {},
+    writeEvents: async () => {},
+  });
+  try {
+    await worker.start();
+    expect(clients.consumerConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ minBytes: 1, maxWaitTimeInMs: 5000 }),
+    );
+  } finally {
+    await worker.close();
+  }
 });

@@ -39,7 +39,7 @@ export function createRedpandaEventConsumer(options: RedpandaEventConsumerOption
     options.groupId.length > 255
   )
     throw new TypeError('Invalid processor group ID');
-  const batchWaitMs = options.batchWaitMs ?? (options.writeEvents ? 200 : 0);
+  const batchWaitMs = options.batchWaitMs ?? 0;
   if (!Number.isSafeInteger(batchWaitMs) || batchWaitMs < 0 || batchWaitMs > 1000)
     throw new TypeError('Invalid processor batch wait');
   if (batchWaitMs > 0 && !options.writeEvents)

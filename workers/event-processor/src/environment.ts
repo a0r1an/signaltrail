@@ -17,7 +17,7 @@ export function parseProcessorEnvironment(
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
     throw new ProcessorConfigurationError('Invalid SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS');
   const rawBatchWait = environment.SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS;
-  const batchWaitMs = rawBatchWait === undefined ? 200 : Number(rawBatchWait);
+  const batchWaitMs = rawBatchWait === undefined ? 0 : Number(rawBatchWait);
   if (
     rawBatchWait?.trim() === '' ||
     !Number.isSafeInteger(batchWaitMs) ||

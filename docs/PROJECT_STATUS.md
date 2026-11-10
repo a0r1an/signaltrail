@@ -19,23 +19,29 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
-### November 10 — bounded fetch batching implemented; comparisons in progress
+### November 10 — batching built/tested; opt-in retained after failed long trial
 
-- User authorized building/testing effective worker batching. Batch-capable consumer
-  now collects broker fetches toward64 KiB for at most200ms (configurable0–1000ms,
-  zero restores immediate-fetch settings). Existing100-record/1-MiB chunk ceiling,
-  manual commits, heartbeats, ownership checks, ack/retry paths remain.
-- Entry-point batch wait defaults200ms; direct single-event-only consumer remains
-  immediate. Historical memory/load profiles explicitly pass0; new named batched
-  profiles pass200. HTTP/DB/CPU/RAM limits unchanged. No deployed process changed.
-- TDD intended failures observed; processor lint/120 units/types/build and71 harness
-  units pass. Real isolated pipeline paused-storage/restart/ambiguous-ack recovery
-  passes: `2026-11-10T19-02-01.953Z-pipeline`. Resources cleaned up.
-- Short batching probe passes:3001 accepted/stored,411 chunks (~7.30 records/write),
-  no refusals/drops/errors, three heap profiles and clean teardown. Artifact:
-  `2026-11-10T19-04-24.065Z-capacity-4gb-memory-trace-heap-batched-smoke`.
-  Fresh zero-wait baseline then200-ms candidate comparison now in progress; no
-  sustained benefit or capacity increase claimed yet.
+- User-authorized bounded fetch collection implemented toward 64 KiB with a selected
+  200-ms wait; existing chunk/byte/ack/offset/ownership/heartbeat safety remains.
+  Final default 0; environment/API option accepts0–1000ms. Default restored after
+  long candidate fails, with regression evidence. No running service redeployed.
+- Final processor lint/121 tests/types/build, 71 load units and real pipeline
+  paused-storage/restart/ambiguous-ack recovery pass. Short batched probe passes
+  3001 accepted/stored,7.30 records/write and clean teardown.
+- Fresh same-workload 900-second/180-idle pair: baseline 0ms fails 31 metadata refusals
+  and one analytical memory rejection, 89970 accepted/stored, 1.10 records/write.
+  Candidate200ms reaches 7.31 records/write and lower observed parts/memory, but has
+  severe scheduling stalls (28s interval,83% CPU pressure), 3901 metadata/11511 HTTP
+  refusals, 10711 drops and HTTP p99~10.3s. 58638 accepted/62937 unique stored;
+  equality fails amid 4167 cancelled/late publications. No accepted-loss proof.
+- Worker CPU per selected record ~1.41→1.37ms: no demonstrated meaningful CPU gain.
+  Candidate delivers fewer records and has observation timeouts; lower long-run
+  memory/part maxima are conditional evidence, not certified bounds or causality.
+- Both resource cleanups pass, no OOM/restart, targets [] and lock released. Both
+  runs retained as failed. Evidence: `performance/4gb-worker-batching.md`.
+- Exact next step: isolate component CPU/fetch/heartbeat scheduling stalls on a
+  quiet/CPU-isolated repeat before default enablement. Keep collection opt-in 200,
+  default 0; no higher HTTP/DB/RAM limits or production capacity claim.
 
 ### November 10 — heap attribution identifies retained part metadata as the leading growth source
 

@@ -463,3 +463,15 @@ and the point at which an answer becomes necessary.
   idle is shorter than 480s part lifetime and cannot rule out every persistent
   consumer. Query-log spikes/scheduling remain separate potential contributors.
   Evidence/limits: `performance/4gb-heap-profile.md`.
+
+## November 10 — worker batching remains opt-in
+
+- User authorized implementation/testing. Bounded fetch batching produces ~7.3
+  source records/write versus ~1.1, with lower observed part/memory footprint.
+  Correctness/recovery checks and short load pass; long 200-ms candidate fails badly
+  during broad scheduling stalls and delivers fewer events. Cause unresolved;
+  reduced memory is not proof of reliability or stable capacity.
+- Final default 0, opt-in 200 through SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS. No running
+  process/default deployment changed. Next local investigation is component CPU/
+  fetch/heartbeat timing before promotion; no new budget/provider/gate decision
+  assumed. Exact evidence/limitations: `performance/4gb-worker-batching.md`.
