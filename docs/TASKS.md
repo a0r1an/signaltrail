@@ -1,6 +1,6 @@
 # SignalTrail remaining work
 
-Updated: 2026-11-09. This is the current task queue. Historical “next” entries in
+Updated: 2026-11-10. This is the current task queue. Historical “next” entries in
 PROJECT_STATUS are session records, not instructions to repeat completed work.
 Evidence and limitations belong in PROJECT_STATUS; decisions awaiting the user
 belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked.
@@ -57,7 +57,7 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       one-variable text-log control. Query peaks ~14–15 MiB; no thread/spill memory
       benefit observed, text-log disabling does not reduce broader tracked growth.
       Evidence: [query memory](performance/4gb-query-memory.md).
-- [ ] Attribute server memory growth with continuous category/allocator/background/
+- [ ] In progress: attribute server memory growth with continuous category/allocator/background/
       log-buffer snapshots and query IDs through a bounded 12–15-minute reproduction
       using the repaired loops before choosing a control or repeating endurance.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;

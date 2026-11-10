@@ -23,6 +23,10 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
+  if (profile === 'capacity-4gb-memory-trace')
+    return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 900 }];
+  if (profile === 'capacity-4gb-memory-trace-smoke')
+    return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 30 }];
   if (profile.startsWith('capacity-4gb-query-memory'))
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 }];
   if (profile === 'capacity-4gb-db8-q24-endurance')

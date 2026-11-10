@@ -6,6 +6,7 @@ import { readCollectorDelivery } from './collector-delivery.mjs';
 import { persistIntervalBatch } from './interval-history.mjs';
 import { observeUntil } from './observation-loop.mjs';
 import { investigateQueryMemory } from './query-memory.mjs';
+import { captureMemoryTrace } from './memory-trace.mjs';
 import { missingDashboardMetrics } from './dashboard-metrics.mjs';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { capacityTargets } from './capacity-targets.mjs';
@@ -34,6 +35,8 @@ const dbConnections = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-memory-trace',
+  'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -44,6 +47,7 @@ const dbConnections = [
 const dbQueries =
   profile.startsWith('capacity-4gb-db8-q24') ||
   profile.startsWith('capacity-4gb-telemetry') ||
+  profile.startsWith('capacity-4gb-memory-trace') ||
   profile.startsWith('capacity-4gb-query-memory')
     ? 24
     : 16;
@@ -51,12 +55,15 @@ const isolatedGenerator = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-memory-trace',
+  'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
   'capacity-4gb-db8-q24-endurance',
 ].includes(profile);
 let generatorAffinityVerified = false;
+const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
 const totalGiB = (serviceMiB + memoryPlan.hostReserveMiB) / 1024;
@@ -115,6 +122,8 @@ const compose = (...args) =>
     ...([
       'capacity-4gb-db8-q24-rebalanced',
       'capacity-4gb-telemetry',
+      'capacity-4gb-memory-trace',
+      'capacity-4gb-memory-trace-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
@@ -167,6 +176,17 @@ const samples = [];
 const stages = [];
 const queries = [];
 const observationFailures = {};
+async function traceMemory() {
+  const record = await captureMemoryTrace({
+    request: query,
+    append: (record) =>
+      appendFile(`${directory}/clickhouse-memory.jsonl`, JSON.stringify(record) + '\n'),
+  });
+  result.memoryTraceSnapshots = (result.memoryTraceSnapshots ?? 0) + 1;
+  for (const error of record.errors)
+    await reportObservationError('clickhouse-memory', new Error(`${error.name}: ${error.message}`));
+  return record;
+}
 async function reportObservationError(kind, error) {
   const record = { at: new Date().toISOString(), kind, message: error.message };
   await appendFile(`${directory}/observation-errors.jsonl`, JSON.stringify(record) + '\n');
@@ -545,6 +565,17 @@ try {
       : Promise.resolve();
     let analyticalError;
     let analyticalAttempts = 0;
+    const tracing = memoryTrace
+      ? observeUntil({
+          done: () => done,
+          intervalMs: 15000,
+          observe: traceMemory,
+          onError: async (error) => {
+            samplingError ??= error;
+            await reportObservationError('clickhouse-memory-export', error);
+          },
+        })
+      : Promise.resolve();
     const analytical = analyticalLoad
       ? observeUntil({
           done: () => done,
@@ -552,11 +583,34 @@ try {
             analyticalAttempts++;
             const injectFailure =
               profile === 'capacity-4gb-telemetry-failure' && analyticalAttempts === 1;
-            await query(
-              'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name' +
-                (injectFailure ? ' SETTINGS max_memory_usage=1' : '') +
-                ' FORMAT JSONEachRow',
-            );
+            const queryId = memoryTrace ? `${runId}-analytical-${analyticalAttempts}` : undefined;
+            const startedAt = new Date().toISOString(),
+              started = performance.now();
+            let queryFailure;
+            try {
+              await query(
+                'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name' +
+                  (injectFailure ? ' SETTINGS max_memory_usage=1' : '') +
+                  ' FORMAT JSONEachRow',
+                queryId,
+              );
+            } catch (error) {
+              queryFailure = error;
+              throw error;
+            } finally {
+              if (memoryTrace)
+                await appendFile(
+                  `${directory}/analytical-attempts.jsonl`,
+                  JSON.stringify({
+                    queryId,
+                    startedAt,
+                    finishedAt: new Date().toISOString(),
+                    ms: performance.now() - started,
+                    ok: !queryFailure,
+                    ...(queryFailure ? { message: queryFailure.message } : {}),
+                  }) + '\n',
+                );
+            }
           },
           onError: async (error) => {
             analyticalError ??= error;
@@ -565,7 +619,7 @@ try {
         })
       : Promise.resolve();
     // Attach rejection handlers immediately; artifact-write errors still fail the run.
-    const observations = Promise.allSettled([sampling, intervals, analytical]);
+    const observations = Promise.allSettled([sampling, intervals, analytical, tracing]);
     let output;
     try {
       output = await traffic;
@@ -599,6 +653,8 @@ try {
       if (analyticalError)
         stage.reasons.push(`Analytical query failed: ${analyticalError.message}`);
       stage.analyticalAttempts = analyticalAttempts;
+      if (observationFailures['clickhouse-memory'])
+        stage.reasons.push('ClickHouse memory snapshots have unavailable categories');
       const drainStart = performance.now(),
         deadline = Date.now() + 60000;
       do {
@@ -721,6 +777,23 @@ await finishRun({
     await cleanupResources([
       ...(capacity
         ? [
+            ...(memoryTrace
+              ? [
+                  {
+                    name: 'save final ClickHouse memory and query logs',
+                    timeoutMs: 90000,
+                    run: async () => {
+                      await traceMemory();
+                      await query('SYSTEM FLUSH LOGS');
+                      const body = await query(
+                        `SELECT query_id, toString(type) AS type, query_duration_ms, read_rows, memory_usage, exception_code, exception FROM system.query_log WHERE startsWith(query_id, '${runId}-analytical-') AND type != 'QueryStart' ORDER BY event_time_microseconds SETTINGS max_threads=1, max_memory_usage=67108864 FORMAT JSONEachRow`,
+                      );
+                      await save('analytical-query-log.jsonl', body);
+                      assert.ok(body.trim(), 'No analytical query-log evidence');
+                    },
+                  },
+                ]
+              : []),
             {
               name: 'save interval diagnostics',
               timeoutMs: 15000,

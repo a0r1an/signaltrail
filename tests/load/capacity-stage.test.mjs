@@ -137,3 +137,13 @@ test('text-log control keeps the same bounded query-memory workload', () => {
     capacityWorkloads('capacity-4gb-query-memory'),
   );
 });
+
+test('memory trace holds unchanged 100 EPS for fifteen minutes, with a short instrumentation smoke', () => {
+  assert.deepEqual(capacityWorkloads('capacity-4gb-memory-trace'), [
+    { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 900 },
+  ]);
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-smoke'),
+    capacityWorkloads('capacity-4gb-telemetry'),
+  );
+});

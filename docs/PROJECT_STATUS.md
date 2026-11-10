@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-11-09
+Last updated: 2026-11-10
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 The current actionable queue is [TASKS.md](TASKS.md); historical “next” entries
@@ -18,6 +18,20 @@ Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
+
+### November 10 — continuous ClickHouse memory trace in progress
+
+- User authorized a bounded 15-minute 100-EPS reproduction. New memory-trace
+  profiles retain revised allocation, gates and generator isolation; independent
+  15-second snapshots capture allocator/server categories, active merges and parts.
+  Every analytical attempt has a unique ID/outcome/timing and final query-log match.
+- TDD partial-evidence/profile regression and all 67 harness tests pass. Real
+  30-second instrument check collects four error-free memory snapshots, 14/14
+  matching attempts/query-log rows and complete interval export; cleanup succeeds.
+  Traffic itself fails (120 metadata refusals, 137 generator drops, 2744 accepted/
+  stored, p95 873.37 ms); retained as failed evidence, not a passing smoke.
+  Artifact: `2026-11-10T17-49-28.181Z-capacity-4gb-memory-trace-smoke`.
+- Fifteen-minute diagnostic run now in progress. No limit/default changes.
 
 ### November 9 — telemetry recovery and bounded query-memory investigation complete
 
