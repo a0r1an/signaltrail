@@ -85,6 +85,7 @@ export function startStallObserver({
       } catch {
         record.metricsObservationFailed = true;
       }
+      record.sequence = totalRecords + 1;
       records.push(record);
       totalRecords++;
       if (records.length > 600) records.shift();
@@ -97,7 +98,11 @@ export function startStallObserver({
   timer.unref();
   return {
     snapshot: () => ({ totalRecords, retained: records.length, latest: records.slice(-2) }),
-    records: () => ({ totalRecords, records: [...records] }),
+    records: (after = 0) => ({
+      totalRecords,
+      missingBefore: Math.max(0, (records[0]?.sequence ?? totalRecords + 1) - after - 1),
+      records: records.filter((record) => record.sequence > after),
+    }),
     stop() {
       stopped = true;
       clearInterval(timer);

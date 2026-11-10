@@ -44,6 +44,10 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Test separate four-GiB redistribution (ClickHouse 1536 / app 384 / PostgreSQL
       128 MiB, other caps/reserve unchanged). Two fresh five-minute 100-EPS runs
       pass with zero refusals, exact storage/drain and no detected OOM/restart.
+- [x] Add 30-minute revised-allocation profile, complete streamed interval history
+      and minute checkpoints; 58 units and fresh telemetry integration pass.
+- [ ] Complete authorized 30-minute 100-EPS endurance run (currently running),
+      analyze whole-run interval history and record failures as measured evidence.
 - [ ] Extend the revised profile to longer retained-data/maintenance measurements;
       qualify actual-host CPU credits/disk/OS overhead before supported capacity
       or production sizing claims. No paid target/default change is authorized.

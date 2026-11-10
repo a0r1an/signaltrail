@@ -131,3 +131,15 @@ Remaining dependency: restore working browser page control, then import the JSON
 select the account datasource and verify actual PromQL/rendering for the saved test
 window. The URL is resolved; it must not be requested again. Do not send tokens in
 chat, extract browser credentials, or assume the telemetry write token grants reads.
+
+## Endurance interval retention
+
+`load capacity-4gb-db8-q24-endurance` holds the revised allocation at 100 EPS
+for 1800 seconds, retaining full analytical SQL and generator CPU separation.
+The runner polls cursor-based diagnostics and appends contiguous records to
+`stall-intervals.jsonl`; it fails collection on overwritten/gapped history.
+`stall-history.json` records the final exported sequence. This covers traffic
+and drain through export; the later scrape-hold shutdown window is excluded.
+`stall-diagnostics.json` still contains only the final 600 intervals. Use the
+NDJSON file for whole-run analysis. `capacity-progress.json` is a minute checkpoint;
+its broker-acknowledged count is not the final HTTP accepted/stored reconciliation.

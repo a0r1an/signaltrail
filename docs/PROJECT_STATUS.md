@@ -19,6 +19,21 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-09
 
+### November 9 — 30-minute endurance run in progress
+
+- User authorized 100 EPS for 1800 seconds under the revised four-GiB plan,
+  target CPUs 0,1 / generator 2,3, HTTP 128 / pool 8 / outstanding gate 24.
+  Profile: `load capacity-4gb-db8-q24-endurance`; full analytical SQL retained.
+- Added contiguous, cursor-based interval export to `stall-intervals.jsonl`
+  so the 600-record in-memory ring does not truncate a 30-minute history.
+  Collector detects overwritten/gapped history; minute progress checkpoints saved.
+- TDD failures observed before implementation; all 58 load-harness tests pass.
+  Fresh 30-second integration passes with 3001 accepted/unique stored, no refusals,
+  all 40 exported intervals contiguous and observed Alloy forwarding.
+  Report: `test-results/load/2026-11-10T00-03-36.737Z-capacity-4gb-telemetry/result.json`.
+- Endurance result pending. No production defaults or external resources changed.
+  Grafana cloud import/query remains separately blocked by browser control.
+
 ### November 9 — Grafana URL supplied; browser control blocks cloud import
 
 - User supplied `https://dashingjackal3083.grafana.net` and existing ingestion

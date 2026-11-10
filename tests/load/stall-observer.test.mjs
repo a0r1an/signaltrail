@@ -44,3 +44,30 @@ test('interval telemetry does not overlap a slow database observation and record
   await setImmediate();
   assert.equal(observer.records().totalRecords, before);
 });
+
+test('interval history supports cursor reads and explicitly reports an overwritten gap', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const observer = startStallObserver({
+    database: { query: async () => ({ rows: [] }) },
+    snapshot: () => ({}),
+    readResources: async () => ({}),
+  });
+  try {
+    for (let i = 0; i < 602; i++) {
+      t.mock.timers.tick(1000);
+      await setImmediate();
+    }
+    const recent = observer.records(600);
+    assert.equal(recent.totalRecords, 602);
+    assert.deepEqual(
+      recent.records.map((r) => r.sequence),
+      [601, 602],
+    );
+    assert.equal(recent.missingBefore, 0);
+    const old = observer.records(0);
+    assert.equal(old.records.length, 600);
+    assert.equal(old.missingBefore, 2);
+  } finally {
+    observer.stop();
+  }
+});

@@ -109,3 +109,11 @@ test('telemetry smoke uses a bounded 30-second 100 EPS workload', () => {
     { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 30 },
   ]);
 });
+
+test('endurance holds 100 EPS for 30 minutes with shutdown allowance', async () => {
+  assert.deepEqual(capacityWorkloads('capacity-4gb-db8-q24-endurance'), [
+    { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 1800 },
+  ]);
+  const { capacityCommandTimeoutMs } = await import('./capacity-stage.mjs');
+  assert.equal(capacityCommandTimeoutMs('capacity-4gb-db8-q24-endurance'), 1920000);
+});

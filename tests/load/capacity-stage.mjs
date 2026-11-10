@@ -23,6 +23,8 @@ export function assessCapacityStage(summary) {
 }
 
 export function capacityWorkloads(profile) {
+  if (profile === 'capacity-4gb-db8-q24-endurance')
+    return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 1800 }];
   if (profile === 'capacity-4gb-telemetry')
     return [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 30 }];
   if (

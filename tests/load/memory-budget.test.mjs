@@ -96,3 +96,10 @@ test('rebalanced profile gives ClickHouse more room while preserving four GiB an
     verifyMemoryLimits(containers, memoryPlans['capacity-4gb-db8-q24-generator']),
   );
 });
+
+test('endurance preserves the verified revised four-GiB allocation and CPU affinity', () => {
+  assert.deepEqual(
+    memoryPlans['capacity-4gb-db8-q24-endurance'],
+    memoryPlans['capacity-4gb-db8-q24-rebalanced'],
+  );
+});

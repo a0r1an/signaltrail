@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, rename, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, rename, readFile, appendFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { readCollectorDelivery } from './collector-delivery.mjs';
+import { persistIntervalBatch } from './interval-history.mjs';
 import { missingDashboardMetrics } from './dashboard-metrics.mjs';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { capacityTargets } from './capacity-targets.mjs';
@@ -31,6 +32,7 @@ const dbConnections = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-db8-q24-endurance',
 ].includes(profile)
   ? 8
   : 4;
@@ -40,6 +42,7 @@ const isolatedGenerator = [
   'capacity-4gb-db8-q24-generator',
   'capacity-4gb-db8-q24-rebalanced',
   'capacity-4gb-telemetry',
+  'capacity-4gb-db8-q24-endurance',
 ].includes(profile);
 let generatorAffinityVerified = false;
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
@@ -97,7 +100,11 @@ const compose = (...args) =>
     ...(profile === 'memory-2gb' ? ['-f', 'tests/load/compose.memory-2gb.yaml'] : []),
     ...(capacity ? ['-f', 'tests/load/compose.capacity.yaml'] : []),
     ...(isolatedGenerator ? ['-f', 'tests/load/compose.generator-isolation.yaml'] : []),
-    ...(['capacity-4gb-db8-q24-rebalanced', 'capacity-4gb-telemetry'].includes(profile)
+    ...([
+      'capacity-4gb-db8-q24-rebalanced',
+      'capacity-4gb-telemetry',
+      'capacity-4gb-db8-q24-endurance',
+    ].includes(profile)
       ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
       : []),
     ...args,
@@ -125,6 +132,19 @@ const telemetryConfig = {
   queryLimit: dbQueries,
   httpLimit: httpCap,
 };
+let intervalCursor = 0;
+async function flushIntervals() {
+  const response = await fetch(`http://127.0.0.1:34105/diagnostics?after=${intervalCursor}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  assert.equal(response.status, 200);
+  intervalCursor = await persistIntervalBatch({
+    cursor: intervalCursor,
+    payload: await response.json(),
+    append: (body) => appendFile(`${directory}/stall-intervals.jsonl`, body),
+  });
+  result.intervalRecordsSaved = intervalCursor;
+}
 const samples = [];
 const stages = [];
 const queries = [];
@@ -326,6 +346,8 @@ try {
         : `Testing ${users} active-user equivalent: ${rate} events/s for 60 seconds`,
     );
     hostTelemetry?.setRun({ ...telemetryConfig, offeredRate: rate });
+    const trafficStarted = performance.now();
+    let lastProgressAt = 0;
     const queryStart = queries.length;
     let done = false,
       samplingError,
@@ -422,7 +444,31 @@ try {
             observation.clickhouseMemoryFinishedAt = new Date().toISOString();
           }
           hostTelemetry?.updateSample(observation, memoryPlan);
+          if (capacity) await flushIntervals();
           samples.push(observation);
+          if (capacity && (!lastProgressAt || performance.now() - lastProgressAt >= 60000)) {
+            const state = observation.pipeline;
+            const checkpoint = {
+              phase: 'running',
+              at: new Date().toISOString(),
+              profile,
+              elapsedSeconds: (performance.now() - trafficStarted) / 1000,
+              offeredEventsPerSecond: rate,
+              brokerAcknowledged: state.publisher.completed,
+              metadataRefused: state.metadata.refused,
+              metadataFailures: state.metadata.failedQueries,
+              httpRefused: state.admission.refused,
+              sourceLag: state.source.total,
+              peakOutstandingQueries: state.metadata.peakInFlight,
+              loopMaxMs: state.eventLoopDelayMs.max,
+              intervalRecordsSaved: intervalCursor,
+            };
+            await save('capacity-progress.json', checkpoint);
+            console.log(
+              `Progress ${Math.round(checkpoint.elapsedSeconds)}s: broker_acknowledged=${checkpoint.brokerAcknowledged}, metadata_refused=${checkpoint.metadataRefused}, http_refused=${checkpoint.httpRefused}, lag=${checkpoint.sourceLag}`,
+            );
+            lastProgressAt = performance.now();
+          }
           if (analyticalLoad)
             await query(
               'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name FORMAT JSONEachRow',
@@ -587,6 +633,14 @@ await finishRun({
               name: 'save interval diagnostics',
               timeoutMs: 15000,
               run: async () => {
+                await flushIntervals();
+                result.telemetryVerification.intervalHistoryCompleteThroughExport = true;
+                await save('stall-history.json', {
+                  savedThroughSequence: intervalCursor,
+                  exportedAt: new Date().toISOString(),
+                  format: 'stall-intervals.jsonl',
+                  note: 'Contiguous history through export; post-export scrape-hold intervals are outside the traffic/drain window.',
+                });
                 const response = await fetch('http://127.0.0.1:34105/diagnostics', {
                   signal: AbortSignal.timeout(10000),
                 });

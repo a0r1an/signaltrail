@@ -178,10 +178,16 @@ if (capacity) {
         .catch(() => res.writeHead(503).end());
       return;
     }
-    if (req.url === '/diagnostics') {
+    const diagnosticsRequest = /^\/diagnostics(?:\?after=(\d+))?$/.exec(req.url ?? '');
+    if (diagnosticsRequest) {
+      const after = Number(diagnosticsRequest[1] ?? 0);
+      if (!Number.isSafeInteger(after)) {
+        res.writeHead(400).end();
+        return;
+      }
       res
         .writeHead(200, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify(stallObserver.records()));
+        .end(JSON.stringify(stallObserver.records(after)));
       return;
     }
     if (req.url !== '/status') {
