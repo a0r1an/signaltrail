@@ -17,21 +17,43 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-11-09
+## Current checkpoint — 2026-11-10
+
+### November 10 — session closed at user request
+
+- Final analysis: batching mechanically reduces writes per processed record by
+  about 85%, but the failed long candidate does not establish improved reliability.
+  Observed ClickHouse allocated-memory maxima ~1046→540 MiB and inactive-part
+  maxima 56222→6625 are confounded by fewer delivered events and missed samples.
+  Worker CPU per source record is nearly unchanged. The source of severe scheduling
+  contention remains unresolved; neither batching nor shared-host activity has
+  been established as its cause. Do not label the candidate a passing capacity run.
+- Resume from `TASKS.md`: inspect component CPU/fetch/heartbeat scheduling and repeat
+  on a quiet/CPU-isolated setup before promoting the 200-ms option. Preserve exact
+  acknowledgment/offset behavior and record an acceptance-ID ledger for ambiguous
+  response reconciliation. Do not raise gates or memory to hide the unresolved issue.
+- Final implementation default 0; opt-in `SIGNALTRAIL_PROCESSOR_BATCH_WAIT_MS=200`.
+  Verified processor lint/121 tests/types/build, 71 harness units and real recovery;
+  full artifacts/limitations in `performance/4gb-worker-batching.md`. No remote CI,
+  deployment or stable 100-EPS claim. Code/evidence commits 14a043a and bea2abd.
+- Stop checkpoint: worktree clean before this documentation update; load lock absent,
+  load scrape targets [], both owned test stacks/volumes previously verified removed.
+  No test is left running. User explicitly ended the session; do not start another
+  experiment as part of this closeout.
 
 ### November 10 — batching built/tested; opt-in retained after failed long trial
 
 - User-authorized bounded fetch collection implemented toward 64 KiB with a selected
   200-ms wait; existing chunk/byte/ack/offset/ownership/heartbeat safety remains.
-  Final default 0; environment/API option accepts0–1000ms. Default restored after
+  Final default 0; environment/API option accepts 0–1000 ms. Default restored after
   long candidate fails, with regression evidence. No running service redeployed.
 - Final processor lint/121 tests/types/build, 71 load units and real pipeline
   paused-storage/restart/ambiguous-ack recovery pass. Short batched probe passes
-  3001 accepted/stored,7.30 records/write and clean teardown.
+  3001 accepted/stored, 7.30 records/write and clean teardown.
 - Fresh same-workload 900-second/180-idle pair: baseline 0ms fails 31 metadata refusals
   and one analytical memory rejection, 89970 accepted/stored, 1.10 records/write.
-  Candidate200ms reaches 7.31 records/write and lower observed parts/memory, but has
-  severe scheduling stalls (28s interval,83% CPU pressure), 3901 metadata/11511 HTTP
+  Candidate 200 ms reaches 7.31 records/write and lower observed parts/memory, but has
+  severe scheduling stalls (28s interval, 83% CPU pressure), 3901 metadata/11511 HTTP
   refusals, 10711 drops and HTTP p99~10.3s. 58638 accepted/62937 unique stored;
   equality fails amid 4167 cancelled/late publications. No accepted-loss proof.
 - Worker CPU per selected record ~1.41→1.37ms: no demonstrated meaningful CPU gain.

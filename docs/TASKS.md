@@ -72,7 +72,8 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       [batching evidence](performance/4gb-worker-batching.md).
 - [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-
       isolated controlled repeat before promoting batching. No stable100-EPS claim;
-      preserve full failed results and per-ID/ack/offset evidence.
+      preserve full failed results and per-ID/ack/offset evidence. Add an acceptance-ID
+      ledger before interpreting stored/accepted count mismatches as loss or recovery.
 - [ ] Full post-load cleanup qualification needs idle beyond 480s plus cleanup delay.
       Three minutes shows partial recovery, not complete release or leak exclusion.
 - [ ] Query-log-volume comparison deferred behind the stronger part-metadata lead;
