@@ -19,6 +19,19 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-10
 
+### November 10 — 90-day analytics retention enforced in ClickHouse
+
+- User has $100 AWS credits; agreed to finish local retention/dashboard/backup work,
+  then size the VPS and use credits for a short qualification trial.
+- User chose row TTL on the unpartitioned table to keep cross-day retry dedupe.
+  Added `infra/clickhouse/002-analytics-retention.sql` (90 days by `received_at`),
+  applied by local dev setup and the capacity fixture; date-pinned correctness
+  fixtures intentionally apply only 001. TDD: `load analytics-read` failed on the
+  missing migration, then passes with expired removal, retained retry dedupe and
+  idempotent reapply. 78 harness units and async capacity smoke pass.
+- Not run against the user's development ClickHouse (no `metadata configure-local`).
+  TTL merge cost under load is unmeasured.
+
 ### November 10 — async inserts flatten ClickHouse memory at 100 EPS
 
 - User chose async inserts plus small-server tuning. Added opt-in processor

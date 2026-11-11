@@ -132,8 +132,11 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       production target; no local CLI command may silently target production.
 - [ ] Verify live non-owner denial, logout and vendor-session revocation behavior;
       current owner-only checks must remain enforced.
-- [ ] Enforce configurable 90-day analytics retention and document late events,
-      backups/deletion and effects on visitor/identity-link resolution.
+- [x] ClickHouse 90-day row TTL by receipt time (`002-analytics-retention.sql`,
+      unpartitioned per user decision). Real probe: 91-day row removed, 89-day row
+      kept, retry still one row, migration idempotent. Capacity fixture applies it.
+- [ ] Measure TTL merge cost under load; define retention across backups/archives
+      and effects on visitor/identity-link resolution.
 - [ ] Settle clock-skew and attribution semantics before exposing corresponding
       dashboard claims. Event-time explorer and identified visitor counts already exist.
 - [ ] Decide key-rotation overlap and implement deliberate key administration;

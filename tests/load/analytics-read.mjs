@@ -1,5 +1,6 @@
 import { exerciseEventTimeReads } from './event-time-reads.mjs';
 import { exerciseVisitorReads } from './visitor-reads.mjs';
+import { exerciseRetention } from './retention-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import {
@@ -305,6 +306,8 @@ export async function exerciseAnalyticsReads({ directory }) {
     passed: true,
     visitorResolution: await exerciseVisitorReads(connection, reader, window),
     eventTime: await exerciseEventTimeReads(connection, reader, window),
+    // Last: applies the retention migration, which would expire fixed-date fixtures.
+    retention: await exerciseRetention(connection),
     counts,
     halfOpenWindow: true,
     latestVersionBeforeTimeFilter: true,

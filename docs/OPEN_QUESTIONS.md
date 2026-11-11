@@ -111,10 +111,15 @@ Entries are questions, not approvals or completed work.
   Coordinated identity memory fallback remains future work; never claim a shared
   reset succeeded if its write fails. Low-level queue memory fallback is unchanged.
 - **Analytics retention:** user approved a configurable 90-day default for raw
-  analytics events. Retention enforcement is not implemented. Define late-event
-  expiry and deletion across storage/backups before rollout; this is not a
-  promise that aggregates remain after raw-event deletion. Replay and dead-letter
-  retention are separate decisions.
+  analytics events. 2026-11-10: user chose row expiry on the unpartitioned table
+  (no time partition, preserving cross-day retry dedupe) over partitioning by
+  client or arrival time. `infra/clickhouse/002-analytics-retention.sql` applies
+  `TTL toDateTime(received_at) + INTERVAL 90 DAY DELETE` (server receipt time);
+  the period changes by re-running with another interval. Background TTL merge
+  cost is not yet measured. Still to define: deletion across backups/archives,
+  effects on visitor/identity-link resolution, and DLQ retention. This is not a
+  promise that aggregates remain after raw-event deletion. Replay retention is
+  separate.
 - **Replay retention:** user approved a configurable 14-day default for replay
   recordings. Recording, object lifecycle/deletion and metadata cleanup are not
   implemented. This default does not authorize changing the existing S3 bucket

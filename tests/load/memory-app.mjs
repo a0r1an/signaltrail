@@ -47,6 +47,7 @@ async function query(sql) {
   return text;
 }
 await query(await readFile('infra/clickhouse/001-analytics-events.sql', 'utf8'));
+await query(await readFile('infra/clickhouse/002-analytics-retention.sql', 'utf8'));
 await query(
   `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
 );

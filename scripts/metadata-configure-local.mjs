@@ -152,7 +152,10 @@ try {
     await client.query('ROLLBACK');
     throw error;
   }
-  const schema = await readFile(join(root, 'infra/clickhouse/001-analytics-events.sql'), 'utf8');
+  const schema = [
+    await readFile(join(root, 'infra/clickhouse/001-analytics-events.sql'), 'utf8'),
+    await readFile(join(root, 'infra/clickhouse/002-analytics-retention.sql'), 'utf8'),
+  ].join('\n');
   execFileSync(
     'docker',
     [
