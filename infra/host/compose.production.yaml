@@ -121,7 +121,13 @@ services:
       - '${SIGNALTRAIL_INGESTION_BIND:-127.0.0.1}:4100:4100'
     mem_limit: 288m
     healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -145,7 +151,13 @@ services:
       redpanda-init: { condition: service_completed_successfully }
     mem_limit: 224m
     healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:9465/metrics').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9465/metrics').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12

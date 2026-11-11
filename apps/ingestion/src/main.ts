@@ -75,14 +75,10 @@ try {
   if (!stopping)
     await new Promise<void>((resolve, reject) => {
       metrics.server.once('error', reject);
-      metrics.server.listen(
-        metricsPort,
-        metricsHost,
-        () => {
-          metrics.server.off('error', reject);
-          resolve();
-        },
-      );
+      metrics.server.listen(metricsPort, metricsHost, () => {
+        metrics.server.off('error', reject);
+        resolve();
+      });
     });
   if (!stopping) {
     await new Promise<void>((resolve, reject) => {
