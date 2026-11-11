@@ -4,6 +4,7 @@ import {
   IDENTITY_LINK_EVENT_NAME,
 } from '@signaltrail/contracts';
 import type { PageContext } from './capture-url.ts';
+import { createEventId } from './event-id.ts';
 import { SDK_VERSION } from './version.ts';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { normalizeQueueConfig, type EventQueueConfig } from './project-config.ts';
@@ -192,7 +193,7 @@ export async function openIdentityStore(
           state = { ...state, sessionId: crypto.randomUUID(), nextSequence: 0 };
         const link = AnalyticsEventSchema.parse({
           schemaVersion: 1,
-          eventId: crypto.randomUUID(),
+          eventId: createEventId(time),
           eventName: IDENTITY_LINK_EVENT_NAME,
           distinctId: userId,
           sessionId: state.sessionId,

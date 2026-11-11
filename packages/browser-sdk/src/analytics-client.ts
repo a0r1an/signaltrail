@@ -14,6 +14,7 @@ import type { EventQueueConfig, EnqueueResult } from './event-queue.ts';
 import { normalizeQueueConfig } from './project-config.ts';
 import { createPageContextCapture, type PageContext } from './capture-url.ts';
 import { openIdentityStore } from './identity-store.ts';
+import { createEventId } from './event-id.ts';
 import { SDK_VERSION } from './version.ts';
 
 type Properties = ReturnType<typeof AnalyticsEventSchema.parse>['properties'];
@@ -111,7 +112,6 @@ export async function openAnalyticsClient(
         if (eventName === IDENTITY_LINK_EVENT_NAME) return { status: 'invalid_event' };
         input = captureInput.parse({ eventName, properties });
         page = capturePage(getUrl());
-        eventId = crypto.randomUUID();
       } catch {
         return { status: 'invalid_event' };
       }
@@ -123,6 +123,7 @@ export async function openAnalyticsClient(
       }
       if (closed) return { status: 'closed' };
       try {
+        eventId = createEventId(identity.capturedAt);
         const event = AnalyticsEventSchema.parse({
           schemaVersion: 1,
           eventId,

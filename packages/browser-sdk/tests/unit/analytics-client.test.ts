@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AnalyticsEventSchema } from '@signaltrail/contracts';
 import { openAnalyticsClient } from '../../src/analytics-client.ts';
 import { openEventQueue } from '../../src/event-queue.ts';
+import { eventIdTime } from '../../src/event-id.ts';
 const config = { projectKey: 'capture', ingestionUrl: 'https://ingest.example.com/events' };
 const timestamp = '2026-11-05T12:00:00.000Z';
 const getUrl = () =>
@@ -52,6 +53,7 @@ it('builds a validated anonymous event with sanitized URL/campaign and delivers 
       context: { sdkVersion: '0.1.0', campaign: { utm_source: 'email', utm_campaign: 'launch' } },
     });
     expect(result).toMatchObject({ eventId: event.eventId });
+    expect(eventIdTime(event.eventId)).toBe(Date.parse(timestamp));
   } finally {
     client.close();
   }

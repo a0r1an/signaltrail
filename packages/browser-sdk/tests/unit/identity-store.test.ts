@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { deleteDB, openDB } from 'idb';
 import { afterEach, expect, it, vi } from 'vitest';
 import { openIdentityStore } from '../../src/identity-store.ts';
+import { eventIdTime } from '../../src/event-id.ts';
 const config = { projectKey: 'identity', ingestionUrl: 'https://ingest.example.com/events' };
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -211,6 +212,7 @@ it('persists an identity link with its original event ID until explicitly acknow
       sequence: 1,
       context: { identity: { kind: 'link', anonymousId: anonymous.anonymousId, userId: 'user-a' } },
     });
+    expect(eventIdTime(links[0]!.eventId)).toBe(Date.parse(links[0]!.clientTimestamp));
     store.close();
     store = await openIdentityStore(config);
     expect(await store.pendingLinks()).toEqual(links);
