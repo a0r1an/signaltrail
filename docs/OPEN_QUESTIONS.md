@@ -81,7 +81,13 @@ Entries are questions, not approvals or completed work.
   type: c7i-flex.large (x86, $0.0848/h ≈ $62/month, over the $50 ceiling). Partial
   resources were torn down and verified gone ($0). Decision needed: upgrade the
   account to a paid plan (keeps the remaining credits, unlocks t4g) or trial on
-  c7i-flex.large.
+  c7i-flex.large. Resolved: user upgraded the account to paid ($100 credits kept);
+  $10/month gross budget alert (credits excluded) emails the user.
+- **Dashboard 30-day visitors on t4g.medium (2026-11-11):** with 9M rows (3M in the
+  window) the 30-day visitor count takes ~3.1–3.4 s (page ~3.5 s) against the 2 s
+  target; 1-day and 7-day pages stay under 1.2 s. User accepts this for now; fix
+  later (daily visitor rollup or query cache). Exact-mode FINAL expansion with
+  several projects per part was the larger problem and is fixed (8ea9c8a).
   Needed before launch: which account hosts production (a Free plan account closes
   at plan end unless upgraded; upgrading keeps remaining credits), and whether replay
   storage moves, and the production region (match the other AWS services). Working

@@ -200,6 +200,8 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       Was: transport, launch/teardown/resize
       scripts, backup bucket and instance role, then the t4g.medium trial.
 - [ ] VPS phase C: launch host with alarms (needs approval).
+- [ ] Later (user accepted ~3.5 s for now): 30-day visitor count under 2 s on
+      t4g.medium, e.g. a daily visitor rollup or minute-rounded query cache.
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
       Current proposal and launch workload are in
       [launch cost/capacity](performance/launch-cost-and-capacity.md). Benchmark the
