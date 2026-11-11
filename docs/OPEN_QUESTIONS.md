@@ -61,6 +61,11 @@ Entries are questions, not approvals or completed work.
   Workers/D1/Basin/R2 and AWS serverless alternatives were explored; replacing
   the existing backend is not decided. Pricing estimates do not establish
   equivalent acknowledgment, freshness, deduplication or query behavior.
+  2026-11-10: user reports $100 AWS credits on the existing account; expiry date
+  not yet confirmed (new-account credits usually last six months). Agreed order:
+  finish local retention and dashboard/backup load work, then size the VPS and
+  use credits for a short non-burstable qualification trial. Choose the long-term
+  host on full price within the $50 ceiling; no instance is authorized yet.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.
