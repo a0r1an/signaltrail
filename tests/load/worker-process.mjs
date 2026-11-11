@@ -8,7 +8,9 @@ export function startWorkerProcess({
   deadLetterTopic,
   metricsPort,
   clickhouseUrl = 'http://127.0.0.1:38123',
-  timeoutMs = 250,
+  asyncInsert = false,
+  // Async inserts wait for the server flush, so allow the production default.
+  timeoutMs = asyncInsert ? 5000 : 250,
 }) {
   const child = spawn(process.execPath, ['workers/event-processor/dist/main.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -22,6 +24,7 @@ export function startWorkerProcess({
       SIGNALTRAIL_CLICKHOUSE_USERNAME: 'signaltrail',
       SIGNALTRAIL_CLICKHOUSE_PASSWORD: 'signaltrail_local',
       SIGNALTRAIL_CLICKHOUSE_TIMEOUT_MS: String(timeoutMs),
+      SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT: asyncInsert ? '1' : '0',
       ...(metricsPort ? { SIGNALTRAIL_PROCESSOR_METRICS_PORT: String(metricsPort) } : {}),
     },
   });

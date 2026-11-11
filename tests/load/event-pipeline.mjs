@@ -10,6 +10,7 @@ import {
 import { cleanupResources } from './cleanup.mjs';
 import { startWorkerProcess } from './worker-process.mjs';
 import { openInsertResponseGate } from './insert-response-gate.mjs';
+import { assessInsertMode, insertEventsQuery, parseInsertEvents } from './insert-mode.mjs';
 const { Kafka, logLevel, CompressionTypes } = createRequire(
   new URL('../../apps/ingestion/package.json', import.meta.url),
 )('kafkajs');
@@ -29,7 +30,14 @@ async function query(sql) {
   return response.text();
 }
 
-export async function exerciseEventPipeline({ url, runId, docker, browser = false, directory }) {
+export async function exerciseEventPipeline({
+  url,
+  runId,
+  docker,
+  browser = false,
+  directory,
+  asyncInsert = false,
+}) {
   const kafka = new Kafka({
     brokers: ['127.0.0.1:29092'],
     clientId: runId,
@@ -113,12 +121,14 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
         endpoint: 'http://127.0.0.1:38123',
         username: 'signaltrail',
         password: 'signaltrail_local',
+        asyncInsert,
       }),
       writeEvents: async (records) => {
         await createClickHouseBatchWriter({
           endpoint: 'http://127.0.0.1:38123',
           username: 'signaltrail',
           password: 'signaltrail_local',
+          asyncInsert,
         })(records);
         insertSizes.push(records.length);
       },
@@ -302,6 +312,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       topic,
       deadLetterTopic,
       metricsPort: 9466,
+      asyncInsert,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
     await docker(['pause', 'clickhouse']);
@@ -341,6 +352,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       topic,
       deadLetterTopic,
       metricsPort: 9466,
+      asyncInsert,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
     const recoveredOffsets = await waitForCommitted(highOffsets);
@@ -378,6 +390,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       deadLetterTopic,
       clickhouseUrl: responseGate.endpoint,
       timeoutMs: 30000,
+      asyncInsert,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
     await responseGate.waitForStored();
@@ -410,6 +423,7 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       topic,
       deadLetterTopic,
       metricsPort: 9466,
+      asyncInsert,
     });
     await workerProcess.waitFor('SignalTrail event processor started');
     const lostAckRecovered = await waitForCommitted(lostAckHigh);
@@ -437,7 +451,10 @@ export async function exerciseEventPipeline({ url, runId, docker, browser = fals
       await waitForCommitted(await admin.fetchTopicOffsets(topic));
     }
     assert.equal((await workerProcess.stop()).code, 0);
+    const insertEvents = parseInsertEvents(await query(insertEventsQuery));
+    assert.deepEqual(assessInsertMode({ asyncInsert, events: insertEvents }), []);
     return {
+      insertMode: { asyncInsert, events: insertEvents },
       browserPipeline,
       boundedBulk,
       boundedBytes,

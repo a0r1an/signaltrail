@@ -41,6 +41,7 @@ Preview an operation without side effects:
 | Load-harness unit checks                   | `./scripts/signaltrail-ops.mjs load check`                            |
 | Native Chromium-to-storage recovery        | `./scripts/signaltrail-ops.mjs load browser-pipeline`                 |
 | Isolated event-to-ClickHouse probe         | `./scripts/signaltrail-ops.mjs load pipeline`                         |
+| Same probe with ClickHouse async inserts   | `./scripts/signaltrail-ops.mjs load pipeline-async`                   |
 | Isolated broker outage and SDK retry       | `./scripts/signaltrail-ops.mjs load recovery`                         |
 | Baseline / burst and recovery              | `./scripts/signaltrail-ops.mjs load baseline` / `load burst`          |
 | Count / byte budget saturation             | `./scripts/signaltrail-ops.mjs load saturation` / `load bytes`        |

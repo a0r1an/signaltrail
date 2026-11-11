@@ -69,6 +69,7 @@ const scenarios = {
   },
   'browser-pipeline': { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   pipeline: { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
+  'pipeline-async': { rate: 0, batch: 3, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   recovery: { rate: 0, batch: 3, padding: 0, maxEvents: 2, maxBytes: 8388608 },
   baseline: { rate: 10, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   burst: { rate: 200, batch: 20, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
@@ -81,7 +82,7 @@ const config = {
   ...(scenario.startsWith('sustained') ? { sessionCount: 100 } : {}),
 };
 if (!Object.hasOwn(scenarios, scenario)) throw new Error(`Unknown scenario: ${scenario}`);
-const isPipeline = ['pipeline', 'browser-pipeline'].includes(scenario);
+const isPipeline = ['pipeline', 'pipeline-async', 'browser-pipeline'].includes(scenario);
 const isSustained = [
   'sustained-smoke',
   'sustained',
@@ -98,7 +99,14 @@ const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
 await mkdir(directory, { recursive: true });
 const releaseRunLock = await acquireRunLock(resolve(root, 'test-results/load.lock'));
-const compose = ['compose', '--profile', '*', '-f', 'tests/load/compose.yaml'];
+const compose = [
+  'compose',
+  '--profile',
+  '*',
+  '-f',
+  'tests/load/compose.yaml',
+  ...(scenario === 'pipeline-async' ? ['-f', 'tests/load/compose.small-server.yaml'] : []),
+];
 const dockerEnv = {
   ...process.env,
   SIGNALTRAIL_REDPANDA_EXTERNAL_PORT: '29092',
@@ -333,6 +341,7 @@ try {
       docker,
       browser: scenario === 'browser-pipeline',
       directory,
+      asyncInsert: scenario === 'pipeline-async',
     });
     await writeFile(resolve(directory, 'pipeline.json'), JSON.stringify(evidence, null, 2));
   }

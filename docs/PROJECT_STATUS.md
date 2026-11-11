@@ -30,8 +30,11 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   parts plateau ~700 (vs 40–55k), ClickHouse memory flat 250–285 MiB (vs ~611 MiB
   growth to rejection), zero drops/memory rejections, CPU pressure median 3.8%.
   Fails on 9 metadata refusals in one interval at ~3.5 min; none afterwards.
-- Not yet verified: async-mode recovery probe, repeats, longer soak, VPS. Evidence:
-  `performance/4gb-async-insert.md`.
+- Added `load pipeline-async`: full recovery probe (paused storage, SIGKILL,
+  withheld-ack replay, bulk/byte bounds, DLQ) with async inserts passes, server
+  confirms 11 async inserts; sync `load pipeline` still passes; 78 units pass.
+- Not yet verified: repeats, longer soak, ClickHouse process loss with buffered
+  async data, VPS. Evidence: `performance/4gb-async-insert.md`.
 
 ### November 10 — 50-EPS step-down endurance: one pass, one fail
 

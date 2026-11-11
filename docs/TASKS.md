@@ -78,8 +78,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Async inserts + small-server ClickHouse tuning at 100 EPS / 15 minutes:
       memory and inactive parts flat, exact storage, 9 refusals in one early
       interval (fail). See [async inserts](performance/4gb-async-insert.md).
-- [ ] Run the real pipeline recovery probe (paused storage, crash, ambiguous ack)
-      with async inserts enabled before considering it as a default.
+- [x] Real pipeline recovery probe with async inserts (`load pipeline-async`):
+      paused storage, worker SIGKILL and withheld-acknowledgement replay all pass;
+      sync `load pipeline` still passes.
 - [ ] Repeat the async 100 EPS run, then a 30-minute endurance; investigate the
       early refusal burst if it recurs.
 - [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-

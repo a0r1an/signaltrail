@@ -68,6 +68,28 @@ Source lag held at roughly 100–200 records during traffic instead of 0–1: ab
 one second of traffic is always waiting for its flush. It did not grow and
 drained within 0.02 s after traffic stopped.
 
+## Recovery probe with async inserts — passed
+
+`./scripts/signaltrail-ops.mjs load pipeline-async` runs the full `load pipeline`
+recovery probe with every in-process and child worker using async inserts and
+ClickHouse on the same small-server/1-second-flush configuration. Child workers
+use the 5000-ms production storage timeout in async mode (250 ms when synchronous).
+The probe asserts the server recorded async inserts (and none for `load pipeline`).
+
+| Check | `load pipeline` (sync) | `load pipeline-async` |
+| --- | --- | --- |
+| Paused storage: failed write, retry, uncommitted offset, SIGKILL, restart → 1 row, offset committed | pass | pass |
+| Insert stored but response withheld, SIGKILL, replacement re-inserts → 1 logical row | pass | pass |
+| Bounded bulk 205 events in 100/100/5 inserts; byte-bounded chunks; DLQ | pass (0.12 s) | pass (3.16 s) |
+| Server insert counters | 11 sync, 0 async | 11 async |
+
+Reports: `test-results/load/2026-11-11T00-11-04.078Z-pipeline/result.json` and
+`test-results/load/2026-11-11T00-12-57.085Z-pipeline-async/result.json`; cleanup
+passed and the lock was released. The 3-s bulk time is the ~1-s flush per insert.
+Not covered: killing ClickHouse itself while async data is buffered but unflushed
+(the client has no acknowledgement then, so replay plus `FINAL` dedupe is the
+expected path, unverified), and multi-partition concurrent async flushes.
+
 ## Interpretation and limitations
 
 - The memory mechanism is addressed in this run: inactive parts and ClickHouse
@@ -76,10 +98,9 @@ drained within 0.02 s after traffic stopped.
   run on a shared host does not establish causation or that stalls are gone.
 - The failure is a short early burst, not the sustained degradation seen
   before. Its cause is not identified.
-- Not yet verified in async mode: the real pipeline recovery probe (paused
-  storage, worker crash, ambiguous acknowledgement), and async insert behavior
-  during ClickHouse outages. `async_insert_deduplicate` is 0; downstream
-  `ReplacingMergeTree`/`FINAL` dedupe still covers replays.
+- Recovery probe passes in async mode (above). ClickHouse process loss with
+  buffered data is not tested. `async_insert_deduplicate` is 0; downstream
+  `ReplacingMergeTree`/`FINAL` dedupe covers replays.
 - Storage acknowledgement latency is now ~1 s by design; end-to-end freshness
   is about one second longer.
 - One 15-minute local run; repeats, longer soaks and a candidate VPS remain.
