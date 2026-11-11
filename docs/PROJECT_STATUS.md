@@ -34,8 +34,10 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 - User approved phase B (≤ $10, same-day teardown) and S3 backups; credits expire
   in 182 days (~2027-05-12). The credits are on a new, separate Free plan account,
   so the existing SSO profiles and replay dev bucket do not apply to it.
-- Next (blocked on user): CLI access to the new account (profile
-  `signaltrail-trial`), then phase B tooling and the trial.
+- CLI access works: profile `signaltrail-trial` (`aws login`), account
+  231576004804, region us-east-2 (the account's project is fixed to Ohio).
+- Next: phase B tooling (launch/teardown by tag, SSH transport, resize, cost log),
+  then the t4g.medium trial.
 
 ### November 11 — local readiness work before VPS sizing
 

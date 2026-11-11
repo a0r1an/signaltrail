@@ -144,9 +144,11 @@ bucket, so CLI access must be set up for it (profile `signaltrail-trial`).
 
 Still open:
 
-1. CLI access to the new account (`aws login --profile signaltrail-trial`).
-2. Region: Oregon (`us-west-2`) is assumed. The replay dev bucket is in the other
-   account, so the region is no longer forced by it.
+1. ~~CLI access~~ done: `aws login --profile signaltrail-trial --region us-east-2`
+   gives account 231576004804 (role `AccountFullAccessRole`). Checked: 16 vCPU
+   on-demand quota, default VPC, Ubuntu 24.04 arm64 AMI, t4g.medium dry-run launch.
+2. Region: the account's project is fixed to Ohio (`us-east-2`), so the trial runs
+   there. Before launch, put the host in the region of the other AWS services.
 3. Whether the $50 ceiling covers only the VPS, or also backups, S3 and snapshots.
 4. Which account hosts production. A Free plan account closes when the plan ends
    (six months or credits used) unless upgraded to a paid plan, which keeps the

@@ -74,11 +74,12 @@ Entries are questions, not approvals or completed work.
   Later 2026-11-11: phase B approved (≤ $10, same-day teardown); credits expire in
   182 days. The credits are on a **new, separate Free plan account**; the Identity
   Center profiles (`signaltrail-admin`, `signaltrail-replay-dev`) and the replay dev
-  bucket stay in account 469302114413. Needed now: CLI access to the new account.
+  bucket stay in account 469302114413. CLI access to the new account (231576004804)
+  works; its project is fixed to us-east-2, so the trial runs in Ohio.
   Needed before launch: which account hosts production (a Free plan account closes
   at plan end unless upgraded; upgrading keeps remaining credits), and whether replay
-  storage moves. Working assumption: trial and backup bucket in the new account,
-  `us-west-2`; replay unchanged until replay work starts.
+  storage moves, and the production region (match the other AWS services). Working
+  assumption: trial and backup bucket in the new account, `us-east-2`; replay unchanged until replay work starts.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.
