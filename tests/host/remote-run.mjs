@@ -320,21 +320,29 @@ try {
       stage.rate > 0
         ? assessStage(record, { baselinePercent })
         : { passed: true, withinBaseline: record.cpu.busyPercent <= baselinePercent, reasons: [] };
+    // The viewer is part of the load, but its page target is reported separately:
+    // a slow dashboard must not hide where ingestion itself stops keeping up.
     if (profile.viewer) {
       record.dashboard = summarizeDashboard(pages);
-      assessment.reasons.push(...assessDashboard(record.dashboard));
-      assessment.passed = assessment.reasons.length === 0;
+      record.dashboardReasons = assessDashboard(record.dashboard);
+      record.dashboardPassed = record.dashboardReasons.length === 0;
     }
     Object.assign(record, assessment);
     await save();
     console.log(
-      `stage ${index}: ${stage.rate} EPS ${record.passed ? 'pass' : 'FAIL'} cpu ${record.cpu.busyPercent.toFixed(1)}% steal ${record.cpu.stealPercent.toFixed(1)}%`,
-      record.reasons.join('; '),
+      `stage ${index}: ${stage.rate} EPS ingestion ${record.passed ? 'pass' : 'FAIL'}${profile.viewer ? ` dashboard ${record.dashboardPassed ? 'pass' : 'FAIL'} (page p95 ${Math.round(record.dashboard.pageMs.p95)} ms)` : ''} cpu ${record.cpu.busyPercent.toFixed(1)}% steal ${record.cpu.stealPercent.toFixed(1)}%`,
+      [...record.reasons, ...(record.dashboardReasons ?? [])].join('; '),
     );
     if (!record.passed) break;
   }
   result.limits = findLimits(result.stages.filter((stage) => stage.rate > 0));
-  result.passed = result.stages.every((stage) => stage.passed);
+  result.dashboardLimitEventsPerSecond = Math.max(
+    0,
+    ...result.stages
+      .filter((stage) => stage.rate > 0 && stage.dashboardPassed)
+      .map((stage) => stage.rate),
+  );
+  result.passed = result.stages.every((stage) => stage.passed && stage.dashboardPassed !== false);
 } catch (error) {
   result.error = error.message;
 } finally {
@@ -352,7 +360,13 @@ try {
 }
 console.log(
   JSON.stringify(
-    { passed: result.passed, limits: result.limits, error: result.error, directory },
+    {
+      passed: result.passed,
+      limits: result.limits,
+      dashboardLimitEventsPerSecond: result.dashboardLimitEventsPerSecond,
+      error: result.error,
+      directory,
+    },
     null,
     2,
   ),
