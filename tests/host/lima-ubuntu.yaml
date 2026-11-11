@@ -1,0 +1,9 @@
+# Disposable Ubuntu 24.04 VM for testing infra/host/bootstrap.sh (host vm-test).
+# vm-test.sh adds the read-only repository mount and the separate data disk.
+base: template://ubuntu-24.04
+vmType: vz
+cpus: 2
+memory: 4GiB
+disk: 30GiB
+containerd: { system: false, user: false }
+mounts: []
