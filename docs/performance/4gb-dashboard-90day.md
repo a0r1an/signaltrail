@@ -61,3 +61,46 @@ cleanup passed and the lock was released.
   ingestion is mostly unaffected, but one CPU burst caused refusals.
 - This is a schema/query design limit; more RAM would only move the threshold.
   Options and the decision are recorded in OPEN_QUESTIONS.
+
+## Rerun after the read-layout fix — November 11: passed
+
+User approved fixes A + B. Changes (commits caf4737, f9e90ec): SDK UUIDv7 event
+IDs; migration 003 (insert-time `occurred_at`, min/max skip indexes on received
+and occurred time, `analytics_identity_links` fed by a DEFINER materialized view,
+idempotent backfill); 004 (links expire after 90 days); reader filters on
+`occurred_at` and resolves visitor links only for IDs active in the window, using
+`min = max` instead of per-visitor exact sets. The seed now uses time-ordered IDs.
+Reader limits unchanged (64 MiB, 2 threads, ~4 s).
+
+Integration (`load analytics-read`): a 1-day read over 1.2M time-ordered rows
+reads ~57k rows (counts/list) and ~90k (visitors). Visitor-resolution, event-time
+and retention fixtures pass unchanged, plus backfill-once, insert-only processor,
+select-only reader and replay dedupe. `pipeline`, `project-access`,
+`authorized-analytics`, `sustained-smoke` pass.
+
+Report: `test-results/load/2026-11-11T17-31-26.930Z-capacity-4gb-memory-trace-async-dashboard/result.json`.
+
+| Measurement | Before (Nov 10) | After |
+| --- | --- | --- |
+| Dashboard query errors | 126 visitor + 1 count | **0** of 164 pages |
+| Page p50 / p95 / max | 2113 / 2408 / 5036 ms | **317 / 1192 / 2008 ms** |
+| 1-day page p50 / p95 | ~2.1 s | 122 / 180 ms |
+| 7-day page p50 / p95 | ~2.1 s | 312 / 406 ms |
+| 30-day page p50 / p95 | ~2.1 s | 1047 / 1384 ms |
+| Visitor query p95 | failed (≥ 64 MiB) | 1189 ms; peak query memory ≤ 39.8 MiB |
+| Accepted / unique stored | 89523 / 89532 | 90001 / 90001 |
+| Refusals / drops / retries | 83 / 322 / 9 | 0 / 0 / 0 |
+| ClickHouse jemalloc / tracked | ≤ 381 / ≤ 379 MiB | 228–391 / 253–333 MiB |
+
+Window-cost figures are from the run's last 136 page loads. Result gate passed
+with no reasons; drain 0.05 s; no OOM/restart.
+
+Remaining limits:
+
+- 30-day pages now dominate (p95 1.4 s, one 2.0 s page) and grow with visitors
+  active in the window. Exact visitor counts may need an approximate count or
+  daily rollups at larger scale.
+- One owner viewing; concurrent dashboard users are untested.
+- Events from SDKs sending random IDs stay correct but cannot be skipped.
+- The ingestion improvement (no refusals) is one run on a shared Mac; the
+  earlier CPU-stall refusals are not shown to be fixed.

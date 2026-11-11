@@ -1,6 +1,6 @@
 # SignalTrail project status
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 Open decisions and working assumptions are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 The current actionable queue is [TASKS.md](TASKS.md); historical “next” entries
@@ -17,7 +17,25 @@ transport; Valkey caching/rate limits; Amazon S3 replay object storage
 Short isolated load and recovery tests now exercise ingestion and processing.
 Sustained capacity, production sizing, and disaster recovery remain unverified.
 
-## Current checkpoint — 2026-11-10
+## Current checkpoint — 2026-11-11
+
+### November 11 — dashboard reads scale with the window, not history
+
+- User approved fixes A + B. SDK now emits UUIDv7 event IDs (caf4737; 310 SDK
+  tests). Migration 003 adds insert-time `occurred_at`, min/max skip indexes and
+  an `analytics_identity_links` table fed by a DEFINER materialized view with
+  idempotent backfill; 004 expires links after 90 days. Reader uses `occurred_at`
+  and window-scoped link lookup (f9e90ec; analytics 238, dashboard 81, harness
+  85 tests). Fixtures share `tests/load/clickhouse-schema.mjs`.
+- `analytics-read` verifies backfill, reapply, restricted users, replay dedupe and
+  that a 1-day read skips ~95% of 1.2M rows. `pipeline`, `project-access`,
+  `authorized-analytics`, `sustained-smoke` pass.
+- 90-day dashboard 15-minute run passes: 0 query errors over 164 pages, page p95
+  1.19 s (was 2.41 s with every visitor count failing), 1-day pages ~120 ms;
+  90001 accepted/stored, 0 refusals. Evidence: `performance/4gb-dashboard-90day.md`.
+- The user's development ClickHouse still needs `metadata configure-local` to apply
+  003/004 and grant the reader SELECT on the links table; not run by the agent.
+
 
 ### November 10 — dashboard queries do not scale to 90 days of data
 

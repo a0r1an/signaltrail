@@ -116,19 +116,26 @@ Entries are questions, not approvals or completed work.
   client or arrival time. `infra/clickhouse/002-analytics-retention.sql` applies
   `TTL toDateTime(received_at) + INTERVAL 90 DAY DELETE` (server receipt time);
   the period changes by re-running with another interval. Background TTL merge
-  cost is not yet measured. Still to define: deletion across backups/archives,
-  effects on visitor/identity-link resolution, and DLQ retention. This is not a
+  cost is not yet measured. Identity links now live in their own table and
+  expire after the same 90 days (004). Still to define: deletion across
+  backups/archives and DLQ retention. This is not a
   promise that aggregates remain after raw-event deletion. Replay retention is
   separate.
-- **Dashboard query scaling (decision needed before launch):** at ~9M rows (90 days
-  at ~1000 visitors/day) every explorer query reads the whole project history
-  regardless of window; the visitor count fails its 64 MiB cap on every load and
-  pages take ~2.1–2.4 s. Cause: `(project_id, event_id)` ordering with random
-  UUIDv4 IDs, string client timestamps, and a full-history identity-link scan.
-  Candidate fixes: time-ordered (UUIDv7) event IDs plus time skip indexes / a
-  parsed occurred-time column; a separate identity-links table; daily rollups.
-  Raising the per-query cap only moves the limit. Evidence:
-  `performance/4gb-dashboard-90day.md`.
+- **Dashboard query scaling:** 2026-11-11 user approved fixes A + B after a
+  90-day run showed every explorer query reading all ~9M rows and the visitor
+  count failing its 64 MiB cap. Implemented: SDK UUIDv7 event IDs (rows stay
+  time-clustered under the unchanged `(project_id, event_id)` dedupe key);
+  migration 003 adds insert-time `occurred_at` plus min/max skip indexes and an
+  `analytics_identity_links` table fed by a DEFINER materialized view (processor
+  stays insert-only) with an idempotent backfill; 004 expires links with events
+  after 90 days, so link retention matches the previous behaviour (links came
+  from retained events). Working assumptions, reversible: keep links 90 days
+  (longer retention would preserve retroactive identity past 90 days but adds a
+  longer-lived personal-data store); events from old SDKs with random IDs stay
+  correct but unclustered. Remaining limits: exact visitor counts still need
+  memory proportional to visitors active in the window; a later approximate
+  count or daily rollups may be needed at larger scale. The 64 MiB reader cap is
+  unchanged. Evidence: `performance/4gb-dashboard-90day.md`.
 - **Replay retention:** user approved a configurable 14-day default for replay
   recordings. Recording, object lifecycle/deletion and metadata cleanup are not
   implemented. This default does not authorize changing the existing S3 bucket

@@ -140,8 +140,10 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] 90-day dashboard capacity profile with real reader queries: fails. Visitor
       count exceeds 64 MiB on every page load; all queries scan the full history.
       See [dashboard 90-day](performance/4gb-dashboard-90day.md).
-- [ ] Choose and implement a dashboard query-scaling fix (OPEN_QUESTIONS), then
-      re-run the dashboard profile.
+- [x] Dashboard query-scaling fix (UUIDv7 IDs, `occurred_at` skip indexes,
+      identity-links table); dashboard profile re-run passes (p95 1.19 s, 0 errors).
+- [ ] Measure concurrent dashboard users and 30-day visitor-count growth; decide
+      whether approximate counts or daily rollups are needed.
 - [ ] Settle clock-skew and attribution semantics before exposing corresponding
       dashboard claims. Event-time explorer and identified visitor counts already exist.
 - [ ] Decide key-rotation overlap and implement deliberate key administration;
