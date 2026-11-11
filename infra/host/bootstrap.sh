@@ -83,3 +83,26 @@ done
 } > "$SIGNALTRAIL_ETC/host.env"
 
 sh "$here/migrate.sh"
+
+# Hourly backups (local; off-host when SIGNALTRAIL_BACKUP_S3 is set in host.env).
+cat > /etc/systemd/system/signaltrail-backup.service <<EOF
+[Unit]
+Description=SignalTrail hourly backup
+After=docker.service
+[Service]
+Type=oneshot
+Environment=SIGNALTRAIL_ETC=$SIGNALTRAIL_ETC SIGNALTRAIL_DATA=$data
+ExecStart=/bin/sh $here/backup.sh
+EOF
+cat > /etc/systemd/system/signaltrail-backup.timer <<'EOF'
+[Unit]
+Description=SignalTrail hourly backup
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=120
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now signaltrail-backup.timer

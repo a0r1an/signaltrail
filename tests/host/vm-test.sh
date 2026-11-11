@@ -4,6 +4,7 @@
 #   vm-test.sh          full test, VM deleted afterwards
 #   vm-test.sh vm-up    bootstrap and verify, leave the VM running for remote runs
 #   vm-test.sh vm-down  delete the VM and its disk
+#   vm-test.sh vm-backup  on a running vm-up VM: backup, incremental, restore, timer
 set -eu
 mode=${1:-test}
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -17,6 +18,35 @@ cleanup() {
   limactl disk delete -f "$disk" >/dev/null 2>&1 || true
 }
 if [ "$mode" = vm-down ]; then cleanup; printf 'Deleted %s\n' "$name"; exit 0; fi
+if [ "$mode" = vm-backup ]; then
+  in_vm() { limactl shell --workdir / "$name" "$@"; }
+  host_sh() { in_vm sudo sh "$root/infra/host/$1" "$@"; }
+  # Rows near the 90-day edge expire (TTL) between backup and restore; compare only
+  # rows newer than one fixed cutoff, a day inside retention.
+  cutoff=$(date -u -v-89d +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -d '89 days ago' +%Y-%m-%dT%H:%M:%S)
+  fingerprint() {
+    in_vm sudo sh -c "here=$root/infra/host; . \$here/lib.sh; printf \"SELECT (SELECT toString(count()) || ':' || toString(sum(cityHash64(*))) FROM signaltrail.analytics_events FINAL WHERE received_at > toDateTime64('$cutoff', 3, 'UTC')) || '/' || (SELECT toString(count()) FROM signaltrail.analytics_identity_links FINAL WHERE received_at > toDateTime64('$cutoff', 3, 'UTC'));\" | clickhouse_admin"
+  }
+  log 'full backup'; in_vm sudo sh "$root/infra/host/backup.sh" | tee -a "$out/steps.log"
+  in_vm sudo sh "$root/infra/host/verify.sh" >/dev/null
+  log 'incremental backup'; incr=$(in_vm sudo sh "$root/infra/host/backup.sh" | tee -a "$out/steps.log" | sed -n 's/.*"clickhouse":"\([^"]*\)".*/\1/p')
+  case "$incr" in incr-*) ;; *) log "expected an incremental, got $incr"; exit 1 ;; esac
+  expected=$(fingerprint); log "fingerprint at backup: $expected"
+  in_vm sudo sh "$root/infra/host/verify.sh" >/dev/null
+  log "after a post-backup write: $(fingerprint)"
+  log "restore $incr: $(in_vm sudo SIGNALTRAIL_RESTORE_CONFIRM="$incr" sh "$root/infra/host/restore.sh" "$incr")"
+  actual=$(fingerprint); log "fingerprint after restore: $actual"
+  [ "$actual" = "$expected" ] || { log 'restore does not match the backup'; exit 1; }
+  log "verify: $(in_vm sudo sh "$root/infra/host/verify.sh" | tail -1)"
+  log 'bootstrap again: installs the hourly timer'
+  in_vm sudo SIGNALTRAIL_RELEASE=vmtest SIGNALTRAIL_INGESTION_PUBLISH=127.0.0.1:34100 \
+    SIGNALTRAIL_CLICKHOUSE_PUBLISH=127.0.0.1:38223 sh "$root/infra/host/bootstrap.sh" >> "$out/bootstrap.log" 2>&1
+  in_vm systemctl is-enabled signaltrail-backup.timer | tee -a "$out/steps.log"
+  in_vm sudo systemctl start signaltrail-backup.service
+  log "timer service run: $(in_vm systemctl show -p Result --value signaltrail-backup.service)"
+  log 'PASS'
+  exit 0
+fi
 [ "$mode" = vm-up ] || trap cleanup EXIT
 cleanup
 in_vm() { limactl shell --workdir / "$name" "$@"; }
