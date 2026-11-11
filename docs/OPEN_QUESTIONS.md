@@ -136,11 +136,13 @@ Entries are questions, not approvals or completed work.
   memory proportional to visitors active in the window; a later approximate
   count or daily rollups may be needed at larger scale. The 64 MiB reader cap is
   unchanged. Evidence: `performance/4gb-dashboard-90day.md`.
-- **Dashboard concurrency (decide before multi-user claims):** five simultaneous
-  page loads on the 4-GiB/2-CPU plan give page p95 2.23 s with 0 errors; ingestion
-  unaffected. Options: per-server dashboard query cap, short page-result cache,
-  approximate visitor counts, more CPU. Working assumption: launch with 1–2
-  concurrent owners is within target (single viewer p95 ~1.2 s).
+- **Dashboard concurrency:** 2026-11-11 user confirmed one dashboard viewer at a
+  time at launch and that the launch dashboard views are not final. Deferred: no
+  query cache, concurrency workload, `max_threads` tuning or rollups until views
+  are chosen. Evidence for later: one viewer p95 ~1.2 s; five simultaneous viewers
+  p95 2.23 s with 0 errors on 2 CPUs. ClickHouse guidance when needed: minute-
+  rounded windows + `use_query_cache`, a dashboard WORKLOAD with a concurrency cap
+  and queue, test `max_threads` 1/2/4, AggregatingMergeTree rollups for chosen views.
 - **Backups (approval needed for S3):** local drill passes. Needed: approval to
   write backups to S3 (or another off-host destination), schedule (hourly
   incremental for the 1-hour RPO), backup retention, encryption and a production-

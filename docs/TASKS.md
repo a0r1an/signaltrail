@@ -149,8 +149,8 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       identity-links table); dashboard profile re-run passes (p95 1.19 s, 0 errors).
 - [x] Five simultaneous viewers: 0 errors, page p95 2.23 s (fails 2 s); ingestion
       unaffected. Single viewer p95 ~1.2 s.
-- [ ] Decide dashboard concurrency handling (query cap, short result cache,
-      approximate visitors, or more CPU) before multi-user claims.
+- [ ] Dashboard concurrency deferred (one viewer at launch; views not final). Revisit
+      with the chosen launch views: query cache, workload cap, rollups.
 - [ ] Settle clock-skew and attribution semantics before exposing corresponding
       dashboard claims. Event-time explorer and identified visitor counts already exist.
 - [ ] Decide key-rotation overlap and implement deliberate key administration;
