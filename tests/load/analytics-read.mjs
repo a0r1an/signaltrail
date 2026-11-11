@@ -1,8 +1,9 @@
 import { exerciseEventTimeReads } from './event-time-reads.mjs';
 import { exerciseVisitorReads } from './visitor-reads.mjs';
 import { exerciseRetention } from './retention-reads.mjs';
+import { exerciseReadLayout } from './read-layout.mjs';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import {
   createAnalyticsReader,
   createAnalyticsQueryHandler,
@@ -15,17 +16,8 @@ export async function exerciseAnalyticsReads({ directory }) {
     username: 'signaltrail',
     password: 'signaltrail_local',
   };
-  const response = await fetch(connection.endpoint, {
-    method: 'POST',
-    headers: { 'X-ClickHouse-User': connection.username, 'X-ClickHouse-Key': connection.password },
-    body: await readFile(
-      new URL('../../infra/clickhouse/001-analytics-events.sql', import.meta.url),
-      'utf8',
-    ),
-    signal: AbortSignal.timeout(10000),
-  });
-  assert.equal(response.status, 200);
-  assert.equal((await response.text()).trim(), '');
+  // First: applies the schema, including the read layout over pre-existing history.
+  const readLayout = await exerciseReadLayout(connection);
   const reader = createAnalyticsReader({
     ...connection,
     fetch: async (url, init) => {
@@ -304,6 +296,7 @@ export async function exerciseAnalyticsReads({ directory }) {
   assert.deepEqual(await missingSessionResponse.json(), { events: [], hasMore: false });
   return {
     passed: true,
+    readLayout,
     visitorResolution: await exerciseVisitorReads(connection, reader, window),
     eventTime: await exerciseEventTimeReads(connection, reader, window),
     // Last: applies the retention migration, which would expire fixed-date fixtures.

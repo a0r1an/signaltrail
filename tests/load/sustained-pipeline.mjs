@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { applyClickHouseSchema } from './clickhouse-schema.mjs';
+import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolve } from 'node:path';
@@ -155,12 +156,7 @@ export async function openSustainedPipeline({
     return closing;
   };
   try {
-    await query(
-      await readFile(
-        new URL('../../infra/clickhouse/001-analytics-events.sql', import.meta.url),
-        'utf8',
-      ),
-    );
+    await applyClickHouseSchema(query);
     assert.equal(Number(await query('SELECT count() FROM signaltrail.analytics_events')), 0);
     await admin.connect();
     await admin.createTopics({

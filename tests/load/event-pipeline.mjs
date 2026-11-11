@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { applyClickHouseSchema } from './clickhouse-schema.mjs';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
@@ -88,12 +88,7 @@ export async function exerciseEventPipeline({
     throw new Error('Replacement worker did not acknowledge retained source records');
   };
   try {
-    await query(
-      await readFile(
-        new URL('../../infra/clickhouse/001-analytics-events.sql', import.meta.url),
-        'utf8',
-      ),
-    );
+    await applyClickHouseSchema(query);
     assert.equal(
       Number(await query('SELECT count() FROM signaltrail.analytics_events')),
       0,

@@ -13,6 +13,7 @@ export interface AnalyticsReaderOptions {
   password: string;
   database?: string;
   table?: string;
+  linksTable?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
 }
@@ -129,8 +130,9 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
     throw new TypeError('Invalid analytics credentials');
   const database = options.database ?? 'signaltrail';
   const table = options.table ?? 'analytics_events';
+  const linksTable = options.linksTable ?? 'analytics_identity_links';
   if (
-    ![database, table].every(
+    ![database, table, linksTable].every(
       (value) => typeof value === 'string' && /^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/.test(value),
     )
   )
@@ -421,12 +423,18 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         signal,
         4096,
         decodeCount,
-        visitorCountQuery(database, table, 'occurred'),
+        visitorCountQuery(database, table, 'occurred', linksTable),
       );
     },
     /** Server-only read: current retained project links resolve history retroactively. */
     countReceivedVisitors(window: ReceivedEventWindow, signal?: AbortSignal) {
-      return execute(window, signal, 4096, decodeCount, visitorCountQuery(database, table));
+      return execute(
+        window,
+        signal,
+        4096,
+        decodeCount,
+        visitorCountQuery(database, table, 'received', linksTable),
+      );
     },
     countReceivedEvents(window: ReceivedEventWindow, signal?: AbortSignal) {
       return execute(window, signal, 4096, decodeCount);

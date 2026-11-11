@@ -2,6 +2,7 @@ import { exerciseIngestionKeys } from './ingestion-keys.mjs';
 import { exerciseDashboardReads } from './dashboard-reads.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { applyClickHouseSchema } from './clickhouse-schema.mjs';
 import { createHash } from 'node:crypto';
 import {
   createProjectAccessResolver,
@@ -198,20 +199,19 @@ export async function exerciseProjectAccess({ docker, realAnalytics = false }) {
         username: 'signaltrail',
         password: 'signaltrail_local',
       };
-      const migration = await fetch(connection.endpoint, {
-        method: 'POST',
-        headers: {
-          'X-ClickHouse-User': connection.username,
-          'X-ClickHouse-Key': connection.password,
-        },
-        body: await readFile(
-          new URL('../../infra/clickhouse/001-analytics-events.sql', import.meta.url),
-          'utf8',
-        ),
-        signal: AbortSignal.timeout(10000),
+      await applyClickHouseSchema(async (statement) => {
+        const migration = await fetch(connection.endpoint, {
+          method: 'POST',
+          headers: {
+            'X-ClickHouse-User': connection.username,
+            'X-ClickHouse-Key': connection.password,
+          },
+          body: statement,
+          signal: AbortSignal.timeout(10000),
+        });
+        assert.equal(migration.status, 200);
+        assert.equal((await migration.text()).trim(), '');
       });
-      assert.equal(migration.status, 200);
-      assert.equal((await migration.text()).trim(), '');
       const event = {
         schemaVersion: 1,
         eventId: 'event-a',

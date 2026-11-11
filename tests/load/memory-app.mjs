@@ -1,13 +1,17 @@
 // Synthetic isolated fixture only; no development credentials/configuration are loaded.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { startStallObserver } from './stall-observer.mjs';
+import {
+  ANALYTICS_RETENTION,
+  ANALYTICS_SCHEMA,
+  applyClickHouseSchema,
+} from './clickhouse-schema.mjs';
 import { measureSourceLag } from './pipeline-measurements.mjs';
 import { createPostgresMembershipDatabase } from '../../packages/project-access/dist/index.js';
 import {
@@ -49,16 +53,18 @@ async function query(sql) {
     throw new Error(text);
   return text;
 }
-await query(await readFile('infra/clickhouse/001-analytics-events.sql', 'utf8'));
-await query(await readFile('infra/clickhouse/002-analytics-retention.sql', 'utf8'));
+await applyClickHouseSchema(query, [...ANALYTICS_SCHEMA, ...ANALYTICS_RETENTION]);
+// Time-ordered (UUIDv7-layout) seed IDs match what the browser SDK produces.
+const seedId = (time, number) =>
+  `concat(substring(leftPad(lower(hex(toUnixTimestamp64Milli(${time}))), 12, '0'), 1, 8), '-', substring(leftPad(lower(hex(toUnixTimestamp64Milli(${time}))), 12, '0'), 9, 4), '-7', substring(leftPad(lower(hex(sipHash64(${number}))), 18, '0'), 1, 3), '-8', substring(leftPad(lower(hex(sipHash64(${number}))), 18, '0'), 4, 3), '-', substring(leftPad(lower(hex(sipHash64(${number}))), 18, '0'), 7, 12))`;
 if (retention90)
   for (let offset = 0; offset < seedRows; offset += 1000000)
     await query(
-      `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), received, toString(received), 'history_seed', if(number % 20 = 0, concat('user-',toString(intDiv(number, 100))), concat('visitor-',toString(intDiv(number, 100)))), concat('session-',toString(intDiv(number, 20))), number, 'https://load.invalid', '{}', if(number % 20 = 0, concat('{"identity":{"kind":"link","anonymousId":"visitor-',toString(intDiv(number, 100)),'","userId":"user-',toString(intDiv(number, 100)),'"}}'), '{}') FROM (SELECT number, now64(3) - toIntervalMillisecond(number * 864) AS received FROM numbers(${offset}, 1000000))`,
+      `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', ${seedId('received', 'number')}, received, toString(received), 'history_seed', if(number % 20 = 0, concat('user-',toString(intDiv(number, 100))), concat('visitor-',toString(intDiv(number, 100)))), concat('session-',toString(intDiv(number, 20))), number, 'https://load.invalid', '{}', if(number % 20 = 0, concat('{"identity":{"kind":"link","anonymousId":"visitor-',toString(intDiv(number, 100)),'","userId":"user-',toString(intDiv(number, 100)),'"}}'), '{}') FROM (SELECT number, now64(3) - toIntervalMillisecond(number * 864) AS received FROM numbers(${offset}, 1000000))`,
     );
 else
   await query(
-    `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
+    `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', ${seedId('now64(3) - toIntervalDay(number % 30)', 'number')}, now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
   );
 let applicationMetrics, capacityMetrics;
 let metadataDatabase,

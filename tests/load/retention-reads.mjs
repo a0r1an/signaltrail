@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { ANALYTICS_RETENTION, applyClickHouseSchema } from './clickhouse-schema.mjs';
 import { createClickHouseBatchWriter } from '../../workers/event-processor/dist/index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -20,21 +20,15 @@ export async function exerciseRetention(connection) {
     assert.equal(response.status, 200, body.slice(0, 500));
     return body;
   };
-  await query(
-    await readFile(
-      new URL('../../infra/clickhouse/002-analytics-retention.sql', import.meta.url),
-      'utf8',
-    ),
-  );
+  await applyClickHouseSchema(query, ANALYTICS_RETENTION);
   const definition = await query('SHOW CREATE TABLE signaltrail.analytics_events FORMAT TSVRaw');
   assert.match(definition, /TTL toDateTime\(received_at\) \+ toIntervalDay\(90\)/);
-  // Reapplying the migration must be harmless.
-  await query(
-    await readFile(
-      new URL('../../infra/clickhouse/002-analytics-retention.sql', import.meta.url),
-      'utf8',
-    ),
+  assert.match(
+    await query('SHOW CREATE TABLE signaltrail.analytics_identity_links FORMAT TSVRaw'),
+    /TTL toDateTime\(received_at\) \+ toIntervalDay\(90\)/,
   );
+  // Reapplying the migrations must be harmless.
+  await applyClickHouseSchema(query, ANALYTICS_RETENTION);
   const now = Date.now();
   const at = (days) => new Date(now - days * DAY_MS).toISOString();
   const record = (eventId, receivedAt) => ({
@@ -50,22 +44,26 @@ export async function exerciseRetention(connection) {
       clientTimestamp: receivedAt,
       url: 'https://probe.invalid',
       properties: {},
-      context: { sdkVersion: 'retention-probe' },
+      // Each probe is also an identity link, so link retention is checked alongside events.
+      context: {
+        sdkVersion: 'retention-probe',
+        identity: { kind: 'link', anonymousId: 'anonymous', userId: 'visitor' },
+      },
     },
   });
   const write = createClickHouseBatchWriter(connection);
   await write([record('expired', at(91)), record('kept', at(89))]);
   // A retry of a retained event arrives later; dedupe must still yield one row.
   await write([record('kept', at(1)), record('recent', at(0))]);
-  await query(
-    'ALTER TABLE signaltrail.analytics_events MATERIALIZE TTL SETTINGS mutations_sync = 2',
-  );
-  await query('OPTIMIZE TABLE signaltrail.analytics_events FINAL');
-  const rows = async (final) =>
+  for (const table of ['analytics_events', 'analytics_identity_links']) {
+    await query(`ALTER TABLE signaltrail.${table} MATERIALIZE TTL SETTINGS mutations_sync = 2`);
+    await query(`OPTIMIZE TABLE signaltrail.${table} FINAL`);
+  }
+  const rows = async (final, table = 'analytics_events') =>
     Object.fromEntries(
       (
         await query(
-          `SELECT event_id, toString(count()) AS c FROM signaltrail.analytics_events${final ? ' FINAL' : ''} WHERE project_id = 'retention' GROUP BY event_id FORMAT JSONEachRow`,
+          `SELECT event_id, toString(count()) AS c FROM signaltrail.${table}${final ? ' FINAL' : ''} WHERE project_id = 'retention' GROUP BY event_id FORMAT JSONEachRow`,
         )
       )
         .trim()
@@ -80,6 +78,8 @@ export async function exerciseRetention(connection) {
   const physical = await rows(false);
   assert.deepEqual(unique, { kept: '1', recent: '1' });
   assert.deepEqual(physical, { kept: '1', recent: '1' });
+  const links = await rows(false, 'analytics_identity_links');
+  assert.deepEqual(links, { kept: '1', recent: '1' });
   return {
     retentionDays: 90,
     expression: 'toDateTime(received_at) + INTERVAL 90 DAY DELETE',
@@ -87,5 +87,6 @@ export async function exerciseRetention(connection) {
     retainedRetryDeduplicated: true,
     uniqueRows: unique,
     physicalRowsAfterMerge: physical,
+    identityLinksAfterMerge: links,
   };
 }

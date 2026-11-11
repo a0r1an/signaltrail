@@ -13,7 +13,7 @@ it('pages by event time with received time retained as a diagnostic field', asyn
   const sql = new URL(String(send.mock.calls[0]![0])).searchParams.get('query')!;
   expect(sql).toContain('AS occurredAtMs');
   expect(sql).toContain('AS receivedAtMs');
-  expect(sql).toMatch(/ORDER BY if\(match\(client_timestamp/);
+  expect(sql).toContain('ORDER BY occurred_at DESC, event_id DESC');
 });
 it('returns both clocks and binds cursor position/scope to occurrence time', async () => {
   const row = (eventId: string) => ({

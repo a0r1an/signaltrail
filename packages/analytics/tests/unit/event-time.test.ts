@@ -11,8 +11,9 @@ it('counts activity by client event time while retaining received-time diagnosti
   const window = { projectId: 'trusted', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' };
   expect(await reader.countOccurredEvents(window)).toEqual({ count: '2' });
   const query = new URL(String(send.mock.calls[0]![0])).searchParams.get('query')!;
-  expect(query).toContain('client_timestamp');
-  expect(query).toContain('parseDateTime64BestEffortOrNull');
+  // The insert-time occurred_at column is skip-indexed; parsing strings per read is not.
+  expect(query).toContain('occurred_at >=');
+  expect(query).not.toContain('client_timestamp');
   expect(query).not.toContain('received_at >=');
   await reader.countReceivedEvents(window);
   expect(new URL(String(send.mock.calls[1]![0])).searchParams.get('query')).toContain(
@@ -54,7 +55,8 @@ it('applies event-time filters only to activity while resolving retained project
     sessionId: 'session',
   });
   const sql = new URL(String(send.mock.calls[0]![0])).searchParams.get('query')!;
-  expect(sql).toContain('client_timestamp');
+  expect(sql).toContain('occurred_at >=');
+  expect(sql).not.toContain('client_timestamp');
   expect(sql.indexOf('event_name = unhex')).toBeGreaterThan(sql.indexOf('LEFT JOIN'));
   expect(sql.indexOf('session_id = unhex')).toBeGreaterThan(sql.indexOf('LEFT JOIN'));
 });

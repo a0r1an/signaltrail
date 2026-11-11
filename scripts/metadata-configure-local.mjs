@@ -155,6 +155,8 @@ try {
   const schema = [
     await readFile(join(root, 'infra/clickhouse/001-analytics-events.sql'), 'utf8'),
     await readFile(join(root, 'infra/clickhouse/002-analytics-retention.sql'), 'utf8'),
+    await readFile(join(root, 'infra/clickhouse/003-analytics-read-layout.sql'), 'utf8'),
+    await readFile(join(root, 'infra/clickhouse/004-identity-link-retention.sql'), 'utf8'),
   ].join('\n');
   execFileSync(
     'docker',
@@ -174,7 +176,7 @@ try {
       cwd: root,
       timeout: 15000,
       stdio: ['pipe', 'pipe', 'pipe'],
-      input: `${schema}\nCREATE USER IF NOT EXISTS ${state.readerName} IDENTIFIED WITH sha256_password BY '${state.chPassword}';\nGRANT SELECT ON signaltrail.analytics_events TO ${state.readerName};\nCREATE USER IF NOT EXISTS ${processorName} IDENTIFIED WITH sha256_password BY '${state.processorPassword}';\nGRANT INSERT ON signaltrail.analytics_events TO ${processorName};`,
+      input: `${schema}\nCREATE USER IF NOT EXISTS ${state.readerName} IDENTIFIED WITH sha256_password BY '${state.chPassword}';\nGRANT SELECT ON signaltrail.analytics_events, SELECT ON signaltrail.analytics_identity_links TO ${state.readerName};\nCREATE USER IF NOT EXISTS ${processorName} IDENTIFIED WITH sha256_password BY '${state.processorPassword}';\nGRANT INSERT ON signaltrail.analytics_events TO ${processorName};`,
     },
   );
   const connectionString = `postgres://${state.readerName}:${state.pgPassword}@127.0.0.1:5433/signaltrail`;
