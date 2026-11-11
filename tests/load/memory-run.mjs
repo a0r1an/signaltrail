@@ -23,7 +23,14 @@ import {
   capacityCommandTimeoutMs,
 } from './capacity-stage.mjs';
 import { assessInsertMode, insertEventsQuery, parseInsertEvents } from './insert-mode.mjs';
-import { assessDashboard, dashboardWindow, summarizeDashboard } from './dashboard-load.mjs';
+import {
+  assessDashboard,
+  dashboardViewers,
+  dashboardWindow,
+  summarizeDashboard,
+  summarizeMerges,
+} from './dashboard-load.mjs';
+import { reconcileAcceptance } from './acceptance-ledger.mjs';
 import { createAnalyticsReader } from '../../packages/analytics/dist/index.js';
 
 const profile = process.argv[2] ?? 'memory-4gb';
@@ -49,6 +56,9 @@ const dbConnections = [
   'capacity-4gb-memory-trace-async-smoke',
   'capacity-4gb-memory-trace-async-dashboard',
   'capacity-4gb-memory-trace-async-dashboard-smoke',
+  'capacity-4gb-memory-trace-async-dashboard-endurance',
+  'capacity-4gb-memory-trace-async-dashboard-viewers5',
+  'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -78,6 +88,9 @@ const isolatedGenerator = [
   'capacity-4gb-memory-trace-async-smoke',
   'capacity-4gb-memory-trace-async-dashboard',
   'capacity-4gb-memory-trace-async-dashboard-smoke',
+  'capacity-4gb-memory-trace-async-dashboard-endurance',
+  'capacity-4gb-memory-trace-async-dashboard-viewers5',
+  'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -93,6 +106,7 @@ const asyncInsert = profile.includes('memory-trace-async');
 // Dashboard profiles seed 90 days of history and replace the synthetic full-table
 // query with real explorer page loads.
 const dashboardLoad = profile.includes('-dashboard');
+const viewers = dashboardViewers(profile);
 const seedRows = dashboardLoad ? 9000000 : capacity ? 1000000 : 100000;
 const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
@@ -166,6 +180,12 @@ const compose = (...args) =>
       'capacity-4gb-memory-trace-async-smoke',
       'capacity-4gb-memory-trace-async-dashboard',
       'capacity-4gb-memory-trace-async-dashboard-smoke',
+      'capacity-4gb-memory-trace-async-dashboard-endurance',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
+      'capacity-4gb-memory-trace-async-dashboard-endurance',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
@@ -308,6 +328,13 @@ async function status() {
     signal: AbortSignal.timeout(10000),
   });
   assert.equal(response.status, 200, 'Capacity observer unavailable');
+  return response.json();
+}
+async function ledger() {
+  const response = await fetch('http://127.0.0.1:34105/ledger', {
+    signal: AbortSignal.timeout(10000),
+  });
+  assert.equal(response.status, 200, 'Acceptance ledger unavailable');
   return response.json();
 }
 async function query(sql, queryId, { timeoutMs = 15000, recordTiming = true } = {}) {
@@ -702,45 +729,10 @@ try {
           intervalMs: 5000,
           observe: async () => {
             const attempt = ++analyticalAttempts;
-            const window = {
-              projectId: '00000000-0000-0000-0000-000000000011',
-              ...dashboardWindow(attempt - 1),
-            };
-            const started = performance.now();
-            const run = async (kind, call) => {
-              const queryStarted = performance.now();
-              try {
-                await call(`${runId}-analytical-${attempt}-${kind}`);
-                return { ok: true, ms: performance.now() - queryStarted };
-              } catch (error) {
-                return { ok: false, ms: performance.now() - queryStarted, error: error.message };
-              }
-            };
-            const tagged = (id) =>
-              // The reader passes its own fetch init; carry the tag in a private header.
-              createAnalyticsReader({
-                endpoint: 'http://127.0.0.1:38124',
-                username: 'signaltrail',
-                password: 'signaltrail_local',
-                fetch: (url, init) => {
-                  const target = new URL(url);
-                  target.searchParams.set('query_id', id);
-                  return fetch(target, init);
-                },
-              });
-            const [list, count, visitors] = await Promise.all([
-              run('list', (id) => tagged(id).listOccurredEvents({ ...window, limit: 50 })),
-              run('count', (id) => tagged(id).countOccurredEvents(window)),
-              run('visitors', (id) => tagged(id).countOccurredVisitors(window)),
-            ]);
-            const page = {
-              at: new Date().toISOString(),
-              days: window.days,
-              ms: performance.now() - started,
-              queries: { list, count, visitors },
-            };
-            dashboardPages.push(page);
-            await appendFile(`${directory}/dashboard-pages.jsonl`, JSON.stringify(page) + '\n');
+            // Concurrent viewers open their pages at the same moment, on staggered windows.
+            await Promise.all(
+              Array.from({ length: viewers }, (_, viewer) => loadPage(attempt, viewer)),
+            );
           },
           onError: async (error) => {
             analyticalError ??= error;
@@ -748,6 +740,76 @@ try {
           },
         })
       : undefined;
+    async function loadPage(attempt, viewer) {
+      const window = {
+        projectId: '00000000-0000-0000-0000-000000000011',
+        ...dashboardWindow((attempt - 1) * viewers + viewer),
+      };
+      const started = performance.now();
+      const run = async (kind, call) => {
+        const queryStarted = performance.now();
+        try {
+          await call(`${runId}-analytical-${attempt}-${viewer}-${kind}`);
+          return { ok: true, ms: performance.now() - queryStarted };
+        } catch (error) {
+          return { ok: false, ms: performance.now() - queryStarted, error: error.message };
+        }
+      };
+      const tagged = (id) =>
+        // The reader passes its own fetch init; carry the tag in a private header.
+        createAnalyticsReader({
+          endpoint: 'http://127.0.0.1:38124',
+          username: 'signaltrail',
+          password: 'signaltrail_local',
+          fetch: (url, init) => {
+            const target = new URL(url);
+            target.searchParams.set('query_id', id);
+            return fetch(target, init);
+          },
+        });
+      const [list, count, visitors] = await Promise.all([
+        run('list', (id) => tagged(id).listOccurredEvents({ ...window, limit: 50 })),
+        run('count', (id) => tagged(id).countOccurredEvents(window)),
+        run('visitors', (id) => tagged(id).countOccurredVisitors(window)),
+      ]);
+      const page = {
+        at: new Date().toISOString(),
+        viewer,
+        days: window.days,
+        ms: performance.now() - started,
+        queries: { list, count, visitors },
+      };
+      dashboardPages.push(page);
+      await appendFile(`${directory}/dashboard-pages.jsonl`, JSON.stringify(page) + '\n');
+    }
+    // Background merges, including TTL deletes rewriting retained parts, during traffic.
+    const mergeSamples = [];
+    const merges = dashboardLoad
+      ? observeUntil({
+          done: () => done,
+          intervalMs: 5000,
+          observe: async () => {
+            const body = await query(
+              `SELECT result_part_name, toString(merge_type) AS merge_type, elapsed, memory_usage, rows_read FROM system.merges WHERE database = 'signaltrail' FORMAT JSONEachRow`,
+              undefined,
+              { recordTiming: false },
+            );
+            const sample = {
+              at: new Date().toISOString(),
+              merges: body
+                .split('\n')
+                .filter(Boolean)
+                .map((line) => JSON.parse(line)),
+            };
+            mergeSamples.push(sample);
+            await appendFile(`${directory}/merges.jsonl`, JSON.stringify(sample) + '\n');
+          },
+          onError: async (error) => {
+            samplingError ??= error;
+            await reportObservationError('merges', error);
+          },
+        })
+      : Promise.resolve();
     const analytical = dashboard
       ? dashboard
       : analyticalLoad
@@ -793,7 +855,7 @@ try {
           })
         : Promise.resolve();
     // Attach rejection handlers immediately; artifact-write errors still fail the run.
-    const observations = Promise.allSettled([sampling, intervals, analytical, tracing]);
+    const observations = Promise.allSettled([sampling, intervals, analytical, tracing, merges]);
     let output;
     try {
       output = await traffic;
@@ -845,6 +907,16 @@ try {
       if (dashboardLoad) {
         stage.dashboard = summarizeDashboard(dashboardPages);
         stage.reasons.push(...assessDashboard(stage.dashboard));
+        stage.dashboard.viewers = viewers;
+        stage.merges = summarizeMerges(mergeSamples);
+        // Diagnostic: seeded rows past 90 days that TTL merges have not yet removed.
+        stage.expiredSeedRowsRemaining = Number(
+          await query(
+            `SELECT count() FROM signaltrail.analytics_events WHERE project_id = '00000000-0000-0000-0000-000000000011' AND received_at < now64(3) - INTERVAL 90 DAY`,
+            undefined,
+            { recordTiming: false },
+          ),
+        );
       }
       if (observationFailures.heap) stage.reasons.push('Heap evidence incomplete');
       if (observationFailures['clickhouse-memory'])
@@ -859,16 +931,24 @@ try {
         assert.ok(stage.pipeline.metadata.queryExecutionMs.count > 0);
         assert.ok(stage.pipeline.admission.peakActiveRequests > 0);
         assert.ok(Number.isFinite(stage.pipeline.eventLoopDelayMs.max));
-        stage.uniqueStored = Number(
+        const storedIds = (
           await query(
-            `SELECT count() FROM signaltrail.analytics_events FINAL WHERE startsWith(event_id,'memory-${users}-')`,
-          ),
-        );
-        if (stage.uniqueStored === accepted && stage.pipeline.source.total === '0') break;
+            `SELECT event_id FROM signaltrail.analytics_events FINAL WHERE startsWith(event_id,'memory-${users}-') FORMAT TSVRaw`,
+            undefined,
+            { recordTiming: false },
+          )
+        )
+          .split('\n')
+          .filter(Boolean);
+        stage.uniqueStored = storedIds.length;
+        // Per-ID: every server-accepted event stored; nothing stored without an outcome.
+        stage.acceptance = reconcileAcceptance(await ledger(), storedIds);
+        if (!stage.acceptance.reasons.length && stage.pipeline.source.total === '0') break;
         await delay(1000);
       } while (Date.now() < deadline && !cancelled);
       stage.drainSeconds = (performance.now() - drainStart) / 1000;
-      if (stage.uniqueStored !== accepted || stage.pipeline.source.total !== '0')
+      stage.reasons.push(...stage.acceptance.reasons);
+      if (stage.acceptance.reasons.length || stage.pipeline.source.total !== '0')
         stage.reasons.push('Storage/offset drain did not reconcile within 60 seconds');
       const durations = queries.slice(queryStart).map((q) => q.ms);
       stage.maxDiagnosticQueryMs = Math.max(...durations);

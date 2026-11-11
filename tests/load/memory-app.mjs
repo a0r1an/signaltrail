@@ -7,6 +7,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { createIngestionMetrics } from '../../apps/ingestion/src/metrics.ts';
 import { createCapacityTelemetry } from './capacity-telemetry.mjs';
 import { startStallObserver } from './stall-observer.mjs';
+import { createAcceptanceLedger } from './acceptance-ledger.mjs';
 import {
   ANALYTICS_RETENTION,
   ANALYTICS_SCHEMA,
@@ -90,6 +91,7 @@ const projects = createProjectRuntime(
           metadataDatabase = database;
           return {
             close: database.close,
+            connectListener: database.connectListener,
             query(input) {
               const state = database.snapshot();
               if (state.inFlight >= state.capacity) metadataAtCapacity++;
@@ -206,6 +208,12 @@ if (capacity) {
         .end(JSON.stringify(stallObserver.records(after)));
       return;
     }
+    if (req.url === '/ledger') {
+      res
+        .writeHead(200, { 'Content-Type': 'application/json' })
+        .end(JSON.stringify(ledger.snapshot()));
+      return;
+    }
     if (req.url !== '/status') {
       res.writeHead(404).end();
       return;
@@ -266,10 +274,22 @@ let stopping = false;
 worker.on('exit', (code) => {
   if (!stopping) process.exit(code || 1);
 });
+const ledger = capacity ? createAcceptanceLedger() : undefined;
 const server = createIngestionServer({
   maxConcurrentRequests: Number(process.env.SIGNALTRAIL_FIXTURE_HTTP_CAP ?? 128),
   resolveProjectKey: projects.resolveProjectKey,
-  publish: publisher.publish,
+  // The handler aborts the signal at its response deadline, after which clients see retry.
+  publish: ledger
+    ? async (record, signal) => {
+        try {
+          await publisher.publish(record, signal);
+          ledger.record(record.event.eventId, signal.aborted ? 'late' : 'accepted');
+        } catch (error) {
+          ledger.record(record.event.eventId, 'failed');
+          throw error;
+        }
+      }
+    : publisher.publish,
   ...(capacity
     ? {
         observeAdmission(active, refused) {

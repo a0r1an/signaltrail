@@ -120,6 +120,9 @@ test('dashboard profiles keep the revised four-GiB allocation and CPU affinity',
   for (const name of [
     'capacity-4gb-memory-trace-async-dashboard',
     'capacity-4gb-memory-trace-async-dashboard-smoke',
+    'capacity-4gb-memory-trace-async-dashboard-endurance',
+    'capacity-4gb-memory-trace-async-dashboard-viewers5',
+    'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
   ])
     assert.deepEqual(memoryPlans[name], memoryPlans['capacity-4gb-memory-trace']);
 });

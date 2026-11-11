@@ -18,6 +18,7 @@ const scenarios = {
   'authorized-analytics': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'project-access': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'analytics-read': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
+  'backup-restore': { rate: 0, batch: 1, padding: 0, maxEvents: 1000, maxBytes: 8388608 },
   'request-admission': {
     rate: 0,
     batch: 1,
@@ -93,7 +94,9 @@ const isSustained = [
 const usesStorage =
   isPipeline ||
   isSustained ||
-  ['analytics-read', 'storage-readiness', 'authorized-analytics'].includes(scenario);
+  ['analytics-read', 'storage-readiness', 'authorized-analytics', 'backup-restore'].includes(
+    scenario,
+  );
 const usesMetadata = ['project-access', 'authorized-analytics'].includes(scenario);
 const runId = `${new Date().toISOString().replaceAll(':', '-')}-${scenario}`;
 const directory = resolve(root, 'test-results/load', runId);
@@ -106,6 +109,7 @@ const compose = [
   '-f',
   'tests/load/compose.yaml',
   ...(scenario === 'pipeline-async' ? ['-f', 'tests/load/compose.small-server.yaml'] : []),
+  ...(scenario === 'backup-restore' ? ['-f', 'tests/load/compose.backup.yaml'] : []),
 ];
 const dockerEnv = {
   ...process.env,
@@ -199,7 +203,7 @@ try {
     ...(scenario === 'storage-readiness' ? [] : ['--wait', '--wait-timeout', '120']),
     'redpanda',
     ...(usesStorage ? ['clickhouse'] : []),
-    ...(usesMetadata ? ['postgres'] : []),
+    ...(usesMetadata || scenario === 'backup-restore' ? ['postgres'] : []),
   ]);
   if (scenario === 'storage-readiness') {
     const { exerciseStorageReadiness } = await import('./storage-readiness.mjs');
@@ -311,6 +315,12 @@ try {
       resolve(directory, 'analytics-read.json'),
       JSON.stringify(await exerciseAnalyticsReads({ directory }), null, 2),
     );
+  }
+  if (scenario === 'backup-restore') {
+    const { exerciseBackupRestore } = await import('./backup-restore.mjs');
+    const evidence = await exerciseBackupRestore({ docker, runId, directory });
+    await writeFile(resolve(directory, 'backup-restore.json'), JSON.stringify(evidence, null, 2));
+    if (!evidence.passed) throw new Error(`Backup drill failed: ${evidence.reasons.join('; ')}`);
   }
   if (scenario === 'request-admission') {
     const { exerciseRequestAdmission } = await import('./request-admission.mjs');

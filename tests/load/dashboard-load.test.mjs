@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assessDashboard, dashboardWindow, summarizeDashboard } from './dashboard-load.mjs';
+import {
+  assessDashboard,
+  dashboardViewers,
+  dashboardWindow,
+  summarizeDashboard,
+  summarizeMerges,
+} from './dashboard-load.mjs';
 
 test('page loads rotate through the 1/7/30-day windows the reader allows', () => {
   const now = Date.parse('2026-11-10T12:00:00.000Z');
@@ -51,4 +57,39 @@ test('fails on any dashboard error, missing page loads or slow p95', () => {
   assert.deepEqual(assessDashboard(summarizeDashboard([page(30, 2500)])), [
     'Dashboard page p95 exceeds 2000 ms',
   ]);
+});
+
+test('viewer count comes from the profile; one viewer by default', () => {
+  assert.equal(dashboardViewers('capacity-4gb-memory-trace-async-dashboard'), 1);
+  assert.equal(dashboardViewers('capacity-4gb-memory-trace-async-dashboard-viewers5'), 5);
+  assert.equal(dashboardViewers('capacity-4gb-memory-trace-async-dashboard-viewers5-smoke'), 5);
+});
+
+test('summarizes background merges by type, including TTL deletes', () => {
+  const merge = (part, type, elapsed, memory, rows) => ({
+    result_part_name: part,
+    merge_type: type,
+    elapsed,
+    memory_usage: memory,
+    rows_read: rows,
+  });
+  assert.deepEqual(
+    summarizeMerges([
+      { at: 't1', merges: [merge('a', 'Regular', 1, 10, 100)] },
+      {
+        at: 't2',
+        merges: [merge('a', 'Regular', 2, 30, 200), merge('b', 'TTLDelete', 5, 50, 9e6)],
+      },
+      { at: 't3', merges: [merge('b', 'TTLDelete', 40, 80, 9e6)] },
+      { at: 't4', merges: [] },
+    ]),
+    {
+      samples: 4,
+      maxConcurrent: 2,
+      byType: {
+        Regular: { merges: 1, maxElapsedSeconds: 2, maxMemoryBytes: 30, maxRowsRead: 200 },
+        TTLDelete: { merges: 1, maxElapsedSeconds: 40, maxMemoryBytes: 80, maxRowsRead: 9e6 },
+      },
+    },
+  );
 });

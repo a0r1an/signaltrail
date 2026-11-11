@@ -148,6 +148,22 @@ test('dashboard profiles keep the async memory-trace workloads', () => {
   );
 });
 
+test('dashboard endurance runs 30 minutes; concurrent viewers run 10 minutes with a smoke', () => {
+  const at = (durationSeconds) => [{ users: 1000, rate: 100, sessionCount: 1000, durationSeconds }];
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-dashboard-endurance'),
+    at(1800),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-dashboard-viewers5'),
+    at(600),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-dashboard-viewers5-smoke'),
+    at(30),
+  );
+});
+
 test('query-memory investigation uses a bounded two-minute revised workload', () => {
   assert.deepEqual(capacityWorkloads('capacity-4gb-query-memory'), [
     { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 },

@@ -1,0 +1,36 @@
+# Replacement-host drill: empty PostgreSQL/ClickHouse restore targets beside the primaries.
+# A shared volume stands in for off-server backup storage (S3 in production).
+services:
+  clickhouse:
+    # Named volumes start root-owned; the server writes backups as the clickhouse user.
+    entrypoint: &backup-entrypoint
+      ['/bin/sh', '-ec', 'chown clickhouse:clickhouse /backups && exec /entrypoint.sh']
+    volumes:
+      - ./clickhouse-backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
+      - clickhouse_backups:/backups
+  clickhouse-restore:
+    extends:
+      file: ../../compose.yaml
+      service: clickhouse
+    profiles: ['backup']
+    entrypoint: *backup-entrypoint
+    volumes:
+      - ./clickhouse-backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
+      - clickhouse_backups:/backups
+      - clickhouse_restore_data:/var/lib/clickhouse
+    ports: !override
+      - '127.0.0.1:38125:8123'
+  postgres-restore:
+    extends:
+      file: ../../compose.yaml
+      service: postgres
+    profiles: ['backup']
+    volumes: !override
+      - postgres_restore_data:/var/lib/postgresql
+    ports: !override
+      - '127.0.0.1:35434:5432'
+
+volumes:
+  clickhouse_backups:
+  clickhouse_restore_data:
+  postgres_restore_data:

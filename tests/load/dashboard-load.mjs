@@ -3,6 +3,45 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW_DAYS = [1, 7, 30];
 const KINDS = ['list', 'count', 'visitors'];
 
+/** `-viewersN` profiles load N explorer pages at the same moment, every interval. */
+export function dashboardViewers(profile) {
+  const match = /-viewers(\d+)(?:-|$)/.exec(profile);
+  return match ? Number(match[1]) : 1;
+}
+
+/** Samples of system.merges; one entry per result part, keeping its largest observation. */
+export function summarizeMerges(samples) {
+  const merges = new Map();
+  let maxConcurrent = 0;
+  for (const sample of samples) {
+    maxConcurrent = Math.max(maxConcurrent, sample.merges.length);
+    for (const merge of sample.merges) {
+      const key = `${merge.merge_type}:${merge.result_part_name}`;
+      const previous = merges.get(key);
+      merges.set(key, {
+        type: merge.merge_type,
+        elapsed: Math.max(previous?.elapsed ?? 0, merge.elapsed),
+        memory: Math.max(previous?.memory ?? 0, merge.memory_usage),
+        rows: Math.max(previous?.rows ?? 0, merge.rows_read),
+      });
+    }
+  }
+  const byType = {};
+  for (const merge of merges.values()) {
+    const entry = (byType[merge.type] ??= {
+      merges: 0,
+      maxElapsedSeconds: 0,
+      maxMemoryBytes: 0,
+      maxRowsRead: 0,
+    });
+    entry.merges++;
+    entry.maxElapsedSeconds = Math.max(entry.maxElapsedSeconds, merge.elapsed);
+    entry.maxMemoryBytes = Math.max(entry.maxMemoryBytes, merge.memory);
+    entry.maxRowsRead = Math.max(entry.maxRowsRead, merge.rows);
+  }
+  return { samples: samples.length, maxConcurrent, byType };
+}
+
 /** Explorer page loads rotate through the windows an owner is likely to open. */
 export function dashboardWindow(index, now = Date.now()) {
   const days = WINDOW_DAYS[index % WINDOW_DAYS.length];
