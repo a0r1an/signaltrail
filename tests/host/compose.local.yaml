@@ -1,0 +1,7 @@
+# Local smoke only: macOS bind mounts are not ext4/XFS, so Redpanda cannot use them.
+# Plain Docker volumes stand in for the host data disk.
+volumes:
+  postgres_data: { driver_opts: !reset {} }
+  redpanda_data: { driver_opts: !reset {} }
+  clickhouse_data: { driver_opts: !reset {} }
+  backups: { driver_opts: !reset {} }

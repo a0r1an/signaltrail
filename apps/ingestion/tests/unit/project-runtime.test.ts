@@ -42,6 +42,13 @@ it.each([
   },
   { ...env, SIGNALTRAIL_INGESTION_DATABASE_TLS: 'no' },
   { ...env, SIGNALTRAIL_INGESTION_DATABASE_CA: 'certificate' },
+  { ...env, SIGNALTRAIL_INGESTION_DATABASE_CA_FILE: '/missing/ca.pem' },
+  {
+    ...env,
+    SIGNALTRAIL_INGESTION_DATABASE_TLS: 'true',
+    SIGNALTRAIL_INGESTION_DATABASE_CA: 'certificate',
+    SIGNALTRAIL_INGESTION_DATABASE_CA_FILE: '/etc/hosts',
+  },
   { ...env, SIGNALTRAIL_INGESTION_DATABASE_URL: 'https://metadata.invalid' },
   {
     ...env,
@@ -123,4 +130,30 @@ it('caches key lookups only while the invalidation listener is live and drops re
   expect(database.query).toHaveBeenCalledTimes(4); // Untrusted: every lookup reaches PostgreSQL.
   await runtime.close();
   expect(database.close).toHaveBeenCalledOnce();
+});
+it('reads the database CA from a file for container deployments', async () => {
+  const { mkdtemp, writeFile } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const directory = await mkdtemp(join(tmpdir(), 'signaltrail-ca-'));
+  const file = join(directory, 'ca.pem');
+  await writeFile(file, '-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n');
+  const database = { query: vi.fn(async () => ({ rows: [] })), close: vi.fn(async () => {}) };
+  const createDatabase = vi.fn(() => database);
+  const runtime = createProjectRuntime(
+    {
+      NODE_ENV: 'production',
+      SIGNALTRAIL_INGESTION_DATABASE_URL: 'postgres://reader:fixture@postgres:5432/signaltrail',
+      SIGNALTRAIL_INGESTION_DATABASE_TLS: 'true',
+      SIGNALTRAIL_INGESTION_DATABASE_CA_FILE: file,
+    },
+    { createDatabase },
+  );
+  expect(createDatabase).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tls: true,
+      ca: '-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n',
+    }),
+  );
+  await runtime.close();
 });

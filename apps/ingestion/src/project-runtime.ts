@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import {
   createCachedProjectResolver,
   createPostgresMembershipDatabase,
@@ -45,8 +46,14 @@ export function createProjectRuntime(
     throw new TypeError('Development project mappings are not allowed in production');
   const connectionString = env.SIGNALTRAIL_INGESTION_DATABASE_URL;
   const tlsValue = env.SIGNALTRAIL_INGESTION_DATABASE_TLS ?? 'true';
-  const ca = env.SIGNALTRAIL_INGESTION_DATABASE_CA;
+  let ca = env.SIGNALTRAIL_INGESTION_DATABASE_CA;
   try {
+    // Containers mount the CA as a file; multi-line PEM does not fit env files.
+    const caFile = env.SIGNALTRAIL_INGESTION_DATABASE_CA_FILE;
+    if (caFile !== undefined) {
+      if (ca !== undefined || !caFile.startsWith('/')) throw new Error();
+      ca = readFileSync(caFile, 'utf8');
+    }
     if (
       !connectionString ||
       Buffer.byteLength(connectionString) > 8192 ||
