@@ -7,6 +7,7 @@ import {
   parseLedger,
   parseProcStat,
   reconcile,
+  summarizeProbe,
 } from './remote-assess.mjs';
 
 test('parses the aggregate cpu line of /proc/stat, including steal', () => {
@@ -108,4 +109,33 @@ test('limits: highest rate within baseline and highest passing rate before first
     burstEventsPerSecond: 25,
     firstFailureEventsPerSecond: 50,
   });
+});
+
+test('summarizes the disk probe: fsync, random read and sequential write', () => {
+  const job = (fields) => ({ jobs: [fields] });
+  assert.deepEqual(
+    summarizeProbe({
+      instanceType: 't4g.medium',
+      dataFilesystem: 'ext4',
+      fio: {
+        fsync: job({
+          write: { iops: 812.4 },
+          sync: { lat_ns: { percentile: { '99.000000': 2500000 } } },
+        }),
+        randread: job({
+          read: { iops: 3001.7, clat_ns: { percentile: { '99.000000': 1200000 } } },
+        }),
+        seqwrite: job({ write: { bw: 128000 } }),
+      },
+    }),
+    {
+      instanceType: 't4g.medium',
+      dataFilesystem: 'ext4',
+      fsyncWritesPerSecond: 812,
+      fsyncP99Ms: 2.5,
+      randomReadIops: 3002,
+      randomReadP99Ms: 1.2,
+      sequentialWriteMBps: 125,
+    },
+  );
 });

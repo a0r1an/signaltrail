@@ -117,3 +117,18 @@ export function findLimits(stages) {
     firstFailureEventsPerSecond: firstFailure,
   };
 }
+
+/** infra/host/probe.sh output reduced to the numbers that size the host. */
+export function summarizeProbe(probe) {
+  const job = (name) => probe.fio[name].jobs[0];
+  const ms = (ns) => Math.round(ns / 1e4) / 100;
+  return {
+    instanceType: probe.instanceType,
+    dataFilesystem: probe.dataFilesystem,
+    fsyncWritesPerSecond: Math.round(job('fsync').write.iops),
+    fsyncP99Ms: ms(job('fsync').sync.lat_ns.percentile['99.000000']),
+    randomReadIops: Math.round(job('randread').read.iops),
+    randomReadP99Ms: ms(job('randread').read.clat_ns.percentile['99.000000']),
+    sequentialWriteMBps: Math.round(job('seqwrite').write.bw / 1024),
+  };
+}

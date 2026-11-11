@@ -21,6 +21,7 @@ import {
   parseLedger,
   parseProcStat,
   reconcile,
+  summarizeProbe,
 } from './remote-assess.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -123,6 +124,13 @@ try {
   };
   result.preflight = (await target.exec(`sh ${target.repo}/infra/host/verify.sh`)).trim();
 
+  // Long profiles record disk behaviour first (about a minute).
+  if (!['smoke', 'ramp-short'].includes(profileName)) {
+    const probe = await target.exec(`sh ${target.repo}/infra/host/probe.sh`);
+    await writeFile(resolve(directory, 'probe.json'), probe);
+    result.probe = summarizeProbe(JSON.parse(probe));
+    await save();
+  }
   const seedStarted = performance.now();
   const seeded = await target.exec(`ROWS=${profile.seedRows} sh ${target.repo}/tests/host/seed.sh`);
   const project = /PROJECT=(\S+)/.exec(seeded)?.[1];
