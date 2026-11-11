@@ -60,3 +60,30 @@ it('applies event-time filters only to activity while resolving retained project
   expect(sql.indexOf('event_name = unhex')).toBeGreaterThan(sql.indexOf('LEFT JOIN'));
   expect(sql.indexOf('session_id = unhex')).toBeGreaterThan(sql.indexOf('LEFT JOIN'));
 });
+it('prunes event-time reads by skip index without exact FINAL expansion; received-time reads stay exact', async () => {
+  const send = vi.fn<typeof fetch>(async (url) =>
+    new Response(
+      String(new URL(String(url)).searchParams.get('query')).startsWith('SELECT event_id')
+        ? ''
+        : '{"count":"0"}',
+    ),
+  );
+  const reader = createAnalyticsReader({
+    endpoint: 'http://clickhouse:8123',
+    username: 'reader',
+    password: 'fixture',
+    fetch: send,
+  });
+  const window = { projectId: 'trusted', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' };
+  await reader.countOccurredEvents(window);
+  await reader.countOccurredVisitors(window);
+  await reader.listOccurredEvents({ ...window, limit: 5 });
+  await reader.countReceivedEvents(window);
+  await reader.countReceivedVisitors(window);
+  const exactMode = send.mock.calls.map(([url]) =>
+    new URL(String(url)).searchParams.get('use_skip_indexes_if_final_exact_mode'),
+  );
+  // Copies of one event share occurred_at, so granules pruned by it hold no copy of an
+  // in-window event; received_at differs per copy, so those reads keep exact mode.
+  expect(exactMode).toEqual(['0', '0', '0', null, null]);
+});

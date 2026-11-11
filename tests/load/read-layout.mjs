@@ -131,21 +131,32 @@ export async function exerciseReadLayout(connection) {
     { count: '1' },
   );
 
-  // Data skipping: one part of time-ordered rows across 60 days.
+  // Data skipping: time-ordered rows across 60 days, with neighbouring projects on
+  // both sides and small recent inserts with non-UUID IDs, so parts mix projects as
+  // they do on a shared host. Exact-mode FINAL expansion then reads most granules.
   const end = Date.parse('2026-09-01T00:00:00.000Z');
-  await query(`INSERT INTO signaltrail.analytics_events
-    SELECT 'layout-skip',
+  const seed = (projectId, rowsPerDay) =>
+    query(`INSERT INTO signaltrail.analytics_events
+    SELECT '${projectId}',
       concat(substring(h, 1, 8), '-', substring(h, 9, 4), '-7', substring(r, 1, 3), '-8', substring(r, 4, 3), '-', substring(r, 7, 12)),
       t, concat(replaceOne(toString(t), ' ', 'T'), 'Z'), 'viewed',
       concat('visitor-', toString(d), '-', toString(n % 100)), concat('session-', toString(d), '-', toString(n % 100)),
       n, 'https://probe.invalid/', '{}', '{}'
     FROM (
-      SELECT intDiv(number, ${SKIP_ROWS_PER_DAY}) AS d, number % ${SKIP_ROWS_PER_DAY} AS n,
-        fromUnixTimestamp64Milli(toInt64(${end} - (d + 1) * ${DAY_MS} + n * 4000), 'UTC') AS t,
+      SELECT intDiv(number, ${rowsPerDay}) AS d, number % ${rowsPerDay} AS n,
+        fromUnixTimestamp64Milli(toInt64(${end} - (d + 1) * ${DAY_MS} + n * intDiv(${DAY_MS}, ${rowsPerDay})), 'UTC') AS t,
         leftPad(lower(hex(toUnixTimestamp64Milli(t))), 12, '0') AS h,
         leftPad(lower(hex(sipHash64(number))), 18, '0') AS r
-      FROM numbers(${SKIP_DAYS * SKIP_ROWS_PER_DAY})
+      FROM numbers(${SKIP_DAYS * rowsPerDay})
     )`);
+  for (const projectId of ['layout-skia', 'layout-skiz']) await seed(projectId, 2000);
+  await seed('layout-skip', SKIP_ROWS_PER_DAY);
+  for (const projectId of ['layout-skia', 'layout-skip', 'layout-skiz'])
+    await query(`INSERT INTO signaltrail.analytics_events
+      SELECT '${projectId}', concat('remote-', toString(number)), t, concat(replaceOne(toString(t), ' ', 'T'), 'Z'),
+        'viewed', 'visitor-live', 'session-live', number, 'https://probe.invalid/', '{}', '{}'
+      FROM (SELECT number, fromUnixTimestamp64Milli(toInt64(${end} - ${DAY_MS} - 1000), 'UTC') AS t FROM numbers(100))`);
+  await query('OPTIMIZE TABLE signaltrail.analytics_events');
   const runId = randomBytes(6).toString('hex');
   let attempt = 0;
   const queryIds = {};
@@ -175,10 +186,10 @@ export async function exerciseReadLayout(connection) {
     occurredVisitors: await tagged('occurredVisitors').countOccurredVisitors(oneDay),
   };
   assert.deepEqual(results, {
-    occurredCount: { count: String(SKIP_ROWS_PER_DAY) },
-    receivedCount: { count: String(SKIP_ROWS_PER_DAY) },
+    occurredCount: { count: String(SKIP_ROWS_PER_DAY + 100) },
+    receivedCount: { count: String(SKIP_ROWS_PER_DAY + 100) },
     occurredList: 5,
-    occurredVisitors: { count: '100' },
+    occurredVisitors: { count: '101' },
   });
   await query('SYSTEM FLUSH LOGS');
   const readRows = {};
@@ -192,9 +203,11 @@ export async function exerciseReadLayout(connection) {
     readRows[kind] = Number(value);
   }
   const totalRows = SKIP_DAYS * SKIP_ROWS_PER_DAY;
-  // One day is 1/60 of the rows; allow granule overlap but require skipping most of the data.
+  // One day is 1/60 of the rows; allow granule overlap but require event-time reads
+  // to skip most of the data. Received-time reads keep exact FINAL and are recorded.
   for (const [kind, value] of Object.entries(readRows))
-    assert.ok(value < totalRows / 4, `${kind} read ${value} of ${totalRows} rows`);
+    if (kind.startsWith('occurred'))
+      assert.ok(value < totalRows / 4, `${kind} read ${value} of ${totalRows} rows`);
   await query(`DROP USER ${processor.username}`);
   await query(`DROP USER ${readerUser.username}`);
   return {

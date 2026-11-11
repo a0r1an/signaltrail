@@ -177,6 +177,11 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
       throw new RangeError('Received-time window must be positive and at most 31 days');
     const target = new URL(endpoint);
     if (query) target.searchParams.set('query', query);
+    // Exact FINAL expansion re-reads every granule whose key range overlaps a selected
+    // one; with several projects per part that is most of the table. Copies of one
+    // event share occurred_at, so granules pruned by it hold no copy of an in-window
+    // event. received_at differs per copy, so received-time reads stay exact.
+    if (basis === 'occurred') target.searchParams.set('use_skip_indexes_if_final_exact_mode', '0');
     for (const [key, column, parameter] of [
       ['eventName', 'event_name', 'event_name_hex'],
       ['sessionId', 'session_id', 'session_hex'],
@@ -414,6 +419,10 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         4096,
         decodeCount,
         `SELECT toString(count()) AS count FROM ${database}.${table} FINAL WHERE event_name != '$identify' AND project_id = unhex({project_hex:String}) AND ${EVENT_TIME_SQL} >= parseDateTime64BestEffort({from:String}, 3, 'UTC') AND ${EVENT_TIME_SQL} < parseDateTime64BestEffort({to:String}, 3, 'UTC') FORMAT JSONEachRow`,
+        undefined,
+        undefined,
+        false,
+        'occurred',
       );
     },
     countOccurredVisitors(window: ReceivedEventWindow, signal?: AbortSignal) {
@@ -424,6 +433,10 @@ export function createAnalyticsReader(options: AnalyticsReaderOptions) {
         4096,
         decodeCount,
         visitorCountQuery(database, table, 'occurred', linksTable),
+        undefined,
+        undefined,
+        false,
+        'occurred',
       );
     },
     /** Server-only read: current retained project links resolve history retroactively. */
