@@ -19,6 +19,20 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-10
 
+### November 10 — async inserts flatten ClickHouse memory at 100 EPS
+
+- User chose async inserts plus small-server tuning. Added opt-in processor
+  `SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT` (async_insert + wait_for_async_insert;
+  default synchronous), 1-second flush profile, 256-MiB mark cache, 13 system logs
+  removed (query_log kept), and run-time assertion of server async inserts.
+  TDD; processor lint/127 tests/types/build and 78 harness units pass. d1701a5.
+- 15-minute 100 EPS run: 89992 accepted/unique stored, 34.3 records/write, inactive
+  parts plateau ~700 (vs 40–55k), ClickHouse memory flat 250–285 MiB (vs ~611 MiB
+  growth to rejection), zero drops/memory rejections, CPU pressure median 3.8%.
+  Fails on 9 metadata refusals in one interval at ~3.5 min; none afterwards.
+- Not yet verified: async-mode recovery probe, repeats, longer soak, VPS. Evidence:
+  `performance/4gb-async-insert.md`.
+
 ### November 10 — 50-EPS step-down endurance: one pass, one fail
 
 - User asked whether to accept 100 EPS as the limit; 100 EPS has failed every

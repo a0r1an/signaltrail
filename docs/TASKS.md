@@ -75,9 +75,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       See [step-down endurance](performance/4gb-step-down-endurance.md).
 - [x] Repeat 50 EPS / 30 minutes: fails (270 refusals in a sub-minute CPU stall;
       memory plateau unchanged). 50 EPS is not repeatably sustained locally.
-- [ ] Choose next: async_insert + small-server ClickHouse tuning experiment, 25 EPS
-      step-down, or quieter host (dev stack stopped / candidate VPS, which needs
-      spending approval). See [step-down endurance](performance/4gb-step-down-endurance.md).
+- [x] Async inserts + small-server ClickHouse tuning at 100 EPS / 15 minutes:
+      memory and inactive parts flat, exact storage, 9 refusals in one early
+      interval (fail). See [async inserts](performance/4gb-async-insert.md).
+- [ ] Run the real pipeline recovery probe (paused storage, crash, ambiguous ack)
+      with async inserts enabled before considering it as a default.
+- [ ] Repeat the async 100 EPS run, then a 30-minute endurance; investigate the
+      early refusal burst if it recurs.
 - [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-
       isolated controlled repeat before promoting batching. No stable100-EPS claim;
       preserve full failed results and per-ID/ack/offset evidence. Add an acceptance-ID
