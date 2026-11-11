@@ -6,10 +6,29 @@ each on the provider's page before any approval.
 
 ## Goal
 
-Choose the long-term single host for ingestion, processor, PostgreSQL, Redpanda,
-ClickHouse and Valkey within the **$50/month VPS ceiling**, and publish a measured
-operating limit for the launch workload: 10–50 active users (≈1–5 EPS), one dashboard
-viewer, bursts toward 100 EPS. Dashboard/demo stay on Vercel; backups go off-host.
+Updated 2026-11-11 with the user's launch requirements:
+
+- **Load:** about 1 event per minute at launch; must handle **1 event per second**
+  (≈86k/day, ≈7.8M rows over 90 days, close to the 9M-row dashboard test).
+- **No lost events.** Brief ingestion unavailability is acceptable (one server); no
+  accepted or browser-queued event may be lost. Always-available ingestion
+  (second server + load balancer) is not required.
+- **Known limits:** measure the chosen host's sustained and burst ceilings and alarm
+  well before them, with a rehearsed upgrade step.
+- **AWS:** the user's other services stay in AWS, so the host is EC2 in the same
+  region. OVH, Hetzner and DigitalOcean are dropped.
+- **Budget:** at most $50/month for the VPS. One dashboard viewer at a time.
+
+### How "no lost events" is met on one server
+
+- Browser SDK: unsent events persist in IndexedDB for 24 h (500 events / 1 MiB per
+  browser) and retry, so planned downtime of minutes delays rather than loses them.
+  Limitation: queued events are sent only when a page from the site is open again;
+  a visitor who never returns within 24 h keeps them. A managed front door
+  (API Gateway → SQS/S3) can remove this later; not decided.
+- Server: an event is acknowledged only after Redpanda stores it on EBS; the ledger
+  checks every accepted ID reaches ClickHouse. Host loss with intact EBS loses
+  nothing; EBS loss falls back to the hourly backup (one-hour RPO).
 
 ## What local testing already tells us
 
@@ -28,22 +47,22 @@ Evidence: [readiness runs](4gb-launch-readiness-nov11.md),
 
 ## Candidates
 
-| Host | vCPU / RAM / disk | Listed $/month | CPU type | Notes |
+At 1 EPS the stack is mostly idle, so a burstable instance fits: it earns CPU credits
+while quiet and spends them on dashboard queries, merges and retention deletes. EC2
+also upgrades in place (stop → change type → start; same EBS volume and Elastic IP).
+
+| Instance (Oregon, Graviton) | vCPU / RAM | Listed $/hour | ≈ $/month incl. 30 GB gp3 + IPv4 | Role |
 | --- | --- | --- | --- | --- |
-| OVHcloud US VPS-2 | 4–6 vCores / 8–12 GB / 75–100 GB NVMe | ≈$8.50–12 (some listings need 12-month upfront) | Shared | Most RAM per dollar; verify month-to-month price, term and steal time |
-| OVHcloud US VPS-3 | 6–8 vCores / 12–24 GB / 100–200 GB NVMe | ≈$12–28 (listings conflict) | Shared | Strong long-term candidate if month-to-month and steady |
-| AWS Lightsail compute-optimized Large | 2 / 4 GB / 160 GB | $42 (Nov 9) | Baseline unclear | Fits budget; verify sustained CPU terms |
-| Hetzner CCX13 (Ashburn/Hillsboro) | 2 dedicated / 8 GB | ≈$51 after June 2026 increase | Dedicated | At/over the ceiling; ~1 TB US traffic included |
-| DigitalOcean CPU-optimized | 4 / 8 GB | ≈$84 | Dedicated | Over budget; reference only |
-| AWS EC2 c7g.large (Oregon) | 2 / 4 GB + EBS | ≈$0.0725/h ≈ $53 + disk | Dedicated (Graviton) | Trial reference matching the local 4-GiB/2-CPU plan; over budget long-term |
-| AWS EC2 m7g.large (Oregon) | 2 / 8 GB + EBS | ≈$0.0816/h ≈ $60 + disk | Dedicated (Graviton) | Trial reference for the 8-GB case |
+| t4g.medium | 2 / 4 GiB, 20% baseline per vCPU | ≈$0.034 | ≈$31 | **Primary candidate** |
+| t4g.large | 2 / 8 GiB, 30% baseline per vCPU | ≈$0.067 | ≈$56 | First upgrade step (slightly over the ceiling) |
+| m7g.large / c7g.large | 2 dedicated / 8 or 4 GiB | ≈$0.082 / ≈$0.073 | ≈$66 / ≈$60 | Later steps when sustained CPU is needed |
 
-Burstable plans (t4g, Lightsail general purpose) are excluded as long-term hosts:
-their sustained CPU is a fraction of each vCPU unless extra is paid, and our load is
-steady. They may be measured only to document that limit.
+Prices are listings to verify; t4g.large was found only for us-east-1. The key
+measurement is whether idle stack CPU plus 1 EPS stays below t4g.medium's baseline;
+if it does, credits never drain.
 
-Shared-vCore hosts (OVH) are cheap but other tenants can take CPU ("steal"). That is
-exactly what qualification must measure before choosing one.
+Earlier non-AWS candidates and the full price survey remain in the git history of this
+document and in [launch-cost-and-capacity](launch-cost-and-capacity.md).
 
 ## Phases
 
@@ -63,29 +82,27 @@ The harness now runs targets and generator in one local Docker project. Add:
 
 Verification: dry-run against a local Linux VM or container before any paid host.
 
-### B. AWS reference trial (uses credits; needs approval)
+### B. AWS trial on the candidate (uses credits; needs approval)
 
-Purpose: measure the same workload on known, dedicated 2-vCPU hardware to separate
-"too few resources" from "noisy Mac", and calibrate the cheaper shared hosts.
+On t4g.medium with the full schema, 9M-row 90-day seed and one dashboard viewer:
 
-| Run on c7g.large (then m7g.large if memory-limited) | Duration |
+| Step | Measures |
 | --- | --- |
-| Smoke and 100 EPS (`capacity-4gb-memory-trace-async`), twice | 2 × 15 min |
-| Dashboard endurance with TTL | 30 min |
-| Launch-rate soak (5 EPS) and 50 EPS soak | 2 h each |
-| Five-viewer burst (reference only) | 10 min |
-| Backup/restore at production size (9M rows) | ≈30 min |
-| Disk and steal probes | 10 min |
+| Idle stack for 2 h, then 1 EPS for 4 h | CPU vs baseline, credit balance trend, memory, disk |
+| Ramp 1 → 5 → 10 → 25 → 50 → 100 EPS until failure | **Sustained limit** (credits start draining) and **burst limit** (latency/ack/refusal failure) |
+| Resize rehearsal t4g.medium → t4g.large while sending 1 EPS through the real SDK path | Downtime length; ledger shows zero lost events |
+| Hourly incremental backup to S3 via an IAM role; restore onto a fresh instance | Backup/restore time at production size, RPO/RTO |
+| Disk and steal probes | EBS latency, any steal time |
 
-Estimated cost: two hosts × ≈12 h × ≈$0.08 + generator t4g.small + ≈50 GB gp3 for a
-day + snapshot/S3 traffic ≈ **under $10 of credits**. All resources tagged and
-terminated the same day; cost log recorded.
+Generator on a separate small instance. Estimated cost: a few dollars of credits;
+all resources tagged and terminated the same day.
 
-### C. Long-term candidate (full price; needs separate approval)
+### C. Launch host (full price; needs separate approval)
 
-Run the same matrix on the cheapest candidate that the AWS reference suggests can
-pass (likely an OVH VPS-3-class host on month-to-month billing). Then a 24-hour soak
-at launch rate with dashboard and hourly backups before committing.
+Launch the instance type the trial supports, from the phase-A bootstrap, with
+monitoring and alarms in place before traffic: events/s at 60–70% of the measured
+sustained limit, CPU credit balance falling, memory, disk at 60%/70%, source lag,
+ingestion latency and refusals. The documented upgrade step is the rehearsed resize.
 
 ## Pass criteria (per host)
 
@@ -102,8 +119,9 @@ From the earlier [qualification proposal](launch-cost-and-capacity.md), unchange
 
 ## Decisions and inputs needed from the user
 
-1. Approval for phase B on the AWS account: instance types, ≤ $10 of credits, same-day
-   teardown. Plus CLI access (`aws login` or credentials) and the credit expiry date.
+1. Approval for phase B on the AWS account: t4g.medium/t4g.large plus a small
+   generator, ≤ $10 of credits, same-day teardown. Plus CLI access (`aws login` or
+   credentials) and the credit expiry date.
 2. Region: Oregon (`us-west-2`) is assumed, because the existing S3 bucket is there.
    Confirm or choose a region near the source applications.
 3. Whether the $50 ceiling covers only the VPS, or also backups, S3 and snapshots.
@@ -112,9 +130,9 @@ From the earlier [qualification proposal](launch-cost-and-capacity.md), unchange
 
 ## Risks
 
-- Listed prices conflict and changed in 2026 (Hetzner, OVH increases). Get quotes.
-- Shared-vCore hosts can pass a short trial and degrade later; the 24-hour soak and
-  steal monitoring reduce, but do not remove, that risk.
+- Listed prices are third-party; get the AWS quote for the chosen region.
+- Burstable credits: a sustained rise above baseline drains credits slowly; the
+  credit-balance alarm, not CPU percent, is the early warning.
 - A single host remains a single point of failure; the four-hour RTO depends on
   tested backups and a scripted rebuild (phase A bootstrap doubles as the rebuild).
 

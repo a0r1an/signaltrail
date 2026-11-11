@@ -66,6 +66,11 @@ Entries are questions, not approvals or completed work.
   finish local retention and dashboard/backup load work, then size the VPS and
   use credits for a short non-burstable qualification trial. Choose the long-term
   host on full price within the $50 ceiling; no instance is authorized yet.
+- **Launch workload and host direction (2026-11-11):** user expects ~1 event/minute at
+  launch and requires handling 1 event/second with **no lost events** (brief
+  unavailability acceptable; one server). Other services stay in AWS, so the host is
+  EC2 in the same region; t4g.medium is the primary candidate. User wants measured
+  limits and alarms to know when to upgrade. Plan: `performance/vps-qualification-plan.md`.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.
