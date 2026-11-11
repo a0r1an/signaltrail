@@ -1,3 +1,4 @@
+import { parseListenConfig } from './listen-config.ts';
 import { createIngestionMetrics } from './metrics.ts';
 import { createIngestionServer } from './server.ts';
 import { createProjectRuntime } from './project-runtime.ts';
@@ -5,9 +6,7 @@ import { createRedpandaPublisher } from './redpanda-publisher.ts';
 
 const projects = createProjectRuntime(process.env);
 const resolveProjectKey = projects.resolveProjectKey;
-const port = Number(process.env.PORT ?? 4100);
-if (!Number.isInteger(port) || port < 1 || port > 65535)
-  throw new RangeError('PORT must be from 1 to 65535');
+const { host, port, metricsHost, metricsPort } = parseListenConfig(process.env);
 const publisher = createRedpandaPublisher({
   onPublicationSettled: (seconds, failed) => metrics.observePublication(seconds, failed),
   brokers: (process.env.SIGNALTRAIL_REDPANDA_BROKERS ?? '127.0.0.1:19092')
@@ -17,14 +16,6 @@ const publisher = createRedpandaPublisher({
   maxOutstandingEvents: Number(process.env.SIGNALTRAIL_MAX_OUTSTANDING_EVENTS ?? 1000),
   maxOutstandingBytes: Number(process.env.SIGNALTRAIL_MAX_OUTSTANDING_BYTES ?? 8 * 1024 * 1024),
 });
-const metricsPort = Number(process.env.SIGNALTRAIL_METRICS_PORT ?? 9464);
-if (
-  !Number.isInteger(metricsPort) ||
-  metricsPort < 1 ||
-  metricsPort > 65535 ||
-  metricsPort === port
-)
-  throw new RangeError('Metrics port must be valid and differ from the ingestion port');
 const maxConcurrentRequests = Number(process.env.SIGNALTRAIL_MAX_CONCURRENT_REQUESTS ?? 128);
 const metrics = createIngestionMetrics(publisher.snapshot, {
   maxConcurrentRequests,
@@ -86,7 +77,7 @@ try {
       metrics.server.once('error', reject);
       metrics.server.listen(
         metricsPort,
-        process.env.SIGNALTRAIL_METRICS_HOST ?? '127.0.0.1',
+        metricsHost,
         () => {
           metrics.server.off('error', reject);
           resolve();
@@ -96,12 +87,12 @@ try {
   if (!stopping) {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
-      server.listen(port, '127.0.0.1', () => {
+      server.listen(port, host, () => {
         server.off('error', reject);
         resolve();
       });
     });
-    console.info(`Ingestion listening on http://127.0.0.1:${port}`);
+    console.info(`Ingestion listening on ${host}:${port}`);
   }
 } catch (error) {
   if (!stopping) {

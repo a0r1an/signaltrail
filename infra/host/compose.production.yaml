@@ -1,0 +1,152 @@
+# Single-host production stack (VPS). Run from infra/host after bootstrap.sh has
+# generated /etc/signaltrail/*.env and mounted the data volume.
+#
+# Memory follows the tested four-GiB plan: ClickHouse 1536, Redpanda 1280,
+# ingestion 288, processor 224, PostgreSQL 128 MiB, the rest left to the OS.
+# Every service restarts after a crash or reboot; data lives under SIGNALTRAIL_DATA.
+name: signaltrail
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: '3' }
+
+services:
+  postgres:
+    <<: *service
+    image: postgres:18
+    env_file: ${SIGNALTRAIL_ETC:-/etc/signaltrail}/postgres.env
+    environment:
+      POSTGRES_USER: signaltrail
+      POSTGRES_DB: signaltrail
+    volumes:
+      - ${SIGNALTRAIL_DATA:-/var/lib/signaltrail}/postgres:/var/lib/postgresql
+    mem_limit: 128m
+    shm_size: 64m
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'signaltrail', '-d', 'signaltrail']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redpanda:
+    <<: *service
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
+    command:
+      - redpanda
+      - start
+      # Production mode (no dev-container); shares CPUs with the rest of the host.
+      - --overprovisioned
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    volumes:
+      - ${SIGNALTRAIL_DATA:-/var/lib/signaltrail}/redpanda:/var/lib/redpanda/data
+    mem_limit: 1280m
+    healthcheck:
+      test: ['CMD', 'rpk', 'cluster', 'info', '-X', 'brokers=127.0.0.1:9092']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
+    depends_on:
+      redpanda: { condition: service_healthy }
+    entrypoint: ['/bin/sh', '-ec']
+    # Topics are acknowledged only after fsync (write.caching=false, verified by the script).
+    command:
+      - |
+        SIGNALTRAIL_REDPANDA_TOPIC=signaltrail.analytics.v1 /bin/sh /init/init-topics.sh
+        SIGNALTRAIL_REDPANDA_TOPIC=signaltrail.analytics.dlq.v1 SIGNALTRAIL_TOPIC_PARTITIONS=1 /bin/sh /init/init-topics.sh
+    environment:
+      REDPANDA_BROKERS: redpanda:9092
+      SIGNALTRAIL_TOPIC_PARTITIONS: '3'
+      SIGNALTRAIL_TOPIC_REPLICAS: '1'
+      SIGNALTRAIL_TOPIC_RETENTION_MS: '604800000'
+      SIGNALTRAIL_TOPIC_RETENTION_BYTES: '-1'
+    volumes:
+      - ../redpanda/init-topics.sh:/init/init-topics.sh:ro
+    restart: 'no'
+
+  clickhouse:
+    <<: *service
+    image: clickhouse/clickhouse-server:26.8
+    env_file: ${SIGNALTRAIL_ETC:-/etc/signaltrail}/clickhouse.env
+    environment:
+      CLICKHOUSE_DB: signaltrail
+      CLICKHOUSE_USER: signaltrail
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+    volumes:
+      - ${SIGNALTRAIL_DATA:-/var/lib/signaltrail}/clickhouse:/var/lib/clickhouse
+      - ${SIGNALTRAIL_DATA:-/var/lib/signaltrail}/backups:/backups
+      - ../clickhouse/config/small-server.xml:/etc/clickhouse-server/config.d/small-server.xml:ro
+      - ../clickhouse/config/async-insert-users.xml:/etc/clickhouse-server/users.d/async-insert.xml:ro
+      - ../clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
+      - ../clickhouse/healthcheck.sh:/healthcheck.sh:ro
+    mem_limit: 1536m
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ['CMD', '/bin/sh', '/healthcheck.sh']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  ingestion:
+    <<: *service
+    image: signaltrail-ingestion:${SIGNALTRAIL_RELEASE:?set SIGNALTRAIL_RELEASE}
+    env_file: ${SIGNALTRAIL_ETC:-/etc/signaltrail}/ingestion.env
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
+      SIGNALTRAIL_INGESTION_HOST: 0.0.0.0
+      PORT: '4100'
+      SIGNALTRAIL_METRICS_HOST: 0.0.0.0
+      SIGNALTRAIL_METRICS_PORT: '9464'
+      SIGNALTRAIL_REDPANDA_BROKERS: redpanda:9092
+      SIGNALTRAIL_REDPANDA_TOPIC: signaltrail.analytics.v1
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda-init: { condition: service_completed_successfully }
+    # Reachable only on the host interface the security group allows; TLS comes later.
+    ports:
+      - '${SIGNALTRAIL_INGESTION_BIND:-127.0.0.1}:4100:4100'
+    mem_limit: 288m
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  processor:
+    <<: *service
+    image: signaltrail-event-processor:${SIGNALTRAIL_RELEASE:?set SIGNALTRAIL_RELEASE}
+    env_file: ${SIGNALTRAIL_ETC:-/etc/signaltrail}/processor.env
+    environment:
+      NODE_OPTIONS: --max-old-space-size=128
+      SIGNALTRAIL_REDPANDA_BROKERS: redpanda:9092
+      SIGNALTRAIL_REDPANDA_TOPIC: signaltrail.analytics.v1
+      SIGNALTRAIL_REDPANDA_DLQ_TOPIC: signaltrail.analytics.dlq.v1
+      SIGNALTRAIL_PROCESSOR_GROUP_ID: signaltrail-processor
+      SIGNALTRAIL_PROCESSOR_METRICS_PORT: '9465'
+      SIGNALTRAIL_CLICKHOUSE_URL: http://clickhouse:8123
+      SIGNALTRAIL_CLICKHOUSE_ASYNC_INSERT: '1'
+    depends_on:
+      clickhouse: { condition: service_healthy }
+      redpanda-init: { condition: service_completed_successfully }
+    mem_limit: 224m
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:9465/metrics').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s

@@ -6,7 +6,7 @@ services:
     entrypoint: &backup-entrypoint
       ['/bin/sh', '-ec', 'chown clickhouse:clickhouse /backups && exec /entrypoint.sh']
     volumes:
-      - ./clickhouse-backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
+      - ../../infra/clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
       - clickhouse_backups:/backups
   clickhouse-restore:
     extends:
@@ -15,7 +15,7 @@ services:
     profiles: ['backup']
     entrypoint: *backup-entrypoint
     volumes:
-      - ./clickhouse-backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
+      - ../../infra/clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
       - clickhouse_backups:/backups
       - clickhouse_restore_data:/var/lib/clickhouse
     ports: !override

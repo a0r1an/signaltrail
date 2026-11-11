@@ -16,10 +16,10 @@ batch, plus low-memory tuning on small servers. The user chose to test both toge
   `wait_for_async_insert=1`, `wait_end_of_query=1`. The insert response, and so
   the source-offset commit, still follows the flushed write. Default remains `0`.
   Worker fetch batching stays 0 ms.
-- ClickHouse users profile (`clickhouse-async-insert-users.xml`): adaptive busy
+- ClickHouse users profile (`infra/clickhouse/config/async-insert-users.xml`): adaptive busy
   timeout off, `async_insert_busy_timeout_max_ms=1000` (pinned 26.8 defaults are
   adaptive 50–200 ms), `input_format_parallel_parsing=0`.
-- ClickHouse server (`clickhouse-small-server.xml`): `mark_cache_size` 256 MiB;
+- ClickHouse server (`infra/clickhouse/config/small-server.xml`): `mark_cache_size` 256 MiB;
   13 system log tables removed (trace, text, metric, asynchronous_metric,
   query_metric, error, part, query_thread, query_views, processors_profile,
   opentelemetry_span, asynchronous_insert, background_schedule_pool).

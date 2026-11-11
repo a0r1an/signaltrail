@@ -1,5 +1,5 @@
 services:
   clickhouse:
     volumes:
-      - ./clickhouse-small-server.xml:/etc/clickhouse-server/config.d/small-server.xml:ro
-      - ./clickhouse-async-insert-users.xml:/etc/clickhouse-server/users.d/async-insert.xml:ro
+      - ../../infra/clickhouse/config/small-server.xml:/etc/clickhouse-server/config.d/small-server.xml:ro
+      - ../../infra/clickhouse/config/async-insert-users.xml:/etc/clickhouse-server/users.d/async-insert.xml:ro
