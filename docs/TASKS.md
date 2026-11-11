@@ -195,8 +195,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] VPS phase A (no spending): production images/compose, secrets, migrations,
       TLS, bootstrap, verify, remote runner, probe, backups/restore; verified on
       local Docker and a Lima Ubuntu VM. See [plan](performance/vps-qualification-plan.md).
-- [ ] VPS phase B (approved ≤ $10; profile `signaltrail-trial`, us-east-2):
-      transport, launch/teardown/resize
+- [ ] VPS phase B (approved ≤ $10; profile `signaltrail-trial`, us-east-2). Tooling
+      done; blocked: Free plan rejects t4g (upgrade to paid or use c7i-flex.large).
+      Was: transport, launch/teardown/resize
       scripts, backup bucket and instance role, then the t4g.medium trial.
 - [ ] VPS phase C: launch host with alarms (needs approval).
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.

@@ -36,8 +36,11 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   so the existing SSO profiles and replay dev bucket do not apply to it.
 - CLI access works: profile `signaltrail-trial` (`aws login`), account
   231576004804, region us-east-2 (the account's project is fixed to Ohio).
-- Next: phase B tooling (launch/teardown by tag, SSH transport, resize, cost log),
-  then the t4g.medium trial.
+- Phase B tooling done (da77724): `host ec2-up|ec2-status|ec2-resize-*|ec2-down`
+  and `SIGNALTRAIL_HOST_TARGET=ec2` remote runs; Lima smoke re-passes on it.
+- Blocked: the Free plan account rejects t4g.medium (free-tier-eligible types only).
+  Partial launch torn down, nothing left, $0. Needs the user's choice: upgrade to a
+  paid plan (credits kept) or trial on c7i-flex.large.
 
 ### November 11 — local readiness work before VPS sizing
 

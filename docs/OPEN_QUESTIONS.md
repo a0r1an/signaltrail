@@ -76,6 +76,12 @@ Entries are questions, not approvals or completed work.
   Center profiles (`signaltrail-admin`, `signaltrail-replay-dev`) and the replay dev
   bucket stay in account 469302114413. CLI access to the new account (231576004804)
   works; its project is fixed to us-east-2, so the trial runs in Ohio.
+  Free plan blocks t4g.medium: the first launch (2026-11-11) failed with "instance
+  type is not eligible for Free Tier" (a dry-run does not check this). Eligible 4 GiB
+  type: c7i-flex.large (x86, $0.0848/h ≈ $62/month, over the $50 ceiling). Partial
+  resources were torn down and verified gone ($0). Decision needed: upgrade the
+  account to a paid plan (keeps the remaining credits, unlocks t4g) or trial on
+  c7i-flex.large.
   Needed before launch: which account hosts production (a Free plan account closes
   at plan end unless upgraded; upgrading keeps remaining credits), and whether replay
   storage moves, and the production region (match the other AWS services). Working
