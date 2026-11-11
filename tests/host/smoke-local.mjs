@@ -20,6 +20,7 @@ const env = {
   SIGNALTRAIL_DATA: resolve(directory, 'data'),
   SIGNALTRAIL_RELEASE: release,
   SIGNALTRAIL_INGESTION_PUBLISH: '127.0.0.1:34190',
+  SIGNALTRAIL_CLICKHOUSE_PUBLISH: '127.0.0.1:38290',
   SIGNALTRAIL_COMPOSE_OVERLAY: resolve(root, 'tests/host/compose.local.yaml'),
 };
 const run = (command, args, input) => {

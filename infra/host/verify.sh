@@ -4,22 +4,13 @@
 #   sudo infra/host/verify.sh            # after bootstrap.sh, a reboot or an upgrade
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-etc=${SIGNALTRAIL_ETC:-/etc/signaltrail}
-export SIGNALTRAIL_ETC=$etc
-# shellcheck disable=SC1091
-. "$etc/release.env"
-export SIGNALTRAIL_RELEASE
-compose() {
-  docker compose -f "$here/compose.production.yaml" \
-    ${SIGNALTRAIL_COMPOSE_OVERLAY:+-f "$SIGNALTRAIL_COMPOSE_OVERLAY"} "$@"
-}
-psql_q() { compose exec -T postgres psql -qAt -v ON_ERROR_STOP=1 -U signaltrail -d signaltrail -c "$1"; }
-value() { sed -n "s/^$2=//p" "$etc/$1"; }
+. "$here/lib.sh"
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 ch() { compose exec -T clickhouse clickhouse-client --user "$1" --password "$2" --query "$3"; }
 
 compose up -d --wait >/dev/null 2>&1 || fail 'stack did not become healthy'
-url=http://127.0.0.1:4100
+publish=$(env_value host.env SIGNALTRAIL_INGESTION_PUBLISH)
+url=http://${publish:-127.0.0.1:4100}
 curl -fsS "$url/health" >/dev/null || fail 'ingestion /health'
 
 key="st_pub_$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
@@ -43,8 +34,8 @@ response=$(curl -fsS -X POST "$url/v1/events" -H "authorization: Bearer $key" \
   -H 'content-type: application/json' --data "$body") || fail 'ingestion request'
 printf '%s' "$response" | grep -q '"status":"accepted"' || fail "event not accepted: $response"
 
-reader=$(value dashboard.env SIGNALTRAIL_CLICKHOUSE_READER)
-reader_password=$(value dashboard.env SIGNALTRAIL_CLICKHOUSE_READER_PASSWORD)
+reader=$(env_value dashboard.env SIGNALTRAIL_CLICKHOUSE_READER)
+reader_password=$(env_value dashboard.env SIGNALTRAIL_CLICKHOUSE_READER_PASSWORD)
 stored=0
 for _ in $(seq 1 60); do
   stored=$(ch "$reader" "$reader_password" \
@@ -54,7 +45,7 @@ for _ in $(seq 1 60); do
 done
 [ "$stored" = 1 ] || fail 'accepted event not stored within 30 s'
 
-processor_password=$(value processor.env SIGNALTRAIL_CLICKHOUSE_PASSWORD)
+processor_password=$(env_value processor.env SIGNALTRAIL_CLICKHOUSE_PASSWORD)
 if ch signaltrail_processor "$processor_password" 'SELECT 1 FROM signaltrail.analytics_events LIMIT 1' >/dev/null 2>&1; then
   fail 'processor can read events'
 fi
@@ -62,4 +53,4 @@ tls=$(psql_q "SELECT count(*) FILTER (WHERE ssl) || '/' || count(*) FROM pg_stat
 case "$tls" in 0/* | */0) fail "no TLS ingestion connections: $tls" ;; esac
 [ "${tls%/*}" = "${tls#*/}" ] || fail "non-TLS ingestion connections: $tls"
 
-printf 'OK release=%s event stored, restricted users, ingestion TLS %s\n' "$SIGNALTRAIL_RELEASE" "$tls"
+printf 'OK event stored, restricted users, ingestion TLS %s\n' "$tls"

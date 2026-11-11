@@ -102,6 +102,9 @@ services:
       - ../clickhouse/config/async-insert-users.xml:/etc/clickhouse-server/users.d/async-insert.xml:ro
       - ../clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
       - ../clickhouse/healthcheck.sh:/healthcheck.sh:ro
+    # Host loopback only: operators and load runs reach it through a tunnel.
+    ports:
+      - '${SIGNALTRAIL_CLICKHOUSE_PUBLISH:-127.0.0.1:8123}:8123'
     mem_limit: 1536m
     ulimits:
       nofile: { soft: 262144, hard: 262144 }

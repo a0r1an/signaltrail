@@ -3,6 +3,7 @@
 # Idempotent: re-running on an existing host keeps data, secrets and the mount.
 #
 #   sudo SIGNALTRAIL_RELEASE=<tag> [SIGNALTRAIL_DATA_DEVICE=/dev/nvme1n1] infra/host/bootstrap.sh
+# Optional: SIGNALTRAIL_INGESTION_PUBLISH / SIGNALTRAIL_CLICKHOUSE_PUBLISH (ip:port).
 #
 # SIGNALTRAIL_DATA_DEVICE: a dedicated data disk. Formatted ext4 only when it has no
 # filesystem; an existing filesystem (rebuild onto a restored volume) is mounted as is.
@@ -72,7 +73,13 @@ for app in ingestion event-processor; do
     docker build -q -f "$here/Dockerfile" --build-arg "APP=$app" \
       -t "signaltrail-$app:$SIGNALTRAIL_RELEASE" "$repo"
 done
-# The release tag persists so restarts and scripts use the same images.
-printf 'SIGNALTRAIL_RELEASE=%s\n' "$SIGNALTRAIL_RELEASE" > "$SIGNALTRAIL_ETC/release.env"
+# Release tag and optional publish addresses persist for every later compose command.
+{
+  printf 'SIGNALTRAIL_RELEASE=%s\n' "$SIGNALTRAIL_RELEASE"
+  for name in SIGNALTRAIL_INGESTION_PUBLISH SIGNALTRAIL_CLICKHOUSE_PUBLISH; do
+    eval "value=\${$name:-}"
+    [ -z "$value" ] || printf '%s=%s\n' "$name" "$value"
+  done
+} > "$SIGNALTRAIL_ETC/host.env"
 
 sh "$here/migrate.sh"

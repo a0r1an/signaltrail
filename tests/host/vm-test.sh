@@ -1,7 +1,11 @@
 #!/bin/sh
 # Bootstrap a disposable Lima Ubuntu VM with a separate data disk, verify, re-run,
 # reboot, verify again, then delete the VM and disk. Evidence in test-results/host.
+#   vm-test.sh          full test, VM deleted afterwards
+#   vm-test.sh vm-up    bootstrap and verify, leave the VM running for remote runs
+#   vm-test.sh vm-down  delete the VM and its disk
 set -eu
+mode=${1:-test}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 name=signaltrail-host-test
 disk=signaltrail-host-data
@@ -12,7 +16,8 @@ cleanup() {
   limactl delete -f "$name" >/dev/null 2>&1 || true
   limactl disk delete -f "$disk" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+if [ "$mode" = vm-down ]; then cleanup; printf 'Deleted %s\n' "$name"; exit 0; fi
+[ "$mode" = vm-up ] || trap cleanup EXIT
 cleanup
 in_vm() { limactl shell --workdir / "$name" "$@"; }
 
@@ -29,12 +34,13 @@ log "data disk $device"
 
 bootstrap() {
   in_vm sudo SIGNALTRAIL_RELEASE=vmtest SIGNALTRAIL_DATA_DEVICE="$device" \
+    SIGNALTRAIL_INGESTION_PUBLISH=127.0.0.1:34100 SIGNALTRAIL_CLICKHOUSE_PUBLISH=127.0.0.1:38223 \
     sh "$root/infra/host/bootstrap.sh" >> "$out/bootstrap.log" 2>&1
 }
 verify() { in_vm sudo sh "$root/infra/host/verify.sh" 2>&1 | tee -a "$out/verify.log" | tail -1; }
 events() {
-  in_vm sudo sh -c "cd $root/infra/host && . /etc/signaltrail/release.env && \
-    SIGNALTRAIL_RELEASE=\$SIGNALTRAIL_RELEASE docker compose -f compose.production.yaml exec -T clickhouse \
+  in_vm sudo sh -c "cd $root/infra/host && \
+    docker compose --env-file /etc/signaltrail/host.env -f compose.production.yaml exec -T clickhouse \
     sh -c 'clickhouse-client --user \"\$CLICKHOUSE_USER\" --password \"\$CLICKHOUSE_PASSWORD\" --query \"SELECT count() FROM signaltrail.analytics_events\"'"
 }
 
@@ -43,6 +49,10 @@ log 'bootstrap (fresh host)'
 bootstrap
 log "bootstrap took $(( $(date +%s) - start )) s"
 log "verify: $(verify)"
+if [ "$mode" = vm-up ]; then
+  log "VM $name is up: SIGNALTRAIL_HOST_TARGET=lima:$name"
+  exit 0
+fi
 log 'bootstrap again (idempotent)'
 bootstrap
 log "verify: $(verify)"

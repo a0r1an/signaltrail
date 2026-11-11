@@ -1,17 +1,10 @@
 #!/bin/sh
 # Start data services, apply the release's migrations (embedded in the ingestion
 # image), provision restricted identities, then start everything. Idempotent.
-# Run from any directory: SIGNALTRAIL_RELEASE=<tag> infra/host/migrate.sh
+# Run from any directory: infra/host/migrate.sh (release from host.env or the environment)
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-etc=${SIGNALTRAIL_ETC:-/etc/signaltrail}
-: "${SIGNALTRAIL_RELEASE:?set SIGNALTRAIL_RELEASE}"
-export SIGNALTRAIL_ETC=$etc
-# SIGNALTRAIL_COMPOSE_OVERLAY adds one extra compose file (local smoke test only).
-compose() {
-  docker compose -f "$here/compose.production.yaml" \
-    ${SIGNALTRAIL_COMPOSE_OVERLAY:+-f "$SIGNALTRAIL_COMPOSE_OVERLAY"} "$@"
-}
+. "$here/lib.sh"
 from_image() { compose run --rm --no-deps -T --entrypoint sh ingestion -c "$1"; }
 
 compose up -d --wait postgres clickhouse redpanda
@@ -19,8 +12,7 @@ compose run --rm redpanda-init
 
 # ClickHouse 001.. in order; every statement is idempotent.
 from_image 'cat /app/migrations/clickhouse/*.sql' |
-  compose exec -T clickhouse sh -c \
-    'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery'
+  clickhouse_admin
 # PostgreSQL tracked control-plane plan (checksums, advisory lock).
 from_image 'cat /app/migrations/postgres-plan.sql' |
   compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U signaltrail -d signaltrail
@@ -34,8 +26,7 @@ for value in "$ingestion_password" "$processor_password" "$reader_password" "$da
   case "$value" in '' | *[!0-9a-f]*) printf 'Invalid generated secret\n' >&2; exit 1 ;; esac
 done
 
-compose exec -T clickhouse sh -c \
-  'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery' <<EOF
+clickhouse_admin <<EOF
 CREATE USER IF NOT EXISTS signaltrail_processor IDENTIFIED WITH sha256_password BY '$processor_password';
 ALTER USER signaltrail_processor IDENTIFIED WITH sha256_password BY '$processor_password';
 GRANT INSERT ON signaltrail.analytics_events TO signaltrail_processor;
@@ -67,4 +58,4 @@ GRANT SELECT ON signaltrail_control.principals, signaltrail_control.organization
 EOF
 
 compose up -d --wait
-printf 'SignalTrail release %s is running\n' "$SIGNALTRAIL_RELEASE"
+printf 'SignalTrail is running\n'
