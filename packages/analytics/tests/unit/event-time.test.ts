@@ -61,12 +61,13 @@ it('applies event-time filters only to activity while resolving retained project
   expect(sql.indexOf('session_id = unhex')).toBeGreaterThan(sql.indexOf('LEFT JOIN'));
 });
 it('prunes event-time reads by skip index without exact FINAL expansion; received-time reads stay exact', async () => {
-  const send = vi.fn<typeof fetch>(async (url) =>
-    new Response(
-      String(new URL(String(url)).searchParams.get('query')).startsWith('SELECT event_id')
-        ? ''
-        : '{"count":"0"}',
-    ),
+  const send = vi.fn<typeof fetch>(
+    async (url) =>
+      new Response(
+        String(new URL(String(url)).searchParams.get('query')).startsWith('SELECT event_id')
+          ? ''
+          : '{"count":"0"}',
+      ),
   );
   const reader = createAnalyticsReader({
     endpoint: 'http://clickhouse:8123',
