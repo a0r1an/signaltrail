@@ -136,6 +136,15 @@ Entries are questions, not approvals or completed work.
   memory proportional to visitors active in the window; a later approximate
   count or daily rollups may be needed at larger scale. The 64 MiB reader cap is
   unchanged. Evidence: `performance/4gb-dashboard-90day.md`.
+- **Dashboard concurrency (decide before multi-user claims):** five simultaneous
+  page loads on the 4-GiB/2-CPU plan give page p95 2.23 s with 0 errors; ingestion
+  unaffected. Options: per-server dashboard query cap, short page-result cache,
+  approximate visitor counts, more CPU. Working assumption: launch with 1–2
+  concurrent owners is within target (single viewer p95 ~1.2 s).
+- **Backups (approval needed for S3):** local drill passes. Needed: approval to
+  write backups to S3 (or another off-host destination), schedule (hourly
+  incremental for the 1-hour RPO), backup retention, encryption and a production-
+  size restore on the candidate VPS.
 - **Replay retention:** user approved a configurable 14-day default for replay
   recordings. Recording, object lifecycle/deletion and metadata cleanup are not
   implemented. This default does not authorize changing the existing S3 bucket
@@ -333,8 +342,14 @@ and the point at which an answer becomes necessary.
   fixture access to make the page work. Server connection limits must also be
   validated across Vercel function instances.
 
-- **Public ingestion-key rotation:** hashed key lookup and revocation are being
-  implemented without a cache. A revoked key is denied on its next lookup; batches
+- **Public ingestion-key rotation:** hashed key lookup and revocation. 2026-11-11:
+  user chose an in-memory key cache invalidated by PostgreSQL LISTEN/NOTIFY
+  (migration 003) over a TTL-only cache or Valkey, after per-request lookups caused
+  metadata-gate refusals during short app stalls. The cache is used only while
+  LISTEN is live; a notified revocation is applied within milliseconds of commit
+  (fixture: ~1.5 ms), with a 5-minute TTL backstop. Lost database privileges are
+  not key changes: uncached keys fail closed and readiness fails, but cached keys
+  keep working until notification or TTL. Batches
   already authorized/publishing are not undone. SDK queues are scoped by public
   key and are never silently reassigned to another key/project. Decide the
   rotation overlap/grace policy before exposing a rotate-key operation so older

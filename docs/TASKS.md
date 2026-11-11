@@ -81,12 +81,15 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Real pipeline recovery probe with async inserts (`load pipeline-async`):
       paused storage, worker SIGKILL and withheld-acknowledgement replay all pass;
       sync `load pipeline` still passes.
-- [ ] Repeat the async 100 EPS run, then a 30-minute endurance; investigate the
-      early refusal burst if it recurs.
+- [x] Repeat the async 100 EPS run (refusal burst recurred: per-request key
+      lookups; fixed with NOTIFY-invalidated key cache; repeat passes, 0 refusals),
+      then 30-minute endurance with dashboard + TTL: fails only on one host-wide
+      Docker-VM stall, 0 accepted loss by ledger. See
+      [readiness runs](performance/4gb-launch-readiness-nov11.md).
 - [ ] Isolate CPU/fetch/heartbeat stalls with component timing on a quiet or CPU-
       isolated controlled repeat before promoting batching. No stable100-EPS claim;
-      preserve full failed results and per-ID/ack/offset evidence. Add an acceptance-ID
-      ledger before interpreting stored/accepted count mismatches as loss or recovery.
+      preserve full failed results and per-ID/ack/offset evidence. Acceptance-ID
+      ledger now reconciles every stored ID (9743d2f).
 - [ ] Full post-load cleanup qualification needs idle beyond 480s plus cleanup delay.
       Three minutes shows partial recovery, not complete release or leak exclusion.
 - [ ] Query-log-volume comparison deferred behind the stronger part-metadata lead;
@@ -135,15 +138,19 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] ClickHouse 90-day row TTL by receipt time (`002-analytics-retention.sql`,
       unpartitioned per user decision). Real probe: 91-day row removed, 89-day row
       kept, retry still one row, migration idempotent. Capacity fixture applies it.
-- [ ] Measure TTL merge cost under load; define retention across backups/archives
-      and effects on visitor/identity-link resolution.
+- [x] TTL delete cost: ~6 s of one core per 9M rows (isolated, forced); not observed
+      during 30-minute load. Links expire with events (004).
+- [ ] Define retention across backups/archives; observe a natural TTL merge under
+      ingestion on the candidate VPS.
 - [x] 90-day dashboard capacity profile with real reader queries: fails. Visitor
       count exceeds 64 MiB on every page load; all queries scan the full history.
       See [dashboard 90-day](performance/4gb-dashboard-90day.md).
 - [x] Dashboard query-scaling fix (UUIDv7 IDs, `occurred_at` skip indexes,
       identity-links table); dashboard profile re-run passes (p95 1.19 s, 0 errors).
-- [ ] Measure concurrent dashboard users and 30-day visitor-count growth; decide
-      whether approximate counts or daily rollups are needed.
+- [x] Five simultaneous viewers: 0 errors, page p95 2.23 s (fails 2 s); ingestion
+      unaffected. Single viewer p95 ~1.2 s.
+- [ ] Decide dashboard concurrency handling (query cap, short result cache,
+      approximate visitors, or more CPU) before multi-user claims.
 - [ ] Settle clock-skew and attribution semantics before exposing corresponding
       dashboard claims. Event-time explorer and identified visitor counts already exist.
 - [ ] Decide key-rotation overlap and implement deliberate key administration;
@@ -194,8 +201,11 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       and deployment/rollback workflow.
 - [ ] Off-server analytics archiving and reject-ingestion policy when lag exceeds
       the agreed recovery bound.
-- [ ] PostgreSQL/ClickHouse backups and replacement-host restore drill against
-      four-hour RTO and best-effort one-hour RPO.
+- [x] Local backup + replacement-host restore drill (`load backup-restore`):
+      full + incremental ClickHouse BACKUP and pg_dump; fingerprints, RPO window and
+      restored writes verified. See [backup drill](performance/backup-restore-drill.md).
+- [ ] Off-host backup destination (S3, needs approval), schedule/retention,
+      encryption and a production-size restore on the candidate VPS.
 - [ ] Representative sustained/endurance/failure load tests and capacity limits.
 - [ ] Production lag/availability alerts, recipients and runbooks; Grafana Cloud
       metrics exist, but alert delivery/production objectives remain unresolved.

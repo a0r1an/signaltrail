@@ -19,6 +19,25 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-11
 
+### November 11 — local readiness work before VPS sizing
+
+- Early refusal burst traced to per-request PostgreSQL key lookups during short app
+  stalls. User chose an in-memory key cache invalidated by LISTEN/NOTIFY (Postgres
+  migration 003; fc154a8). Fixture proves cached serving and ~1.5 ms revocation after
+  commit; access 98, ingestion 78 tests. 100 EPS repeat now passes: 0 refusals,
+  HTTP p95 4.5 ms.
+- Acceptance-ID ledger reconciles every stored ID (9743d2f); 93 harness units.
+- 30-minute endurance with dashboard + TTL fails only on one host-wide Docker-VM
+  stall (all containers incl. isolated generator spike; 125 late-stored retries,
+  556 drops), 0 accepted loss, dashboard p95 1.19 s, ClickHouse memory flat.
+- Five simultaneous viewers: 0 errors, page p95 2.23 s (fails 2 s target).
+- TTL delete: ~6 s of one core per 9M rows (forced, isolated).
+- `load backup-restore` passes locally (full + incremental ClickHouse, pg_dump,
+  replacement host verified in 6.4 s on small data). Evidence:
+  `performance/4gb-launch-readiness-nov11.md`, `performance/backup-restore-drill.md`.
+- User's dev stack needs `metadata migrate-local` (Postgres 003) for the key cache's
+  notifications; without it ingestion still works but no key-change notices are sent.
+
 ### November 11 — dashboard reads scale with the window, not history
 
 - User approved fixes A + B. SDK now emits UUIDv7 event IDs (caf4737; 310 SDK
