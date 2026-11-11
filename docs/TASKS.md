@@ -192,6 +192,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       `load memory-4gb` and its limitations are documented in
       [local feasibility](performance/4gb-local-feasibility.md). Cloudflare
       Workers/D1/Basin is an alternative under discussion, not an approved rewrite.
+- [ ] VPS qualification per [plan](performance/vps-qualification-plan.md): (A) remote-run
+      tooling, no spending; (B) AWS reference trial ≤ $10 credits, needs approval;
+      (C) long-term candidate, needs approval.
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
       Current proposal and launch workload are in
       [launch cost/capacity](performance/launch-cost-and-capacity.md). Benchmark the
