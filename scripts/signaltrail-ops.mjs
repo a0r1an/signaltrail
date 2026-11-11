@@ -14,7 +14,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs broker test|status|metrics
   ./scripts/signaltrail-ops.mjs load check|baseline|burst|saturation|bytes|recovery|pipeline|pipeline-async|browser-pipeline|sustained-smoke|sustained|sustained-stress|sustained-outage|sustained-bytes|request-admission|analytics-read|storage-readiness|project-access|authorized-analytics|storage-image|storage-logs
   ./scripts/signaltrail-ops.mjs load part-memory
-  ./scripts/signaltrail-ops.mjs load memory-4gb|memory-2gb|capacity-4gb|capacity-4gb-boundary|capacity-4gb-confirm|capacity-4gb-http32|capacity-4gb-http128|capacity-4gb-db8|capacity-4gb-db4-long|capacity-4gb-db8-long|capacity-4gb-db8-q24|capacity-4gb-db8-q24-noqueries|capacity-4gb-db8-q24-generator|capacity-4gb-db8-q24-rebalanced|capacity-4gb-telemetry|capacity-4gb-memory-trace|capacity-4gb-memory-trace-heap|capacity-4gb-memory-trace-heap-batched|capacity-4gb-memory-trace-heap-batched-smoke|capacity-4gb-memory-trace-heap-smoke|capacity-4gb-memory-trace-smoke|capacity-4gb-memory-trace-async|capacity-4gb-memory-trace-async-smoke|capacity-4gb-telemetry-failure|capacity-4gb-query-memory|capacity-4gb-query-memory-no-text-log|capacity-4gb-db8-q24-endurance|capacity-4gb-db8-q24-endurance-50
+  ./scripts/signaltrail-ops.mjs load memory-4gb|memory-2gb|capacity-4gb|capacity-4gb-boundary|capacity-4gb-confirm|capacity-4gb-http32|capacity-4gb-http128|capacity-4gb-db8|capacity-4gb-db4-long|capacity-4gb-db8-long|capacity-4gb-db8-q24|capacity-4gb-db8-q24-noqueries|capacity-4gb-db8-q24-generator|capacity-4gb-db8-q24-rebalanced|capacity-4gb-telemetry|capacity-4gb-memory-trace|capacity-4gb-memory-trace-heap|capacity-4gb-memory-trace-heap-batched|capacity-4gb-memory-trace-heap-batched-smoke|capacity-4gb-memory-trace-heap-smoke|capacity-4gb-memory-trace-smoke|capacity-4gb-memory-trace-async|capacity-4gb-memory-trace-async-smoke|capacity-4gb-memory-trace-async-dashboard|capacity-4gb-memory-trace-async-dashboard-smoke|capacity-4gb-telemetry-failure|capacity-4gb-query-memory|capacity-4gb-query-memory-no-text-log|capacity-4gb-db8-q24-endurance|capacity-4gb-db8-q24-endurance-50
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
@@ -148,6 +148,8 @@ try {
       'capacity-4gb-memory-trace-smoke',
       'capacity-4gb-memory-trace-async',
       'capacity-4gb-memory-trace-async-smoke',
+      'capacity-4gb-memory-trace-async-dashboard',
+      'capacity-4gb-memory-trace-async-dashboard-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
@@ -155,7 +157,7 @@ try {
       'capacity-4gb-db8-q24-endurance-50',
     ].includes(action)
   ) {
-    for (const name of ['contracts', 'project-access', 'ingestion', 'event-processor'])
+    for (const name of ['contracts', 'project-access', 'ingestion', 'event-processor', 'analytics'])
       pnpm('--filter', `@signaltrail/${name}`, 'build');
     tasks.push({ command: 'node', args: ['tests/load/memory-run.mjs', action] });
   } else if (group === 'load' && action === 'check') pnpm('test:load:unit');

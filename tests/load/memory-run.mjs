@@ -23,6 +23,8 @@ import {
   capacityCommandTimeoutMs,
 } from './capacity-stage.mjs';
 import { assessInsertMode, insertEventsQuery, parseInsertEvents } from './insert-mode.mjs';
+import { assessDashboard, dashboardWindow, summarizeDashboard } from './dashboard-load.mjs';
+import { createAnalyticsReader } from '../../packages/analytics/dist/index.js';
 
 const profile = process.argv[2] ?? 'memory-4gb';
 assert.ok(Object.hasOwn(memoryPlans, profile), 'Unknown memory profile');
@@ -45,6 +47,8 @@ const dbConnections = [
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-memory-trace-async',
   'capacity-4gb-memory-trace-async-smoke',
+  'capacity-4gb-memory-trace-async-dashboard',
+  'capacity-4gb-memory-trace-async-dashboard-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -72,6 +76,8 @@ const isolatedGenerator = [
   'capacity-4gb-memory-trace-smoke',
   'capacity-4gb-memory-trace-async',
   'capacity-4gb-memory-trace-async-smoke',
+  'capacity-4gb-memory-trace-async-dashboard',
+  'capacity-4gb-memory-trace-async-dashboard-smoke',
   'capacity-4gb-telemetry-failure',
   'capacity-4gb-query-memory',
   'capacity-4gb-query-memory-no-text-log',
@@ -84,6 +90,10 @@ const heapSmoke = heapProfile && profile.endsWith('smoke');
 const batchWaitMs = profile.includes('heap-batched') ? 200 : 0;
 // Async-insert profiles also apply the small-server ClickHouse configuration.
 const asyncInsert = profile.includes('memory-trace-async');
+// Dashboard profiles seed 90 days of history and replace the synthetic full-table
+// query with real explorer page loads.
+const dashboardLoad = profile.includes('-dashboard');
+const seedRows = dashboardLoad ? 9000000 : capacity ? 1000000 : 100000;
 const memoryTrace = profile.startsWith('capacity-4gb-memory-trace');
 const analyticalLoad = profile !== 'capacity-4gb-db8-q24-noqueries';
 const serviceMiB = Object.values(memoryPlan.services).reduce((sum, n) => sum + n, 0);
@@ -106,6 +116,7 @@ function docker(args, timeout = capacity ? capacityCommandTimeoutMs(profile) : 3
         SIGNALTRAIL_FIXTURE_HTTP_CAP: String(httpCap),
         SIGNALTRAIL_FIXTURE_BATCH_WAIT_MS: String(batchWaitMs),
         SIGNALTRAIL_FIXTURE_ASYNC_INSERT: asyncInsert ? '1' : '0',
+        SIGNALTRAIL_FIXTURE_SEED_PROFILE: dashboardLoad ? 'retention90' : 'default',
         SIGNALTRAIL_FIXTURE_DB_CONNECTIONS: String(dbConnections),
         SIGNALTRAIL_FIXTURE_DB_QUERIES: String(dbQueries),
       },
@@ -153,12 +164,14 @@ const compose = (...args) =>
       'capacity-4gb-memory-trace-smoke',
       'capacity-4gb-memory-trace-async',
       'capacity-4gb-memory-trace-async-smoke',
+      'capacity-4gb-memory-trace-async-dashboard',
+      'capacity-4gb-memory-trace-async-dashboard-smoke',
       'capacity-4gb-telemetry-failure',
       'capacity-4gb-query-memory',
       'capacity-4gb-query-memory-no-text-log',
       'capacity-4gb-db8-q24-endurance',
       'capacity-4gb-db8-q24-endurance-50',
-  'capacity-4gb-db8-q24-endurance-50',
+      'capacity-4gb-db8-q24-endurance-50',
     ].includes(profile)
       ? ['-f', 'tests/load/compose.memory-rebalanced.yaml']
       : []),
@@ -329,7 +342,7 @@ let result = {
   ...(capacity
     ? {
         highestPassingEventsPerSecond: 0,
-        seedRows: 1000000,
+        seedRows,
         sessionCount: 1000,
         thresholds: {
           httpP95Ms: 500,
@@ -351,10 +364,12 @@ let result = {
   limitations: [
     `Per-service hard memory caps sum to ${serviceMiB} MiB; ${memoryPlan.hostReserveMiB} MiB is reserved, not allocated to a real guest OS.`,
     `Not a ${totalGiB} GiB VM: separate cgroups, shared host CPU/disk, Docker kernel and host caches differ.`,
-    `${capacity ? 1000000 : 100000} historical fixture rows; short runs do not qualify retention-scale, backups, replay or production endurance.`,
+    `${seedRows} historical fixture rows${dashboardLoad ? ' over 90 days' : ''}; short runs do not qualify retention-scale, backups, replay or production endurance.`,
     'PostgreSQL stored-key lookup is real; synthetic fixture role/schema is not production authorization provisioning.',
     analyticalLoad
-      ? 'Valkey runs idle; dashboard query load is direct SQL, not the Clerk/Next.js UI.'
+      ? dashboardLoad
+        ? 'Valkey runs idle; dashboard load uses the real analytics reader queries, not the Clerk/Next.js UI or HTTP handler.'
+        : 'Valkey runs idle; dashboard query load is direct SQL, not the Clerk/Next.js UI.'
       : 'Control suppresses analytical SQL during traffic; final reconciliation and metadata diagnostics remain. This does not qualify concurrent dashboard traffic.',
   ],
 };
@@ -486,9 +501,11 @@ try {
     Number(
       await query(
         "SELECT count() FROM signaltrail.analytics_events FINAL WHERE event_name='history_seed'",
+        undefined,
+        { timeoutMs: 120000, recordTiming: false },
       ),
     ),
-    capacity ? 1000000 : 100000,
+    seedRows,
   );
   if (heapProfile) {
     await save(
@@ -650,6 +667,7 @@ try {
         })
       : Promise.resolve();
     let analyticalError;
+    const dashboardPages = [];
     let analyticalAttempts = 0;
     const heapMilestones = new Set();
     const tracing = memoryTrace
@@ -678,48 +696,102 @@ try {
           },
         })
       : Promise.resolve();
-    const analytical = analyticalLoad
+    const dashboard = dashboardLoad
       ? observeUntil({
           done: () => done,
+          intervalMs: 5000,
           observe: async () => {
-            analyticalAttempts++;
-            const injectFailure =
-              profile === 'capacity-4gb-telemetry-failure' && analyticalAttempts === 1;
-            const queryId = memoryTrace ? `${runId}-analytical-${analyticalAttempts}` : undefined;
-            const startedAt = new Date().toISOString(),
-              started = performance.now();
-            let queryFailure;
-            try {
-              await query(
-                'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name' +
-                  (injectFailure ? ' SETTINGS max_memory_usage=1' : '') +
-                  ' FORMAT JSONEachRow',
-                queryId,
-              );
-            } catch (error) {
-              queryFailure = error;
-              throw error;
-            } finally {
-              if (memoryTrace)
-                await appendFile(
-                  `${directory}/analytical-attempts.jsonl`,
-                  JSON.stringify({
-                    queryId,
-                    startedAt,
-                    finishedAt: new Date().toISOString(),
-                    ms: performance.now() - started,
-                    ok: !queryFailure,
-                    ...(queryFailure ? { message: queryFailure.message } : {}),
-                  }) + '\n',
-                );
-            }
+            const attempt = ++analyticalAttempts;
+            const window = {
+              projectId: '00000000-0000-0000-0000-000000000011',
+              ...dashboardWindow(attempt - 1),
+            };
+            const started = performance.now();
+            const run = async (kind, call) => {
+              const queryStarted = performance.now();
+              try {
+                await call(`${runId}-analytical-${attempt}-${kind}`);
+                return { ok: true, ms: performance.now() - queryStarted };
+              } catch (error) {
+                return { ok: false, ms: performance.now() - queryStarted, error: error.message };
+              }
+            };
+            const tagged = (id) =>
+              // The reader passes its own fetch init; carry the tag in a private header.
+              createAnalyticsReader({
+                endpoint: 'http://127.0.0.1:38124',
+                username: 'signaltrail',
+                password: 'signaltrail_local',
+                fetch: (url, init) => {
+                  const target = new URL(url);
+                  target.searchParams.set('query_id', id);
+                  return fetch(target, init);
+                },
+              });
+            const [list, count, visitors] = await Promise.all([
+              run('list', (id) => tagged(id).listOccurredEvents({ ...window, limit: 50 })),
+              run('count', (id) => tagged(id).countOccurredEvents(window)),
+              run('visitors', (id) => tagged(id).countOccurredVisitors(window)),
+            ]);
+            const page = {
+              at: new Date().toISOString(),
+              days: window.days,
+              ms: performance.now() - started,
+              queries: { list, count, visitors },
+            };
+            dashboardPages.push(page);
+            await appendFile(`${directory}/dashboard-pages.jsonl`, JSON.stringify(page) + '\n');
           },
           onError: async (error) => {
             analyticalError ??= error;
-            await reportObservationError('analytical', error);
+            await reportObservationError('dashboard', error);
           },
         })
-      : Promise.resolve();
+      : undefined;
+    const analytical = dashboard
+      ? dashboard
+      : analyticalLoad
+        ? observeUntil({
+            done: () => done,
+            observe: async () => {
+              analyticalAttempts++;
+              const injectFailure =
+                profile === 'capacity-4gb-telemetry-failure' && analyticalAttempts === 1;
+              const queryId = memoryTrace ? `${runId}-analytical-${analyticalAttempts}` : undefined;
+              const startedAt = new Date().toISOString(),
+                started = performance.now();
+              let queryFailure;
+              try {
+                await query(
+                  'SELECT event_name, count(), uniqExact(distinct_id) FROM signaltrail.analytics_events FINAL GROUP BY event_name' +
+                    (injectFailure ? ' SETTINGS max_memory_usage=1' : '') +
+                    ' FORMAT JSONEachRow',
+                  queryId,
+                );
+              } catch (error) {
+                queryFailure = error;
+                throw error;
+              } finally {
+                if (memoryTrace)
+                  await appendFile(
+                    `${directory}/analytical-attempts.jsonl`,
+                    JSON.stringify({
+                      queryId,
+                      startedAt,
+                      finishedAt: new Date().toISOString(),
+                      ms: performance.now() - started,
+                      ok: !queryFailure,
+                      ...(queryFailure ? { message: queryFailure.message } : {}),
+                    }) + '\n',
+                  );
+              }
+            },
+            onError: async (error) => {
+              analyticalError ??= error;
+              await reportObservationError('analytical', error);
+            },
+          })
+        : Promise.resolve();
     // Attach rejection handlers immediately; artifact-write errors still fail the run.
     const observations = Promise.allSettled([sampling, intervals, analytical, tracing]);
     let output;
@@ -770,6 +842,10 @@ try {
       if (analyticalError)
         stage.reasons.push(`Analytical query failed: ${analyticalError.message}`);
       stage.analyticalAttempts = analyticalAttempts;
+      if (dashboardLoad) {
+        stage.dashboard = summarizeDashboard(dashboardPages);
+        stage.reasons.push(...assessDashboard(stage.dashboard));
+      }
       if (observationFailures.heap) stage.reasons.push('Heap evidence incomplete');
       if (observationFailures['clickhouse-memory'])
         stage.reasons.push('ClickHouse memory snapshots have unavailable categories');

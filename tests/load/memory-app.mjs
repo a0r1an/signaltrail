@@ -19,7 +19,10 @@ const { Client } = createRequire(
   new URL('../../packages/project-access/package.json', import.meta.url),
 )('pg');
 const capacity = process.env.SIGNALTRAIL_CAPACITY_PROFILE === '1';
-const seedRows = capacity ? 1000000 : 100000;
+// retention90: 9M rows over 90 days; 100 events per visitor, so ~1000 visitors
+// per day (~90k total), five sessions each and 5% identity-link events.
+const retention90 = process.env.SIGNALTRAIL_FIXTURE_SEED_PROFILE === 'retention90';
+const seedRows = retention90 ? 9000000 : capacity ? 1000000 : 100000;
 const pg = new Client({
   connectionString: 'postgres://signaltrail:signaltrail_local@127.0.0.1:5432/signaltrail',
 });
@@ -48,9 +51,15 @@ async function query(sql) {
 }
 await query(await readFile('infra/clickhouse/001-analytics-events.sql', 'utf8'));
 await query(await readFile('infra/clickhouse/002-analytics-retention.sql', 'utf8'));
-await query(
-  `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
-);
+if (retention90)
+  for (let offset = 0; offset < seedRows; offset += 1000000)
+    await query(
+      `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), received, toString(received), 'history_seed', if(number % 20 = 0, concat('user-',toString(intDiv(number, 100))), concat('visitor-',toString(intDiv(number, 100)))), concat('session-',toString(intDiv(number, 20))), number, 'https://load.invalid', '{}', if(number % 20 = 0, concat('{"identity":{"kind":"link","anonymousId":"visitor-',toString(intDiv(number, 100)),'","userId":"user-',toString(intDiv(number, 100)),'"}}'), '{}') FROM (SELECT number, now64(3) - toIntervalMillisecond(number * 864) AS received FROM numbers(${offset}, 1000000))`,
+    );
+else
+  await query(
+    `INSERT INTO signaltrail.analytics_events SELECT '00000000-0000-0000-0000-000000000011', concat('seed-',toString(number)), now64(3) - toIntervalDay(number % 30), toString(now64(3)), 'history_seed', concat('visitor-',toString(number%${capacity ? 10000 : 50})), concat('session-',toString(number%${capacity ? 10000 : 50})), number, 'https://load.invalid', '{}', '{}' FROM numbers(${seedRows})`,
+  );
 let applicationMetrics, capacityMetrics;
 let metadataDatabase,
   metadataFailures = 0,

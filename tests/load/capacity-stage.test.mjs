@@ -137,6 +137,17 @@ test('async insert trace matches the 15-minute memory trace and has a short smok
   );
 });
 
+test('dashboard profiles keep the async memory-trace workloads', () => {
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-dashboard'),
+    capacityWorkloads('capacity-4gb-memory-trace'),
+  );
+  assert.deepEqual(
+    capacityWorkloads('capacity-4gb-memory-trace-async-dashboard-smoke'),
+    capacityWorkloads('capacity-4gb-memory-trace-smoke'),
+  );
+});
+
 test('query-memory investigation uses a bounded two-minute revised workload', () => {
   assert.deepEqual(capacityWorkloads('capacity-4gb-query-memory'), [
     { users: 1000, rate: 100, sessionCount: 1000, durationSeconds: 120 },

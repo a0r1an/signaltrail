@@ -115,3 +115,11 @@ test('async insert profiles keep the revised four-GiB allocation and CPU affinit
   for (const name of ['capacity-4gb-memory-trace-async', 'capacity-4gb-memory-trace-async-smoke'])
     assert.deepEqual(memoryPlans[name], memoryPlans['capacity-4gb-memory-trace']);
 });
+
+test('dashboard profiles keep the revised four-GiB allocation and CPU affinity', () => {
+  for (const name of [
+    'capacity-4gb-memory-trace-async-dashboard',
+    'capacity-4gb-memory-trace-async-dashboard-smoke',
+  ])
+    assert.deepEqual(memoryPlans[name], memoryPlans['capacity-4gb-memory-trace']);
+});
