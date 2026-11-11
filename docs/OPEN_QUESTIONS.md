@@ -120,6 +120,15 @@ Entries are questions, not approvals or completed work.
   effects on visitor/identity-link resolution, and DLQ retention. This is not a
   promise that aggregates remain after raw-event deletion. Replay retention is
   separate.
+- **Dashboard query scaling (decision needed before launch):** at ~9M rows (90 days
+  at ~1000 visitors/day) every explorer query reads the whole project history
+  regardless of window; the visitor count fails its 64 MiB cap on every load and
+  pages take ~2.1–2.4 s. Cause: `(project_id, event_id)` ordering with random
+  UUIDv4 IDs, string client timestamps, and a full-history identity-link scan.
+  Candidate fixes: time-ordered (UUIDv7) event IDs plus time skip indexes / a
+  parsed occurred-time column; a separate identity-links table; daily rollups.
+  Raising the per-query cap only moves the limit. Evidence:
+  `performance/4gb-dashboard-90day.md`.
 - **Replay retention:** user approved a configurable 14-day default for replay
   recordings. Recording, object lifecycle/deletion and metadata cleanup are not
   implemented. This default does not authorize changing the existing S3 bucket

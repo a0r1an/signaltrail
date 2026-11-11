@@ -19,6 +19,17 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-10
 
+### November 10 — dashboard queries do not scale to 90 days of data
+
+- Added dashboard profiles (9M rows over 90 days, real reader list/count/visitor
+  page loads every 5 s on 1/7/30-day windows, async inserts, TTL, 100 EPS). TDD
+  units; 83 harness units pass. Commit 039456b.
+- 15-minute run fails: visitor count 126/126 failed (64 MiB cap), page p95 2.4 s,
+  every query reads ~9M rows regardless of window. ClickHouse memory stays bounded
+  (≤381 MiB). Ingestion: 83 refusals in one ~5 s CPU burst, 322 drops, 9 ambiguous
+  retries stored without explicit acceptance; lag 0. Evidence:
+  `performance/4gb-dashboard-90day.md`; decision recorded in OPEN_QUESTIONS.
+
 ### November 10 — 90-day analytics retention enforced in ClickHouse
 
 - User has $100 AWS credits; agreed to finish local retention/dashboard/backup work,
