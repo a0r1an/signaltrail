@@ -39,7 +39,8 @@ done
 
 target=$(env_value host.env SIGNALTRAIL_BACKUP_S3)
 if [ -n "$target" ]; then
-  aws s3 sync --only-show-errors "$root" "$target"
+  region=$(env_value host.env SIGNALTRAIL_BACKUP_S3_REGION)
+  PATH=$PATH:/snap/bin aws s3 sync --only-show-errors ${region:+--region "$region"} "$root" "$target"
 fi
 printf '{"at":"%s","clickhouse":"%s","postgres":"%s.dump","bytes":%s,"s3":%s}\n' \
   "$stamp" "$name" "$stamp" "$(du -sb "$root" | cut -f1)" "$([ -n "$target" ] && echo true || echo false)"

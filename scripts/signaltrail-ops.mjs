@@ -18,7 +18,8 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs host smoke-local|vm-test|vm-up|vm-down|vm-backup
-  SIGNALTRAIL_HOST_TARGET=lima:<vm> ./scripts/signaltrail-ops.mjs host remote-smoke|remote-ramp-short|remote-idle|remote-1eps|remote-ramp
+  ./scripts/signaltrail-ops.mjs host ec2-up|ec2-status|ec2-resize-large|ec2-resize-medium|ec2-down
+  SIGNALTRAIL_HOST_TARGET=lima:<vm>|ec2 ./scripts/signaltrail-ops.mjs host remote-smoke|remote-ramp-short|remote-idle|remote-1eps|remote-ramp
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
   ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local|status-local
   ./scripts/signaltrail-ops.mjs install
@@ -152,9 +153,9 @@ try {
       'capacity-4gb-memory-trace-async-smoke',
       'capacity-4gb-memory-trace-async-dashboard',
       'capacity-4gb-memory-trace-async-dashboard-smoke',
-  'capacity-4gb-memory-trace-async-dashboard-endurance',
-  'capacity-4gb-memory-trace-async-dashboard-viewers5',
-  'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
+      'capacity-4gb-memory-trace-async-dashboard-endurance',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5',
+      'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
       'capacity-4gb-memory-trace-async-dashboard-endurance',
       'capacity-4gb-memory-trace-async-dashboard-viewers5',
       'capacity-4gb-memory-trace-async-dashboard-viewers5-smoke',
@@ -224,12 +225,24 @@ try {
     tasks.push({ command: 'sh', args: ['tests/host/vm-test.sh', action] });
   else if (
     group === 'host' &&
-    ['remote-smoke', 'remote-ramp-short', 'remote-idle', 'remote-1eps', 'remote-ramp'].includes(action)
+    ['ec2-up', 'ec2-status', 'ec2-resize-large', 'ec2-resize-medium', 'ec2-down'].includes(action)
+  )
+    tasks.push({
+      command: 'node',
+      args: ['tests/host/ec2-trial.mjs', action.slice('ec2-'.length)],
+    });
+  else if (
+    group === 'host' &&
+    ['remote-smoke', 'remote-ramp-short', 'remote-idle', 'remote-1eps', 'remote-ramp'].includes(
+      action,
+    )
   ) {
     pnpm('--filter', '@signaltrail/analytics', 'build');
-    tasks.push({ command: 'node', args: ['tests/host/remote-run.mjs', action.slice('remote-'.length)] });
-  }
-  else if (group === 'compose' && action === 'validate') {
+    tasks.push({
+      command: 'node',
+      args: ['tests/host/remote-run.mjs', action.slice('remote-'.length)],
+    });
+  } else if (group === 'compose' && action === 'validate') {
     docker('compose', 'config', '--quiet');
     docker('compose', '-f', 'tests/load/compose.yaml', 'config', '--quiet');
   } else if (group === 'monitoring') {

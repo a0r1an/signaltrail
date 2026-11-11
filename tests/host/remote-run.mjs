@@ -3,7 +3,8 @@
 // sampler records host CPU (with steal), memory, disk and containers; every event's
 // client outcome is reconciled against ClickHouse. Optional single dashboard viewer.
 //
-//   SIGNALTRAIL_HOST_TARGET=lima:<instance> node tests/host/remote-run.mjs <profile>
+//   SIGNALTRAIL_HOST_TARGET=lima:<instance>|ec2 node tests/host/remote-run.mjs <profile>
+//   (ec2: the trial from tests/host/ec2-trial.mjs, k6 on its generator instance)
 //   SIGNALTRAIL_CPU_BASELINE_PERCENT=20 (t4g.medium) marks the sustainable range.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -70,8 +71,19 @@ function run(command, args, { input, allowFailure = false } = {}) {
   });
 }
 
-/** Commands on the target and the addresses this machine uses to reach it. */
-function transport(spec) {
+const k6Args = (env, ledger) => [
+  'run',
+  '--quiet',
+  '--log-format=raw',
+  `--log-output=file=${ledger}`,
+  ...Object.entries(env).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
+];
+
+/**
+ * Commands on the target, the address this machine uses for ClickHouse, and the k6
+ * traffic run (which writes the stage ledger into the run directory).
+ */
+async function transport(spec) {
   const [kind, name] = (spec ?? '').split(':');
   if (kind === 'lima' && name)
     return {
@@ -81,12 +93,70 @@ function transport(spec) {
       repo: root,
       // Lima forwards the guest's loopback ports to this machine's loopback.
       local: (address) => `http://${address}`,
-      generator: (address) => `http://${address.replace('127.0.0.1', 'host.docker.internal')}`,
+      traffic: async ({ ingestion, env, index }) =>
+        run(
+          'docker',
+          [
+            'run',
+            '--rm',
+            '-v',
+            `${resolve(root, 'tests/host')}:/scripts:ro`,
+            '-v',
+            `${directory}:/out`,
+            'grafana/k6:1.6.0',
+            ...k6Args(
+              {
+                ...env,
+                TARGET: `http://${ingestion.replace('127.0.0.1', 'host.docker.internal')}/v1/events`,
+              },
+              `/out/ledger-${index}.jsonl`,
+            ),
+            '/scripts/k6-ledger.js',
+          ],
+          { allowFailure: true },
+        ),
+      close: async () => {},
     };
-  throw new Error('SIGNALTRAIL_HOST_TARGET must be lima:<instance> (ssh transport: phase B)');
+  if (kind === 'ec2') {
+    // The trial from ec2-trial.mjs: k6 on the generator instance reaches ingestion on
+    // the host's private address; ClickHouse stays on the host's loopback, reached
+    // through an SSH tunnel.
+    const { REPO, ssh, sshArgs } = await import('./ec2-trial.mjs');
+    const state = JSON.parse(
+      await readFile(resolve(root, 'test-results/aws-trial/state.json'), 'utf8'),
+    );
+    assert.ok(state.host && !state.closedAt, 'No running EC2 trial');
+    const tunnelPort = 38223;
+    const tunnel = spawn(
+      'ssh',
+      ['-N', '-L', `${tunnelPort}:127.0.0.1:8123`, ...sshArgs(state, state.host.public)],
+      { stdio: 'ignore' },
+    );
+    await delay(3000);
+    return {
+      exec: async (command) => (await ssh(state, state.host.public, command)).stdout,
+      repo: REPO,
+      local: () => `http://127.0.0.1:${tunnelPort}`,
+      traffic: async ({ ingestion, env, index }) => {
+        const ledger = `/tmp/ledger-${runTag}-${index}.jsonl`;
+        const command = [
+          'k6',
+          ...k6Args({ ...env, TARGET: `http://${ingestion}/v1/events` }, ledger),
+        ]
+          .concat('/home/ubuntu/k6-ledger.js')
+          .map((part) => `'${part}'`)
+          .join(' ');
+        const result = await ssh(state, state.generator.public, command, { allowFailure: true });
+        const lines = await ssh(state, state.generator.public, `cat ${ledger}; rm -f ${ledger}`);
+        await writeFile(resolve(directory, `ledger-${index}.jsonl`), lines.stdout);
+        return result;
+      },
+      close: async () => tunnel.kill(),
+    };
+  }
+  throw new Error('SIGNALTRAIL_HOST_TARGET must be lima:<instance> or ec2');
 }
 
-const target = transport(process.env.SIGNALTRAIL_HOST_TARGET);
 const runTag = `remote-${randomBytes(4).toString('hex')}`;
 const directory = resolve(
   root,
@@ -94,6 +164,7 @@ const directory = resolve(
   `${new Date().toISOString().replaceAll(':', '-')}-remote-${profileName}`,
 );
 await mkdir(directory, { recursive: true });
+const target = await transport(process.env.SIGNALTRAIL_HOST_TARGET);
 const result = { profile: profileName, runTag, baselinePercent, stages: [], passed: false };
 const save = () => writeFile(resolve(directory, 'result.json'), JSON.stringify(result, null, 2));
 const envFile = async (file) =>
@@ -206,34 +277,11 @@ try {
     let k6 = { accepted: 0, retry: 0, rejected: 0, dropped: 0, p95: 0, p99: 0 };
     let ledger = { entries: {}, malformed: 0 };
     if (stage.rate > 0) {
-      const traffic = await run(
-        'docker',
-        [
-          'run',
-          '--rm',
-          '-v',
-          `${resolve(root, 'tests/host')}:/scripts:ro`,
-          '-v',
-          `${directory}:/out`,
-          'grafana/k6:1.6.0',
-          'run',
-          '--quiet',
-          '--log-format=raw',
-          `--log-output=file=/out/ledger-${index}.jsonl`,
-          '-e',
-          `RATE=${stage.rate}`,
-          '-e',
-          `DURATION=${stage.seconds}s`,
-          '-e',
-          `PREFIX=${prefix}`,
-          '-e',
-          `KEY=${key}`,
-          '-e',
-          `TARGET=${target.generator(ingestion)}/v1/events`,
-          '/scripts/k6-ledger.js',
-        ],
-        { allowFailure: true },
-      );
+      const traffic = await target.traffic({
+        ingestion,
+        index,
+        env: { RATE: stage.rate, DURATION: `${stage.seconds}s`, PREFIX: prefix, KEY: key },
+      });
       const metrics = JSON.parse(traffic.stdout).metrics;
       const count = (name) => metrics[name]?.values.count ?? 0;
       k6 = {
@@ -299,6 +347,7 @@ try {
       .catch(() => '');
     await writeFile(resolve(directory, 'samples.jsonl'), samples);
   }
+  await target.close();
   await save();
 }
 console.log(

@@ -3,7 +3,9 @@
 # Idempotent: re-running on an existing host keeps data, secrets and the mount.
 #
 #   sudo SIGNALTRAIL_RELEASE=<tag> [SIGNALTRAIL_DATA_DEVICE=/dev/nvme1n1] infra/host/bootstrap.sh
-# Optional: SIGNALTRAIL_INGESTION_PUBLISH / SIGNALTRAIL_CLICKHOUSE_PUBLISH (ip:port).
+# Optional: SIGNALTRAIL_INGESTION_PUBLISH / SIGNALTRAIL_CLICKHOUSE_PUBLISH (ip:port);
+# SIGNALTRAIL_BACKUP_S3=s3://bucket/prefix and SIGNALTRAIL_BACKUP_S3_REGION for
+# off-host backup copies (written with the instance role).
 #
 # SIGNALTRAIL_DATA_DEVICE: a dedicated data disk. Formatted ext4 only when it has no
 # filesystem; an existing filesystem (rebuild onto a restored volume) is mounted as is.
@@ -32,6 +34,10 @@ if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; t
   apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 apt-get install -yq chrony openssl fio sysstat unattended-upgrades
+# AWS CLI for off-host backup copies (Ubuntu ships it as a snap).
+if [ -n "${SIGNALTRAIL_BACKUP_S3:-}" ] && ! command -v aws >/dev/null && [ ! -x /snap/bin/aws ]; then
+  snap install aws-cli --classic
+fi
 # Security updates install automatically; reboots stay manual (planned downtime).
 printf 'Unattended-Upgrade::Automatic-Reboot "false";\n' > /etc/apt/apt.conf.d/52signaltrail-no-reboot
 systemctl enable --now chrony
@@ -73,10 +79,11 @@ for app in ingestion event-processor; do
     docker build -q -f "$here/Dockerfile" --build-arg "APP=$app" \
       -t "signaltrail-$app:$SIGNALTRAIL_RELEASE" "$repo"
 done
-# Release tag and optional publish addresses persist for every later compose command.
+# Release tag, optional publish addresses and backup target persist for every later compose command.
 {
   printf 'SIGNALTRAIL_RELEASE=%s\n' "$SIGNALTRAIL_RELEASE"
-  for name in SIGNALTRAIL_INGESTION_PUBLISH SIGNALTRAIL_CLICKHOUSE_PUBLISH; do
+  for name in SIGNALTRAIL_INGESTION_PUBLISH SIGNALTRAIL_CLICKHOUSE_PUBLISH \
+    SIGNALTRAIL_BACKUP_S3 SIGNALTRAIL_BACKUP_S3_REGION; do
     eval "value=\${$name:-}"
     [ -z "$value" ] || printf '%s=%s\n' "$name" "$value"
   done
