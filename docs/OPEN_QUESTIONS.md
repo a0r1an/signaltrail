@@ -71,6 +71,14 @@ Entries are questions, not approvals or completed work.
   unavailability acceptable; one server). Other services stay in AWS, so the host is
   EC2 in the same region; t4g.medium is the primary candidate. User wants measured
   limits and alarms to know when to upgrade. Plan: `performance/vps-qualification-plan.md`.
+  Later 2026-11-11: phase B approved (≤ $10, same-day teardown); credits expire in
+  182 days. The credits are on a **new, separate Free plan account**; the Identity
+  Center profiles (`signaltrail-admin`, `signaltrail-replay-dev`) and the replay dev
+  bucket stay in account 469302114413. Needed now: CLI access to the new account.
+  Needed before launch: which account hosts production (a Free plan account closes
+  at plan end unless upgraded; upgrading keeps remaining credits), and whether replay
+  storage moves. Working assumption: trial and backup bucket in the new account,
+  `us-west-2`; replay unchanged until replay work starts.
 - **Recovery targets:** the single-VPS plan accepts a four-hour restore target and
   a best-effort one-hour recovery point. Backups, off-server archive lag rejection,
   and restoration drills still need implementation and measured validation.
@@ -148,8 +156,8 @@ Entries are questions, not approvals or completed work.
   p95 2.23 s with 0 errors on 2 CPUs. ClickHouse guidance when needed: minute-
   rounded windows + `use_query_cache`, a dashboard WORKLOAD with a concurrency cap
   and queue, test `max_threads` 1/2/4, AggregatingMergeTree rollups for chosen views.
-- **Backups (approval needed for S3):** local drill passes. Needed: approval to
-  write backups to S3 (or another off-host destination), schedule (hourly
+- **Backups (S3 approved 2026-11-11):** local drill passes. Bucket goes in the
+  trial account, written by the instance role. Still needed: schedule (hourly
   incremental for the 1-hour RPO), backup retention, encryption and a production-
   size restore on the candidate VPS.
 - **Replay retention:** user approved a configurable 14-day default for replay

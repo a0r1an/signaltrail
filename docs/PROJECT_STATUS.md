@@ -31,7 +31,11 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   Ops: `host smoke-local|vm-test|vm-up|vm-down|vm-backup|remote-*`.
 - Evidence: local smoke (79 s), Lima VM bootstrap 92–94 s with reboot, remote smoke
   and short ramp, backup/restore exact match (14 s). 102 harness/host unit tests.
-- Next (blocked on user): phase B approval, AWS access, credit expiry date.
+- User approved phase B (≤ $10, same-day teardown) and S3 backups; credits expire
+  in 182 days (~2027-05-12). The credits are on a new, separate Free plan account,
+  so the existing SSO profiles and replay dev bucket do not apply to it.
+- Next (blocked on user): CLI access to the new account (profile
+  `signaltrail-trial`), then phase B tooling and the trial.
 
 ### November 11 — local readiness work before VPS sizing
 

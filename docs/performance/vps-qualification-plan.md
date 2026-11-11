@@ -136,13 +136,21 @@ From the earlier [qualification proposal](launch-cost-and-capacity.md), unchange
 
 ## Decisions and inputs needed from the user
 
-1. Approval for phase B on the AWS account: t4g.medium/t4g.large plus a small
-   generator, ≤ $10 of credits, same-day teardown. Plus CLI access (`aws login` or
-   credentials) and the credit expiry date.
-2. Region: Oregon (`us-west-2`) is assumed, because the existing S3 bucket is there.
-   Confirm or choose a region near the source applications.
+Answered 2026-11-11: phase B approved (t4g.medium/t4g.large plus a small generator,
+≤ $10 of credits, same-day teardown); credits expire in 182 days (about 2027-05-12);
+off-host backups to S3 approved. The credits are on a **new, separate AWS account**
+(Free plan), not the account holding the Identity Center profiles and the replay dev
+bucket, so CLI access must be set up for it (profile `signaltrail-trial`).
+
+Still open:
+
+1. CLI access to the new account (`aws login --profile signaltrail-trial`).
+2. Region: Oregon (`us-west-2`) is assumed. The replay dev bucket is in the other
+   account, so the region is no longer forced by it.
 3. Whether the $50 ceiling covers only the VPS, or also backups, S3 and snapshots.
-4. Approval for off-host backups to S3 (from the backup drill).
+4. Which account hosts production. A Free plan account closes when the plan ends
+   (six months or credits used) unless upgraded to a paid plan, which keeps the
+   remaining credits; joining an AWS Organization upgrades it automatically.
 5. Later: approval for phase C on the chosen long-term provider.
 
 ## Risks

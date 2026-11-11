@@ -195,8 +195,9 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] VPS phase A (no spending): production images/compose, secrets, migrations,
       TLS, bootstrap, verify, remote runner, probe, backups/restore; verified on
       local Docker and a Lima Ubuntu VM. See [plan](performance/vps-qualification-plan.md).
-- [ ] VPS phase B (needs approval, AWS access, credit expiry): SSH/SSM transport,
-      launch/teardown/resize scripts, then the t4g.medium trial.
+- [ ] VPS phase B (approved ≤ $10; blocked on CLI access to the new credits
+      account, profile `signaltrail-trial`): SSM transport, launch/teardown/resize
+      scripts, backup bucket and instance role, then the t4g.medium trial.
 - [ ] VPS phase C: launch host with alarms (needs approval).
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
       Current proposal and launch workload are in
@@ -210,7 +211,7 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
 - [x] Local backup + replacement-host restore drill (`load backup-restore`):
       full + incremental ClickHouse BACKUP and pg_dump; fingerprints, RPO window and
       restored writes verified. See [backup drill](performance/backup-restore-drill.md).
-- [ ] Off-host backup destination (S3, needs approval), schedule/retention,
+- [ ] Off-host backup destination (S3 approved; bucket in the trial account), schedule/retention,
       encryption and a production-size restore on the candidate VPS.
 - [ ] Representative sustained/endurance/failure load tests and capacity limits.
 - [ ] Production lag/availability alerts, recipients and runbooks; Grafana Cloud
