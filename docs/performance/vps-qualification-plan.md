@@ -82,6 +82,23 @@ The harness now runs targets and generator in one local Docker project. Add:
 
 Verification: dry-run against a local Linux VM or container before any paid host.
 
+#### Phase A status (2026-11-11)
+
+Done and verified locally (commits 2869fdb … 6ca3a0f):
+
+| Piece | Verification |
+| --- | --- |
+| Images (`infra/host/Dockerfile`) and `compose.production.yaml` | Built for ARM64; non-root; production-mode Redpanda; tested memory split |
+| `secrets.sh`, `migrate.sh`, PostgreSQL TLS, restricted identities | `host smoke-local`: ingest → storage, restart, NOTIFY revocation over TLS, identity limits |
+| `bootstrap.sh`, `verify.sh` | `host vm-test` in a Lima Ubuntu 24.04 VM: fresh bootstrap 92–94 s, idempotent re-run, reboot keeps the data disk mounted and events stored |
+| Remote runner (`tests/host/remote-run.mjs`), sampler, seed, generator-side ledger | `remote-smoke` and `remote-ramp-short` on the VM pass; 9 unit tests |
+| `probe.sh` (fio fsync/random/sequential, EC2 metadata) | Runs on the VM; summarized in long profiles |
+| `backup.sh` + hourly timer, `restore.sh` | `host vm-backup`: restore matches the backup exactly, post-backup write absent, 14 s |
+
+Deferred to the start of phase B, because they depend on how the trial resources
+are created: the SSH/Session Manager transport, `resize.sh` (stop → modify →
+start → verify), launch and tag-based teardown scripts, and the cost log.
+
 ### B. AWS trial on the candidate (uses credits; needs approval)
 
 On t4g.medium with the full schema, 9M-row 90-day seed and one dashboard viewer:

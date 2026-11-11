@@ -19,6 +19,20 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-11
 
+### November 11 — VPS phase A complete (no spending)
+
+- User requirements: ~1 event/minute at launch, handle 1 EPS with no lost events
+  (brief unavailability acceptable), EC2 in AWS, measured limits with upgrade
+  alarms. Candidate t4g.medium. Plan: `performance/vps-qualification-plan.md`.
+- Built and verified: production images and compose (`infra/host`), secrets and
+  PostgreSQL TLS, migrations embedded in the release image, restricted identities,
+  Ubuntu bootstrap with data disk and hourly backups, on-host verify, remote load
+  runner with a generator-side ledger and limit detection, disk probe, restore.
+  Ops: `host smoke-local|vm-test|vm-up|vm-down|vm-backup|remote-*`.
+- Evidence: local smoke (79 s), Lima VM bootstrap 92–94 s with reboot, remote smoke
+  and short ramp, backup/restore exact match (14 s). 102 harness/host unit tests.
+- Next (blocked on user): phase B approval, AWS access, credit expiry date.
+
 ### November 11 — local readiness work before VPS sizing
 
 - Early refusal burst traced to per-request PostgreSQL key lookups during short app
