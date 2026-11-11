@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { exerciseInitialProject } from './bootstrap-project.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createProjectRuntime, createIngestionHandler } from '../../apps/ingestion/dist/index.js';
 import {
   createControlPlaneMigrationStatement,
@@ -53,6 +54,15 @@ export async function exerciseIngestionKeys({
   await sql(
     `INSERT INTO signaltrail_migrations.applied(version,checksum) VALUES (1,'${createHash('sha256').update(initialSource).digest('hex')}')`,
   );
+  // Version 3: key-change notifications that let ingestion cache lookups safely.
+  const notifications = await readFile(
+    new URL('../../infra/postgres/003-ingestion-key-notifications.sql', import.meta.url),
+    'utf8',
+  );
+  await migrate(
+    createControlPlaneMigrationStatement([...sources, { version: 3, source: notifications }]),
+  );
+  assert.equal((await sql('SELECT count(*) FROM signaltrail_migrations.applied')).trim(), '3');
   const id = (n) => '00000000-0000-0000-0000-' + String(n).padStart(12, '0');
   const a = createIngestionKey(),
     b = createIngestionKey();
@@ -108,6 +118,7 @@ export async function exerciseIngestionKeys({
     SIGNALTRAIL_INGESTION_DATABASE_TLS: 'false',
   });
   const published = [];
+  let revocationMs;
   try {
     await runtime.verify();
     const handle = createIngestionHandler({
@@ -145,6 +156,35 @@ export async function exerciseIngestionKeys({
       assert.equal((await handle(request(denied))).status, 401);
     }
     assert.equal(published.length, 1);
+    // Cached key: revocation reaches the cache by NOTIFY, not by waiting for the TTL.
+    const cachedKey = createIngestionKey();
+    await sql(
+      `INSERT INTO signaltrail_control.ingestion_keys(id,project_id,name,key_hash) VALUES ('${id(35)}','${projectB}','Cached',decode('${hashIngestionKey(cachedKey)}','hex'))`,
+    );
+    const listening = Date.now() + 10000;
+    while ((await handle(request(cachedKey))).status !== 200) {
+      assert.ok(Date.now() < listening, 'New key was not accepted');
+      await delay(100);
+    }
+    const published0 = published.length;
+    assert.equal((await handle(request(cachedKey))).status, 200);
+    // Without a notification the cached result stands, proving lookups are served from memory.
+    await sql(
+      `ALTER TABLE signaltrail_control.ingestion_keys DISABLE TRIGGER ingestion_keys_notify; UPDATE signaltrail_control.ingestion_keys SET revoked_at=CURRENT_TIMESTAMP WHERE id='${id(35)}'; ALTER TABLE signaltrail_control.ingestion_keys ENABLE TRIGGER ingestion_keys_notify`,
+    );
+    assert.equal((await handle(request(cachedKey))).status, 200);
+    // Any change to the key row notifies; the revoked key is then refused.
+    await sql(`UPDATE signaltrail_control.ingestion_keys SET name='Revoked' WHERE id='${id(35)}'`);
+    const revokedAt = performance.now();
+    while (revocationMs === undefined) {
+      if ((await handle(request(cachedKey))).status === 401)
+        revocationMs = performance.now() - revokedAt;
+      else {
+        assert.ok(performance.now() - revokedAt < 5000, 'Cached key revocation was not applied');
+        await delay(20);
+      }
+    }
+    assert.equal(published.length, published0 + 2);
     await sql(
       'REVOKE SELECT(project_id,key_hash,revoked_at) ON signaltrail_control.ingestion_keys FROM ingestion_fixture_reader',
     );
@@ -152,8 +192,11 @@ export async function exerciseIngestionKeys({
       runtime.verify(),
       /^Error: Ingestion project database readiness was not confirmed$/,
     );
-    assert.equal((await handle(request(b))).status, 503);
-    assert.equal(published.length, 1);
+    // Lost privileges are not key changes: keys never cached fail closed; cached results
+    // remain until notification or the TTL backstop, and readiness already reports failure.
+    const published1 = published.length;
+    assert.equal((await handle(request(createIngestionKey()))).status, 503);
+    assert.equal(published.length, published1);
   } finally {
     await runtime.close();
   }
@@ -167,6 +210,8 @@ export async function exerciseIngestionKeys({
     incompleteHistoryRejected: true,
     hashOnlyLookup: true,
     revokedKeyDeniedOnNextLookup: true,
+    cachedLookupServedWithoutNotification: true,
+    cachedKeyRevocationMsAfterCommit: revocationMs,
     deletedProjectKeyInvalidated: true,
     productionRuntimeReadiness: true,
     storedKeyHandlerProjectIsolation: true,

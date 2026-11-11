@@ -4,7 +4,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createControlPlaneMigrationStatement } from '../packages/project-access/dist/index.js';
 
-const files = ['001-project-access.sql', '002-ingestion-keys.sql'];
+const files = [
+  '001-project-access.sql',
+  '002-ingestion-keys.sql',
+  '003-ingestion-key-notifications.sql',
+];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 export async function readControlPlanePlan(root) {
   const directory = join(root, 'infra/postgres');

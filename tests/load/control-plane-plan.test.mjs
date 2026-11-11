@@ -10,8 +10,16 @@ test('plans the complete repository migration set with exact source checksums', 
   const root = await mkdtemp(join(tmpdir(), 'signaltrail-plan-'));
   try {
     await mkdir(join(root, 'infra/postgres'), { recursive: true });
-    const names = ['001-project-access.sql', '002-ingestion-keys.sql'];
-    const sources = ['BEGIN; SELECT 1; COMMIT;\n', 'BEGIN; SELECT 2; COMMIT;\n'];
+    const names = [
+      '001-project-access.sql',
+      '002-ingestion-keys.sql',
+      '003-ingestion-key-notifications.sql',
+    ];
+    const sources = [
+      'BEGIN; SELECT 1; COMMIT;\n',
+      'BEGIN; SELECT 2; COMMIT;\n',
+      'BEGIN; SELECT 3; COMMIT;\n',
+    ];
     for (let i = 0; i < names.length; i++)
       await writeFile(join(root, 'infra/postgres', names[i]), sources[i]);
     const plan = await readControlPlanePlan(root);
@@ -27,9 +35,9 @@ test('plans the complete repository migration set with exact source checksums', 
       })),
     );
     assert.equal(plan.statementSha256, createHash('sha256').update(plan.statement).digest('hex'));
-    await writeFile(join(root, 'infra/postgres/003-unregistered.sql'), 'BEGIN; SELECT 3; COMMIT;');
+    await writeFile(join(root, 'infra/postgres/004-unregistered.sql'), 'BEGIN; SELECT 4; COMMIT;');
     await assert.rejects(readControlPlanePlan(root), /Unregistered control-plane migration/);
-    await rm(join(root, 'infra/postgres/003-unregistered.sql'));
+    await rm(join(root, 'infra/postgres/004-unregistered.sql'));
     await writeFile(join(root, 'infra/postgres', names[1]), Buffer.from([0xff]));
     await assert.rejects(readControlPlanePlan(root));
     await rm(join(root, 'infra/postgres', names[1]));

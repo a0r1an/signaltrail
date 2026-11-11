@@ -1,6 +1,9 @@
 import {
+  createCachedProjectResolver,
   createPostgresMembershipDatabase,
   createStoredProjectResolver,
+  startIngestionKeyListener,
+  type ListenClient,
   type AccessOptions,
   type PostgresDatabaseOptions,
 } from '@signaltrail/project-access';
@@ -14,6 +17,8 @@ export interface ProjectRuntime {
 interface ReadDatabase {
   query: AccessOptions['query'];
   close(): Promise<void>;
+  /** Dedicated LISTEN connection; without it every key lookup reaches PostgreSQL. */
+  connectListener?(): Promise<ListenClient>;
 }
 export function createProjectRuntime(
   env: Record<string, string | undefined>,
@@ -76,10 +81,23 @@ export function createProjectRuntime(
   } catch {
     throw new TypeError('Invalid production project database configuration');
   }
+  // Key lookups are cached only while revocation notifications are being received.
+  const cache = createCachedProjectResolver(createStoredProjectResolver(database.query));
+  const listener = database.connectListener
+    ? startIngestionKeyListener({
+        connect: database.connectListener,
+        onTrusted: cache.setTrusted,
+        onInvalidate: cache.invalidate,
+        onClear: cache.clear,
+      })
+    : undefined;
   return {
     mode: 'stored',
-    resolveProjectKey: createStoredProjectResolver(database.query),
-    close: database.close,
+    resolveProjectKey: cache.resolve,
+    async close() {
+      await listener?.stop();
+      await database.close();
+    },
     async verify() {
       try {
         const result = await database.query({

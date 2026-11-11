@@ -88,3 +88,39 @@ it('fails readiness without exposing database diagnostics', async () => {
   await runtime.close();
   expect(database.close).toHaveBeenCalledOnce();
 });
+it('caches key lookups only while the invalidation listener is live and drops revoked keys', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { createHash } = await import('node:crypto');
+  const project = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const listener = Object.assign(new EventEmitter(), {
+    query: vi.fn(async () => ({ rows: [] })),
+    end: vi.fn(async () => {}),
+  });
+  let revoked = false;
+  const database = {
+    query: vi.fn(async () => ({ rows: revoked ? [] : [{ project_id: project }] })),
+    close: vi.fn(async () => {}),
+    connectListener: vi.fn(async () => listener),
+  };
+  const runtime = createProjectRuntime(env, { createDatabase: () => database });
+  const key = 'st_pub_' + Buffer.alloc(32, 2).toString('base64url');
+  await vi.waitFor(() =>
+    expect(listener.query).toHaveBeenCalledWith('LISTEN signaltrail_ingestion_keys'),
+  );
+  expect(await runtime.resolveProjectKey(key)).toBe(project);
+  expect(await runtime.resolveProjectKey(key)).toBe(project);
+  expect(database.query).toHaveBeenCalledTimes(1);
+  revoked = true;
+  listener.emit('notification', {
+    channel: 'signaltrail_ingestion_keys',
+    payload: createHash('sha256').update(key).digest('hex'),
+  });
+  expect(await runtime.resolveProjectKey(key)).toBeUndefined();
+  listener.emit('error', new Error('connection lost'));
+  revoked = false;
+  expect(await runtime.resolveProjectKey(key)).toBe(project);
+  expect(await runtime.resolveProjectKey(key)).toBe(project);
+  expect(database.query).toHaveBeenCalledTimes(4); // Untrusted: every lookup reaches PostgreSQL.
+  await runtime.close();
+  expect(database.close).toHaveBeenCalledOnce();
+});

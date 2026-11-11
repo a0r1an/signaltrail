@@ -138,3 +138,9 @@ it('contains rejected asynchronous timing observers', async () => {
     await database.close();
   }
 });
+
+it('refuses a dedicated listener connection once the adapter is closed', async () => {
+  const database = createPostgresMembershipDatabase(configuration);
+  await database.close();
+  await expect(database.connectListener()).rejects.toThrow('PostgreSQL listener was not confirmed');
+});

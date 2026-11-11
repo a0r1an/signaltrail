@@ -1,5 +1,6 @@
-import { Pool, type PoolClient } from 'pg';
+import { Client, Pool, type PoolClient } from 'pg';
 import type { AccessOptions } from './index.ts';
+import type { ListenClient } from './key-invalidation-listener.ts';
 
 export interface PostgresDatabaseOptions {
   connectionString: string;
@@ -99,7 +100,7 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
   let closing: Promise<void> | undefined;
   const controllers = new Set<AbortController>();
   const pending = new Set<Promise<unknown>>();
-  const pool = new Pool({
+  const connection = {
     host: url.hostname.replace(/^\[|\]$/g, ''),
     port: Number(url.port || 5432),
     user,
@@ -109,6 +110,10 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
       options.tls === false
         ? false
         : { rejectUnauthorized: true, ...(options.ca ? { ca: options.ca } : {}) },
+  };
+  const listeners = new Set<Client>();
+  const pool = new Pool({
+    ...connection,
     max: maxConnections,
     connectionTimeoutMillis: timeoutMs,
     query_timeout: timeoutMs,
@@ -267,11 +272,43 @@ export function createPostgresMembershipDatabase(options: PostgresDatabaseOption
       queryExecutionMs: { ...queryExecutionMs },
       recentRefusals: recentRefusals.map((event) => ({ ...event })),
     }),
+    /** Dedicated connection outside the pool and its admission limits, for LISTEN only. */
+    async connectListener(): Promise<ListenClient> {
+      const failure = () => new Error('PostgreSQL listener was not confirmed');
+      if (closed) throw failure();
+      const client = new Client({
+        ...connection,
+        connectionTimeoutMillis: timeoutMs,
+        keepAlive: true,
+        application_name: 'signaltrail-key-invalidation',
+        options: '-c default_transaction_read_only=on',
+      });
+      client.on('error', reportPoolError);
+      listeners.add(client);
+      client.once('end', () => listeners.delete(client));
+      try {
+        await client.connect();
+        if (closed) throw failure();
+        return {
+          query: (text: string) => client.query(text),
+          on(event: 'notification' | 'error' | 'end', listener: (value?: never) => void) {
+            client.on(event, listener as () => void);
+            return this;
+          },
+          end: () => client.end(),
+        } as ListenClient;
+      } catch {
+        listeners.delete(client);
+        void client.end().catch(() => {});
+        throw failure();
+      }
+    },
     close(): Promise<void> {
       if (closing) return closing;
       closed = true;
       for (const controller of controllers) controller.abort();
       const shutdown = (async () => {
+        await Promise.allSettled([...listeners].map((client) => client.end()));
         await Promise.allSettled([...pending]);
         await pool.end();
       })();

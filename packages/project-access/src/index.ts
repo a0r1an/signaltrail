@@ -4,6 +4,10 @@ export {
   createStoredProjectResolver,
 } from './ingestion-keys.ts';
 export { createControlPlaneMigrationStatement } from './tracked-migrations.ts';
+export { createCachedProjectResolver } from './cached-project-resolver.ts';
+export type { ProjectCacheOptions } from './cached-project-resolver.ts';
+export { INGESTION_KEY_CHANNEL, startIngestionKeyListener } from './key-invalidation-listener.ts';
+export type { IngestionKeyListenerOptions, ListenClient } from './key-invalidation-listener.ts';
 export { createProjectListReader } from './project-list.ts';
 export type { ProjectPage } from './project-list.ts';
 export { createInitialMigrationStatement } from './initial-migration.ts';
