@@ -34,9 +34,15 @@ if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; t
   apt-get install -yq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 apt-get install -yq chrony openssl fio sysstat unattended-upgrades
-# AWS CLI for off-host backup copies (Ubuntu ships it as a snap).
-if [ -n "${SIGNALTRAIL_BACKUP_S3:-}" ] && ! command -v aws >/dev/null && [ ! -x /snap/bin/aws ]; then
-  snap install aws-cli --classic
+# AWS CLI v2 for off-host backup copies, from AWS's installer (the snap store is not
+# always reachable on first boot).
+if [ -n "${SIGNALTRAIL_BACKUP_S3:-}" ] && ! command -v aws >/dev/null; then
+  apt-get install -yq unzip
+  tmp=$(mktemp -d)
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "$tmp/awscli.zip"
+  unzip -q "$tmp/awscli.zip" -d "$tmp"
+  "$tmp/aws/install"
+  rm -rf "$tmp"
 fi
 # Security updates install automatically; reboots stay manual (planned downtime).
 printf 'Unattended-Upgrade::Automatic-Reboot "false";\n' > /etc/apt/apt.conf.d/52signaltrail-no-reboot

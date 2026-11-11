@@ -18,7 +18,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs monitoring validate|up|down|status|logs|delivery
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs host smoke-local|vm-test|vm-up|vm-down|vm-backup
-  ./scripts/signaltrail-ops.mjs host ec2-up|ec2-status|ec2-resize-large|ec2-resize-medium|ec2-down
+  ./scripts/signaltrail-ops.mjs host ec2-up|ec2-bootstrap|ec2-status|ec2-resize-large|ec2-resize-medium|ec2-down
   SIGNALTRAIL_HOST_TARGET=lima:<vm>|ec2 ./scripts/signaltrail-ops.mjs host remote-smoke|remote-ramp-short|remote-idle|remote-1eps|remote-ramp
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
   ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local|status-local
@@ -225,7 +225,14 @@ try {
     tasks.push({ command: 'sh', args: ['tests/host/vm-test.sh', action] });
   else if (
     group === 'host' &&
-    ['ec2-up', 'ec2-status', 'ec2-resize-large', 'ec2-resize-medium', 'ec2-down'].includes(action)
+    [
+      'ec2-up',
+      'ec2-bootstrap',
+      'ec2-status',
+      'ec2-resize-large',
+      'ec2-resize-medium',
+      'ec2-down',
+    ].includes(action)
   )
     tasks.push({
       command: 'node',

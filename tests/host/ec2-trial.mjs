@@ -2,7 +2,8 @@
 // Every resource carries the signaltrail:trial tag (IAM and the bucket by name), and
 // `down` removes them all, then checks nothing tagged is left.
 //
-//   node tests/host/ec2-trial.mjs up|status|resize-large|resize-medium|down
+//   node tests/host/ec2-trial.mjs up|bootstrap|status|resize-large|resize-medium|down
+//   (bootstrap re-runs provisioning on the running trial)
 //   AWS_PROFILE (default signaltrail-trial), AWS_REGION (default us-east-2).
 // State, SSH key and cost log: test-results/aws-trial/ (ignored by git).
 import { spawn } from 'node:child_process';
@@ -337,6 +338,14 @@ async function up() {
   ).Ebs.VolumeId;
   await saveState(state);
 
+  await provision(state);
+}
+
+/** Copy the committed tree, bootstrap the host, install k6, verify. Safe to re-run. */
+async function provision(state) {
+  state ??= await loadState();
+  if (!state || state.closedAt) throw new Error('No running trial');
+  const own = resolve(directory, state.trial);
   await Promise.all([
     waitForSsh(state, state.host.public),
     waitForSsh(state, state.generator.public),
@@ -586,6 +595,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const action = process.argv[2];
   const actions = {
     up,
+    bootstrap: () => provision(),
     status: () => status(),
     'resize-large': () => resize('t4g.large'),
     'resize-medium': () => resize('t4g.medium'),
