@@ -19,6 +19,16 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
 
 ## Current checkpoint — 2026-11-11
 
+### November 12 — CI fixes
+
+- `format:check` failed on 18 docs/config files committed unformatted; reformatted.
+- Browser test "persists an unacknowledged event across reload" was racy: an
+  old-page backoff retry in flight at reload keeps its claim leased 60 s (by
+  design; the server deduplicates by event ID), longer than the 10 s wait.
+  Forcing that race reproduces the CI error 3/3. The test now closes the old
+  page's delivery after the recorded 503 attempt. Locally ~1,000 stressed runs
+  passed, with one earlier unexplained failure among 40 (details not captured).
+
 ### November 11 — VPS phase A complete (no spending)
 
 - User requirements: ~1 event/minute at launch, handle 1 EPS with no lost events

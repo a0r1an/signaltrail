@@ -22,8 +22,15 @@ test('persists an unacknowledged event across reload and retries with the same I
   scenario,
 }) => {
   await configure(request, scenario, { status: 503 });
-  await open(page, scenario);
-  const captured = await page.evaluate(() => window.harness.capture({ immediate: true }));
+  // A long interval keeps timer flushes out of the way of the immediate attempt.
+  await open(page, scenario, 60_000);
+  // Close once the 503 attempt is recorded: a backoff retry in flight during reload
+  // would keep its claim leased for 60 s, longer than this test waits.
+  const captured = await page.evaluate(async () => {
+    const result = await window.harness.capture({ immediate: true });
+    window.harness.delivery.close();
+    return result;
+  });
   expect(captured.status).toBe('queued');
   await expect(page.getByLabel('Queue')).toContainText(captured.eventId);
   await configure(request, scenario, { status: 200 });
