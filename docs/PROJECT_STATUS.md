@@ -38,9 +38,18 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   231576004804, region us-east-2 (the account's project is fixed to Ohio).
 - Phase B tooling done (da77724): `host ec2-up|ec2-status|ec2-resize-*|ec2-down`
   and `SIGNALTRAIL_HOST_TARGET=ec2` remote runs; Lima smoke re-passes on it.
-- Blocked: the Free plan account rejects t4g.medium (free-tier-eligible types only).
-  Partial launch torn down, nothing left, $0. Needs the user's choice: upgrade to a
-  paid plan (credits kept) or trial on c7i-flex.large.
+- User upgraded the account to paid (credits kept); $10/month gross budget alert.
+- Phase B trial done (`performance/ec2-t4g-trial.md`), torn down, ~$0.26 total.
+  t4g.medium: no lost events at any rate; ingestion alone passes 10–150 EPS (p99
+  ≤ 9 ms), within the 20% CPU baseline up to ~50 EPS. With a continuous dashboard
+  viewer, ingestion holds to 25 EPS. Resize to t4g.large: 85 s downtime (same 2
+  vCPUs, no dashboard gain). Production-size backup/restore with S3 copy: exact
+  match, restore 40 s.
+- Fixed on the way: exact-mode FINAL expansion made dashboard reads scan most of
+  the table once several projects share parts (8ea9c8a); AWS CLI install via AWS's
+  installer; dashboard result reported per stage.
+- 30-day visitor count ~3.5 s accepted for now (fix later).
+- Next: phase C (launch host with alarms) needs approval and the production region.
 
 ### November 11 — local readiness work before VPS sizing
 

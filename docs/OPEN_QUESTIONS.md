@@ -88,6 +88,12 @@ Entries are questions, not approvals or completed work.
   target; 1-day and 7-day pages stay under 1.2 s. User accepts this for now; fix
   later (daily visitor rollup or query cache). Exact-mode FINAL expansion with
   several projects per part was the larger problem and is fixed (8ea9c8a).
+- **Phase C inputs (after the 2026-11-11 trial):** t4g.medium meets 1 EPS with no lost
+  events and wide headroom. Needed before launch: approval to launch, the production
+  region (match the other AWS services; the trial ran in us-east-2), S3 backup
+  retention (add a lifecycle rule; the host role cannot delete), and alarm
+  recipients. Proposed alarms: CPU credit balance, ingestion p99 > 500 ms,
+  dashboard query p95 > 2 s, sustained ingest > 25 EPS.
   Needed before launch: which account hosts production (a Free plan account closes
   at plan end unless upgraded; upgrading keeps remaining credits), and whether replay
   storage moves, and the production region (match the other AWS services). Working

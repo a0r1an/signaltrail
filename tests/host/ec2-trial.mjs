@@ -2,7 +2,7 @@
 // Every resource carries the signaltrail:trial tag (IAM and the bucket by name), and
 // `down` removes them all, then checks nothing tagged is left.
 //
-//   node tests/host/ec2-trial.mjs up|bootstrap|status|resize-large|resize-medium|down
+//   node tests/host/ec2-trial.mjs up|bootstrap|backup|status|resize-large|resize-medium|down
 //   (bootstrap re-runs provisioning on the running trial)
 //   AWS_PROFILE (default signaltrail-trial), AWS_REGION (default us-east-2).
 // State, SSH key and cost log: test-results/aws-trial/ (ignored by git).
@@ -472,6 +472,74 @@ async function resize(type) {
   log(`resized to ${type} in ${((Date.now() - started) / 1000).toFixed(0)} s; verify: ${verified}`);
 }
 
+/**
+ * Production-size backup drill: full backup (with the S3 copy), incremental, a write
+ * after the backup, restore, and an exact match with the data at backup time.
+ */
+async function backup() {
+  const state = await loadState();
+  if (!state || state.closedAt) throw new Error('No running trial');
+  const host = (command) => ssh(state, state.host.public, command).then((r) => r.stdout.trim());
+  const timed = async (label, command) => {
+    const started = Date.now();
+    const output = await host(command);
+    const seconds = (Date.now() - started) / 1000;
+    log(`${label}: ${seconds.toFixed(0)} s ${output.split('\n').at(-1)}`);
+    return { output, seconds };
+  };
+  // Rows near the 90-day edge expire (TTL) between steps; compare a day inside it.
+  const cutoff = new Date(Date.now() - 89 * 86400000).toISOString().slice(0, 19);
+  const fingerprint = () =>
+    host(
+      `here=${REPO}/infra/host; . $here/lib.sh; printf "SELECT (SELECT toString(count()) || ':' || toString(sum(cityHash64(*))) FROM signaltrail.analytics_events FINAL WHERE received_at > toDateTime64('${cutoff}', 3, 'UTC')) || '/' || (SELECT toString(count()) FROM signaltrail.analytics_identity_links FINAL WHERE received_at > toDateTime64('${cutoff}', 3, 'UTC'));" | clickhouse_admin`,
+    );
+  const drill = {
+    rows: await host(
+      `here=${REPO}/infra/host; . $here/lib.sh; echo 'SELECT count() FROM signaltrail.analytics_events' | clickhouse_admin`,
+    ),
+  };
+  drill.full = await timed('full backup + S3 copy', `sh ${REPO}/infra/host/backup.sh`);
+  const listing = await run('aws', [
+    's3',
+    'ls',
+    `s3://${state.bucket}/host/`,
+    '--recursive',
+    '--summarize',
+    '--profile',
+    profile,
+    '--region',
+    region,
+  ]);
+  drill.s3 = listing.stdout.trim().split('\n').slice(-2).join(' ');
+  log(`S3: ${drill.s3}`);
+  await host(`sh ${REPO}/infra/host/verify.sh`);
+  drill.incremental = await timed(
+    'incremental backup + S3 copy',
+    `sh ${REPO}/infra/host/backup.sh`,
+  );
+  const name = /"clickhouse":"([^"]+)"/.exec(drill.incremental.output)?.[1];
+  if (!name?.startsWith('incr-')) throw new Error(`Expected an incremental backup, got ${name}`);
+  drill.expected = await fingerprint();
+  await host(`sh ${REPO}/infra/host/verify.sh`);
+  drill.afterWrite = await fingerprint();
+  drill.restore = await timed(
+    'restore',
+    `SIGNALTRAIL_RESTORE_CONFIRM=${name} sh ${REPO}/infra/host/restore.sh ${name}`,
+  );
+  drill.actual = await fingerprint();
+  drill.matched = drill.actual === drill.expected && drill.afterWrite !== drill.expected;
+  drill.verify = (await host(`sh ${REPO}/infra/host/verify.sh`)).split('\n').at(-1);
+  drill.backupBytes = await host(`du -sb /var/lib/signaltrail/backups | cut -f1`);
+  await writeFile(
+    resolve(directory, state.trial, 'backup-drill.json'),
+    JSON.stringify(drill, null, 2),
+  );
+  log(
+    `fingerprint at backup ${drill.expected}, after restore ${drill.actual}: ${drill.matched ? 'MATCH' : 'MISMATCH'}; verify: ${drill.verify}`,
+  );
+  if (!drill.matched) throw new Error('Restore does not match the backup');
+}
+
 async function down() {
   const state = await loadState();
   if (!state || state.closedAt) return log('no trial to tear down');
@@ -596,6 +664,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const actions = {
     up,
     bootstrap: () => provision(),
+    backup,
     status: () => status(),
     'resize-large': () => resize('t4g.large'),
     'resize-medium': () => resize('t4g.medium'),

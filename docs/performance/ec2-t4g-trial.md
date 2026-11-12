@@ -70,7 +70,36 @@ rollup or query cache).
 - Alarm candidates: CPU credit balance falling (not CPU %), ingestion p99 > 500 ms,
   dashboard query p95 > 2 s, sustained ingest rate > 25 EPS.
 
+## t4g.large (same host, resized)
+
+`host ec2-resize-large`: stop → change type → start → verify took **85 s** of
+downtime; data, private address and services came back intact. t4g.large has the
+**same 2 vCPUs** as t4g.medium; it adds memory (8 GiB, unused while the container
+caps stay at their 4 GiB values) and a higher CPU baseline (30% vs 20%). The first
+viewer stage (1 EPS, now 18M rows in two projects) passed ingestion (901/901,
+p95 14 ms) with a 4.1 s dashboard page p95 — no faster than t4g.medium — so the run
+was stopped. Per-rate CPU is the same on both, so on t4g.large ingestion alone stays
+within the 30% baseline up to ~100–150 EPS (25.9% at 100, 30.6% at 150 above).
+Faster dashboards need more vCPUs (t4g.xlarge, ~$98/month, over budget) or a rollup.
+
+## Backup and restore at production size (18M events, 0.89M links)
+
+| Step                                | Result                                 |
+| ----------------------------------- | -------------------------------------- |
+| Full backup, 9M rows (hourly timer) | ~7 s, 409 MB, copied to S3             |
+| Incremental + S3 copy               | 9–10 s (differential against the full) |
+| S3 after two runs                   | 515 objects, 0.92 GB                   |
+| Restore (ClickHouse + PostgreSQL)   | 40 s                                   |
+| Fingerprint at backup vs restored   | exact match; post-backup write gone    |
+| Verify after restore                | OK event stored, restricted users, TLS |
+
+Notes: incrementals are differentials against the latest full, so they grow during
+the day. The host role cannot delete S3 objects, so S3 keeps every backup until a
+lifecycle rule is added (retention decision pending). A replacement host restores
+after syncing the bucket down first.
+
 ## Cost
 
-Three short trials before this host: $0.00, $0.04, $0.03. This host to the end of
-the t4g.medium runs: ~$0.15 (2.3 h). Budget alert: $10/month gross.
+All trials torn down; nothing left (instances, volumes, security groups, key pairs,
+role, bucket checked). Estimated total **$0.26** (trials: $0.00, $0.04, $0.03,
+$0.19 over 2.6 h). Budget alert: $10/month gross. Credits: $140 remaining.
