@@ -49,7 +49,10 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   the table once several projects share parts (8ea9c8a); AWS CLI install via AWS's
   installer; dashboard result reported per stage.
 - 30-day visitor count ~3.5 s accepted for now (fix later).
-- Next: phase C (launch host with alarms) needs approval and the production region.
+- Next: user designs the first production dashboard (views set read cost), then
+  per-element measurement, pages and rollups where needed, a short EC2 re-run,
+  then phase C (launch with alarms; needs approval, region, retention, recipients).
+  Instance comparison: stay on t4g.medium; see OPEN_QUESTIONS.
 
 ### November 11 — local readiness work before VPS sizing
 
@@ -86,7 +89,6 @@ Sustained capacity, production sizing, and disaster recovery remain unverified.
   90001 accepted/stored, 0 refusals. Evidence: `performance/4gb-dashboard-90day.md`.
 - The user's development ClickHouse still needs `metadata configure-local` to apply
   003/004 and grant the reader SELECT on the links table; not run by the agent.
-
 
 ### November 10 — dashboard queries do not scale to 90 days of data
 

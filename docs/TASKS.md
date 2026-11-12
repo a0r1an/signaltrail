@@ -197,9 +197,13 @@ belong in OPEN_QUESTIONS. Update this queue when a slice is completed or blocked
       local Docker and a Lima Ubuntu VM. See [plan](performance/vps-qualification-plan.md).
 - [x] VPS phase B: EC2 t4g trial (tooling, ramps, resize, production-size backup
       with S3, teardown). See [trial](performance/ec2-t4g-trial.md).
-- [ ] VPS phase C: launch host with alarms (needs approval).
+- [ ] Design the first production dashboard (user owns the choice; 2026-11-11 user
+      chose to do this before rollups or launch, since views drive read cost).
+      Then: measure each chosen element against the 9M-row fixture, build pages
+      with rollups only where measured, short EC2 re-run (~$0.10, needs approval).
+- [ ] VPS phase C: launch host with alarms (needs approval; after the dashboard).
 - [ ] Later (user accepted ~3.5 s for now): 30-day visitor count under 2 s on
-      t4g.medium, e.g. a daily visitor rollup or minute-rounded query cache.
+      t4g.medium, if the chosen views keep it (rollup or minute-rounded cache).
 - [ ] Select VPS provider/region/size/budget using representative workload evidence.
       Current proposal and launch workload are in
       [launch cost/capacity](performance/launch-cost-and-capacity.md). Benchmark the

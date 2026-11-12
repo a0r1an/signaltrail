@@ -103,3 +103,17 @@ after syncing the bucket down first.
 All trials torn down; nothing left (instances, volumes, security groups, key pairs,
 role, bucket checked). Estimated total **$0.26** (trials: $0.00, $0.04, $0.03,
 $0.19 over 2.6 h). Budget alert: $10/month gross. Credits: $140 remaining.
+
+## Instance comparison (for later sizing)
+
+| Instance   | vCPU   | Memory | Baseline | Credits/h | EBS burst     | $/month (instance) |
+| ---------- | ------ | ------ | -------- | --------: | ------------- | -----------------: |
+| t4g.medium | 2      | 4 GiB  | 20%      |        24 | 2,085 Mbps    |             ~24.50 |
+| t4g.large  | 2      | 8 GiB  | 30%      |        36 | 2,780 Mbps    |                ~49 |
+| t4g.xlarge | 4      | 16 GiB | 40%      |        96 | 2,780 Mbps    |                ~98 |
+| c7g.large  | 2 (G3) | 4 GiB  | 100%     |         — | up to 10 Gbps |                ~53 |
+| c7g.xlarge | 4 (G3) | 8 GiB  | 100%     |         — | up to 10 Gbps |               ~106 |
+
+Disk (60 GB gp3) and public IPv4 add ~$8.50/month. Only t4g prices were checked
+with the Pricing API; the rest are approximate. Measured here: t4g.large does not
+speed up the dashboard. c7g (Graviton3) is unmeasured.

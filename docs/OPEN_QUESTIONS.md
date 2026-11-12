@@ -88,6 +88,20 @@ Entries are questions, not approvals or completed work.
   target; 1-day and 7-day pages stay under 1.2 s. User accepts this for now; fix
   later (daily visitor rollup or query cache). Exact-mode FINAL expansion with
   several projects per part was the larger problem and is fixed (8ea9c8a).
+- **First production dashboard design (2026-11-11):** user wants to decide what
+  the first dashboard shows before rollups, the EC2 re-run or launch, because the
+  views set read cost. Needed: metrics, default time range, breakdowns, and whether
+  funnels, retention or live refresh are in scope. Relative cost on t4g.medium:
+  counts/trends cheap; top-N breakdowns cheap to moderate; unique visitors costly
+  over long ranges (30-day ~3.5 s); funnels/retention costliest; auto-refresh
+  multiplies all. Unaffected by the design: ingestion limits, backup/restore,
+  resize, the exact-mode fix. Offered: a drafted proposal with per-element cost.
+- **Instance alternatives (2026-11-11, prices approximate except t4g):** stay on
+  t4g.medium (~$33/month with disk and IPv4). t4g.large: same 2 vCPUs, 8 GiB, 30%
+  baseline, ~$57.50 total (over the cap), no dashboard gain measured. t3/t3a.medium
+  cost more, need x86 images. c7g.large (2 vCPU Graviton3, no credits, ~$53 +
+  disk) is the nearest step up; ~25% faster cores per AWS, unmeasured here.
+  Dashboard gains need 4 vCPUs (t4g.xlarge ~$98, c7g.xlarge ~$106) or rollups.
 - **Phase C inputs (after the 2026-11-11 trial):** t4g.medium meets 1 EPS with no lost
   events and wide headroom. Needed before launch: approval to launch, the production
   region (match the other AWS services; the trial ran in us-east-2), S3 backup
