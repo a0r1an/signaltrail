@@ -19,7 +19,7 @@ const help = `SignalTrail operations (run from the repository root)
   ./scripts/signaltrail-ops.mjs compose validate
   ./scripts/signaltrail-ops.mjs host smoke-local|vm-test|vm-up|vm-down|vm-backup
   ./scripts/signaltrail-ops.mjs host ec2-up|ec2-bootstrap|ec2-status|ec2-resize-large|ec2-resize-medium|ec2-down
-  SIGNALTRAIL_HOST_TARGET=lima:<vm>|ec2 ./scripts/signaltrail-ops.mjs host remote-smoke|remote-ramp-short|remote-idle|remote-1eps|remote-ramp
+  SIGNALTRAIL_HOST_TARGET=lima:<vm>|ec2 ./scripts/signaltrail-ops.mjs host remote-smoke|remote-ramp-short|remote-idle|remote-1eps|remote-ramp|remote-ramp-ingest
   ./scripts/signaltrail-ops.mjs metadata status|migrate-local|configure-local|plan|bootstrap-plan
   ./scripts/signaltrail-ops.mjs pipeline start-local|probe-local|status-local
   ./scripts/signaltrail-ops.mjs install
@@ -240,9 +240,14 @@ try {
     });
   else if (
     group === 'host' &&
-    ['remote-smoke', 'remote-ramp-short', 'remote-idle', 'remote-1eps', 'remote-ramp'].includes(
-      action,
-    )
+    [
+      'remote-smoke',
+      'remote-ramp-short',
+      'remote-idle',
+      'remote-1eps',
+      'remote-ramp',
+      'remote-ramp-ingest',
+    ].includes(action)
   ) {
     pnpm('--filter', '@signaltrail/analytics', 'build');
     tasks.push({

@@ -39,6 +39,12 @@ const profiles = {
   },
   idle: { seedRows: 9000000, viewer: false, stages: [{ rate: 0, seconds: 120 * MINUTE }] },
   '1eps': { seedRows: 9000000, viewer: true, stages: [{ rate: 1, seconds: 240 * MINUTE }] },
+  // Ingestion alone on the already-seeded host: no viewer, no new seed rows.
+  'ramp-ingest': {
+    seedRows: 0,
+    viewer: false,
+    stages: [10, 25, 50, 100, 150].map((rate) => ({ rate, seconds: 10 * MINUTE })),
+  },
   ramp: {
     seedRows: 9000000,
     viewer: true,
