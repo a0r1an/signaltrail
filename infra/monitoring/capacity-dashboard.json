@@ -18,11 +18,7 @@
     "to": "now"
   },
   "description": "Isolated test telemetry. Select a run and test time window. No production capacity guarantee; gaps and stale samples are not healthy zeros.",
-  "tags": [
-    "signaltrail",
-    "capacity",
-    "test"
-  ],
+  "tags": ["signaltrail", "capacity", "test"],
   "panels": [
     {
       "id": 1,
@@ -68,9 +64,7 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -796,9 +790,7 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -876,9 +868,7 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1117,14 +1107,8 @@
         "includeAll": true,
         "allValue": ".*",
         "current": {
-          "text": [
-            "cpu0",
-            "cpu1"
-          ],
-          "value": [
-            "cpu0",
-            "cpu1"
-          ]
+          "text": ["cpu0", "cpu1"],
+          "value": ["cpu0", "cpu1"]
         }
       }
     ]

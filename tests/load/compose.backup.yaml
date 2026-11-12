@@ -3,8 +3,12 @@
 services:
   clickhouse:
     # Named volumes start root-owned; the server writes backups as the clickhouse user.
-    entrypoint: &backup-entrypoint
-      ['/bin/sh', '-ec', 'chown clickhouse:clickhouse /backups && exec /entrypoint.sh']
+    entrypoint:
+      &backup-entrypoint [
+        '/bin/sh',
+        '-ec',
+        'chown clickhouse:clickhouse /backups && exec /entrypoint.sh',
+      ]
     volumes:
       - ../../infra/clickhouse/config/backups.xml:/etc/clickhouse-server/config.d/signaltrail-backups.xml:ro
       - clickhouse_backups:/backups

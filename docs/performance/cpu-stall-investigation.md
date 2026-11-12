@@ -19,19 +19,19 @@ and 16 waiting. The interval ending `20:45:39.759 UTC` spans approximately 1002 
 Resources are read just after its timestamp, and collection takes 3.09 ms. These
 are near-aligned observations rather than atomic measurements.
 
-| Observation | Value |
-| --- | --- |
-| Ingestion event-loop delay maximum in interval | 195.04 ms |
-| Ingestion process CPU time | 399.98 ms user + 20.76 ms system |
-| Event-loop utilization | 0.679 (wall time, not CPU utilization) |
-| Ingestion GC activity in interval | 25 events, 109.58 ms total, 39.74 ms largest |
-| App cgroup CPU pressure `some` delta | 457.77 ms |
-| App cgroup CPU pressure `full` delta | 235.24 ms |
-| Assigned logical CPU 0 / CPU 1 busy from Linux CPU-time deltas | 91.9% / 90.9% |
-| App cgroup I/O pressure `some` delta | 0 ms |
-| Docker VM I/O pressure `some` delta | 6.51 ms |
-| App cgroup CPU quota / throttled time | unlimited quota / zero throughout run |
-| App cgroup memory high/max/OOM events | zero throughout run |
+| Observation                                                    | Value                                        |
+| -------------------------------------------------------------- | -------------------------------------------- |
+| Ingestion event-loop delay maximum in interval                 | 195.04 ms                                    |
+| Ingestion process CPU time                                     | 399.98 ms user + 20.76 ms system             |
+| Event-loop utilization                                         | 0.679 (wall time, not CPU utilization)       |
+| Ingestion GC activity in interval                              | 25 events, 109.58 ms total, 39.74 ms largest |
+| App cgroup CPU pressure `some` delta                           | 457.77 ms                                    |
+| App cgroup CPU pressure `full` delta                           | 235.24 ms                                    |
+| Assigned logical CPU 0 / CPU 1 busy from Linux CPU-time deltas | 91.9% / 90.9%                                |
+| App cgroup I/O pressure `some` delta                           | 0 ms                                         |
+| Docker VM I/O pressure `some` delta                            | 6.51 ms                                      |
+| App cgroup CPU quota / throttled time                          | unlimited quota / zero throughout run        |
+| App cgroup memory high/max/OOM events                          | zero throughout run                          |
 
 The cgroup covers ingestion and processor together; process CPU/GC/ELU cover only
 ingestion. CPU pressure measures runnable work waiting for CPU, distinct from
@@ -123,14 +123,14 @@ The control fails with 14 metadata-gate HTTP 503s: 29987 accepted/unique stored,
 no HTTP-gate refusals/retries/rejections/generator drops, final source lag zero.
 HTTP p99 106.83 ms. Cleanup and lock release pass, no detected OOM/restart.
 
-| Measurement | With analytical SQL | Without analytical SQL |
-| --- | --- | --- |
-| Metadata gate refusals | 1 | 14 |
-| HTTP p99, ms | 105.79 | 106.83 |
-| App CPU-pressure `some` fraction across observed span | 12.73% | 13.07% |
-| Largest ingestion GC duration, ms | 39.74 | 41.81 |
-| Total observed ingestion GC time, ms | 4071 | 4181 |
-| App I/O-pressure `some` increase across observed span, ms | 7.81 | 3.45 |
+| Measurement                                               | With analytical SQL | Without analytical SQL |
+| --------------------------------------------------------- | ------------------- | ---------------------- |
+| Metadata gate refusals                                    | 1                   | 14                     |
+| HTTP p99, ms                                              | 105.79              | 106.83                 |
+| App CPU-pressure `some` fraction across observed span     | 12.73%              | 13.07%                 |
+| Largest ingestion GC duration, ms                         | 39.74               | 41.81                  |
+| Total observed ingestion GC time, ms                      | 4071                | 4181                   |
+| App I/O-pressure `some` increase across observed span, ms | 7.81                | 3.45                   |
 
 Pressure fraction uses cumulative kernel `some total` deltas over elapsed time
 between the first and last resource observations; collection is asynchronous,

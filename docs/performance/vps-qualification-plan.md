@@ -32,14 +32,14 @@ Updated 2026-11-11 with the user's launch requirements:
 
 ## What local testing already tells us
 
-| Finding | Evidence | Sizing consequence |
-| --- | --- | --- |
-| Memory fits 4 GiB with async inserts | ClickHouse 230–390 MiB under its 1.5-GiB cap; app ≤ 384 MiB | 4 GiB is the floor; 8 GiB gives ClickHouse cache and merge headroom (ClickHouse guidance: 8 GB minimum) |
-| Ingestion is light | 100 EPS: all services ≈35% of one core on average, ≈63% at peaks | 2 cores cover launch ingestion with wide margin |
-| ClickHouse queries are the CPU peak | One viewer + 100 EPS: ClickHouse up to ≈120% at peaks | 2 cores enough for one viewer; dashboard concurrency deferred |
-| Retention deletes are cheap | ≈6 s of one core per 9M rows, ≤ every 4 h | Not a sizing driver at launch volume |
-| Disk speed unmeasured | Mac SSD only | Must measure on each host (merges, TTL, backup/restore) |
-| Long-run pass/fail unreliable locally | Docker-VM-wide stalls on the shared Mac | Only a real host can qualify endurance |
+| Finding                               | Evidence                                                         | Sizing consequence                                                                                      |
+| ------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Memory fits 4 GiB with async inserts  | ClickHouse 230–390 MiB under its 1.5-GiB cap; app ≤ 384 MiB      | 4 GiB is the floor; 8 GiB gives ClickHouse cache and merge headroom (ClickHouse guidance: 8 GB minimum) |
+| Ingestion is light                    | 100 EPS: all services ≈35% of one core on average, ≈63% at peaks | 2 cores cover launch ingestion with wide margin                                                         |
+| ClickHouse queries are the CPU peak   | One viewer + 100 EPS: ClickHouse up to ≈120% at peaks            | 2 cores enough for one viewer; dashboard concurrency deferred                                           |
+| Retention deletes are cheap           | ≈6 s of one core per 9M rows, ≤ every 4 h                        | Not a sizing driver at launch volume                                                                    |
+| Disk speed unmeasured                 | Mac SSD only                                                     | Must measure on each host (merges, TTL, backup/restore)                                                 |
+| Long-run pass/fail unreliable locally | Docker-VM-wide stalls on the shared Mac                          | Only a real host can qualify endurance                                                                  |
 
 Evidence: [readiness runs](4gb-launch-readiness-nov11.md),
 [dashboard](4gb-dashboard-90day.md), [async inserts](4gb-async-insert.md),
@@ -51,11 +51,11 @@ At 1 EPS the stack is mostly idle, so a burstable instance fits: it earns CPU cr
 while quiet and spends them on dashboard queries, merges and retention deletes. EC2
 also upgrades in place (stop → change type → start; same EBS volume and Elastic IP).
 
-| Instance (Oregon, Graviton) | vCPU / RAM | Listed $/hour | ≈ $/month incl. 30 GB gp3 + IPv4 | Role |
-| --- | --- | --- | --- | --- |
-| t4g.medium | 2 / 4 GiB, 20% baseline per vCPU | ≈$0.034 | ≈$31 | **Primary candidate** |
-| t4g.large | 2 / 8 GiB, 30% baseline per vCPU | ≈$0.067 | ≈$56 | First upgrade step (slightly over the ceiling) |
-| m7g.large / c7g.large | 2 dedicated / 8 or 4 GiB | ≈$0.082 / ≈$0.073 | ≈$66 / ≈$60 | Later steps when sustained CPU is needed |
+| Instance (Oregon, Graviton) | vCPU / RAM                       | Listed $/hour     | ≈ $/month incl. 30 GB gp3 + IPv4 | Role                                           |
+| --------------------------- | -------------------------------- | ----------------- | -------------------------------- | ---------------------------------------------- |
+| t4g.medium                  | 2 / 4 GiB, 20% baseline per vCPU | ≈$0.034           | ≈$31                             | **Primary candidate**                          |
+| t4g.large                   | 2 / 8 GiB, 30% baseline per vCPU | ≈$0.067           | ≈$56                             | First upgrade step (slightly over the ceiling) |
+| m7g.large / c7g.large       | 2 dedicated / 8 or 4 GiB         | ≈$0.082 / ≈$0.073 | ≈$66 / ≈$60                      | Later steps when sustained CPU is needed       |
 
 Prices are listings to verify; t4g.large was found only for us-east-1. The key
 measurement is whether idle stack CPU plus 1 EPS stays below t4g.medium's baseline;
@@ -86,14 +86,14 @@ Verification: dry-run against a local Linux VM or container before any paid host
 
 Done and verified locally (commits 2869fdb … 6ca3a0f):
 
-| Piece | Verification |
-| --- | --- |
-| Images (`infra/host/Dockerfile`) and `compose.production.yaml` | Built for ARM64; non-root; production-mode Redpanda; tested memory split |
-| `secrets.sh`, `migrate.sh`, PostgreSQL TLS, restricted identities | `host smoke-local`: ingest → storage, restart, NOTIFY revocation over TLS, identity limits |
-| `bootstrap.sh`, `verify.sh` | `host vm-test` in a Lima Ubuntu 24.04 VM: fresh bootstrap 92–94 s, idempotent re-run, reboot keeps the data disk mounted and events stored |
-| Remote runner (`tests/host/remote-run.mjs`), sampler, seed, generator-side ledger | `remote-smoke` and `remote-ramp-short` on the VM pass; 9 unit tests |
-| `probe.sh` (fio fsync/random/sequential, EC2 metadata) | Runs on the VM; summarized in long profiles |
-| `backup.sh` + hourly timer, `restore.sh` | `host vm-backup`: restore matches the backup exactly, post-backup write absent, 14 s |
+| Piece                                                                             | Verification                                                                                                                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Images (`infra/host/Dockerfile`) and `compose.production.yaml`                    | Built for ARM64; non-root; production-mode Redpanda; tested memory split                                                                   |
+| `secrets.sh`, `migrate.sh`, PostgreSQL TLS, restricted identities                 | `host smoke-local`: ingest → storage, restart, NOTIFY revocation over TLS, identity limits                                                 |
+| `bootstrap.sh`, `verify.sh`                                                       | `host vm-test` in a Lima Ubuntu 24.04 VM: fresh bootstrap 92–94 s, idempotent re-run, reboot keeps the data disk mounted and events stored |
+| Remote runner (`tests/host/remote-run.mjs`), sampler, seed, generator-side ledger | `remote-smoke` and `remote-ramp-short` on the VM pass; 9 unit tests                                                                        |
+| `probe.sh` (fio fsync/random/sequential, EC2 metadata)                            | Runs on the VM; summarized in long profiles                                                                                                |
+| `backup.sh` + hourly timer, `restore.sh`                                          | `host vm-backup`: restore matches the backup exactly, post-backup write absent, 14 s                                                       |
 
 Deferred to the start of phase B, because they depend on how the trial resources
 are created: the SSH/Session Manager transport, `resize.sh` (stop → modify →
@@ -103,13 +103,13 @@ start → verify), launch and tag-based teardown scripts, and the cost log.
 
 On t4g.medium with the full schema, 9M-row 90-day seed and one dashboard viewer:
 
-| Step | Measures |
-| --- | --- |
-| Idle stack for 2 h, then 1 EPS for 4 h | CPU vs baseline, credit balance trend, memory, disk |
-| Ramp 1 → 5 → 10 → 25 → 50 → 100 EPS until failure | **Sustained limit** (credits start draining) and **burst limit** (latency/ack/refusal failure) |
-| Resize rehearsal t4g.medium → t4g.large while sending 1 EPS through the real SDK path | Downtime length; ledger shows zero lost events |
-| Hourly incremental backup to S3 via an IAM role; restore onto a fresh instance | Backup/restore time at production size, RPO/RTO |
-| Disk and steal probes | EBS latency, any steal time |
+| Step                                                                                  | Measures                                                                                       |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Idle stack for 2 h, then 1 EPS for 4 h                                                | CPU vs baseline, credit balance trend, memory, disk                                            |
+| Ramp 1 → 5 → 10 → 25 → 50 → 100 EPS until failure                                     | **Sustained limit** (credits start draining) and **burst limit** (latency/ack/refusal failure) |
+| Resize rehearsal t4g.medium → t4g.large while sending 1 EPS through the real SDK path | Downtime length; ledger shows zero lost events                                                 |
+| Hourly incremental backup to S3 via an IAM role; restore onto a fresh instance        | Backup/restore time at production size, RPO/RTO                                                |
+| Disk and steal probes                                                                 | EBS latency, any steal time                                                                    |
 
 Generator on a separate small instance. Estimated cost: a few dollars of credits;
 all resources tagged and terminated the same day.

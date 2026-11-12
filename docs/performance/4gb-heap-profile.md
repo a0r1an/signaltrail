@@ -68,13 +68,13 @@ otherwise log queues if it contains `SystemLogQueue<`; otherwise other. Sum the
 provided byte weights and compare the same full stack strings between snapshots.
 This grouping is an analysis rule, not a ClickHouse memory-category counter.
 
-| Snapshot | Profile total, MiB | Part-related, MiB | Log queues, MiB | Other, MiB |
-| --- | --- | --- | --- | --- |
-| Startup | 160.42 | 0 sampled | 72.48 | 87.95 |
-| Five minutes | 613.81 | 368.03 | 85.50 | 160.28 |
-| Eleven minutes | 926.07 | 700.07 | 82.76 | 143.24 |
-| After load | 868.90 | 672.11 | 66.87 | 129.92 |
-| After three idle minutes | 567.26 | 400.07 | 63.22 | 103.96 |
+| Snapshot                 | Profile total, MiB | Part-related, MiB | Log queues, MiB | Other, MiB |
+| ------------------------ | ------------------ | ----------------- | --------------- | ---------- |
+| Startup                  | 160.42             | 0 sampled         | 72.48           | 87.95      |
+| Five minutes             | 613.81             | 368.03            | 85.50           | 160.28     |
+| Eleven minutes           | 926.07             | 700.07            | 82.76           | 143.24     |
+| After load               | 868.90             | 672.11            | 66.87           | 129.92     |
+| After three idle minutes | 567.26             | 400.07            | 63.22           | 103.96     |
 
 At eleven minutes, part-related stacks account for about 700 MiB of the 766-MiB
 net estimated growth. Representative paths include part construction, per-part
@@ -102,12 +102,12 @@ active isolated capacity run, reads all part states plus relevant MergeTree
 settings and saves a timestamped `part-memory-*.json` in that run's directory.
 It performs no writes to ClickHouse or infrastructure. Four point samples:
 
-| UTC observation | Inactive analytics parts | Active analytics parts |
-| --- | --- | --- |
-| 18:27:24, during load | 40584 | 10 |
-| 18:32:00, during load | 54907 | 8 |
-| 18:36:45, shortly after load | 48132 | 4 |
-| 18:38:50, during idle | 34288 | 4 |
+| UTC observation              | Inactive analytics parts | Active analytics parts |
+| ---------------------------- | ------------------------ | ---------------------- |
+| 18:27:24, during load        | 40584                    | 10                     |
+| 18:32:00, during load        | 54907                    | 8                      |
+| 18:36:45, shortly after load | 48132                    | 4                      |
+| 18:38:50, during idle        | 34288                    | 4                      |
 
 Effective `old_parts_lifetime=480` seconds, cleanup delay30 plus random addition10.
 Obsolete merged parts are retained before cleanup. Inactive rows/bytes overlap

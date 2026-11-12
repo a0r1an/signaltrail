@@ -41,18 +41,18 @@ passed with 3001 accepted/stored in 88 writes (~34 records/write).
 
 Report: `test-results/load/2026-11-10T23-51-31.870Z-capacity-4gb-memory-trace-async/result.json`.
 
-| Measurement | Synchronous baseline ([memory trace](4gb-memory-trace.md)) | Async + small-server |
-| --- | --- | --- |
-| Accepted / unique stored | 88272 / 88272 | 89992 / 89992 |
-| Metadata / HTTP refusals | 1285 / 82 | 9 / 0 |
-| Generator drops | 361 | 0 |
-| Analytical memory rejections | 2 | 0 |
-| Records per confirmed write | ~1.1 | 34.3 (89992 / 2620) |
-| Server async insert queries | 0 | 2620 |
-| Mean storage write duration | — | 1.02 s |
-| Inactive analytics parts | tens of thousands (40584–54907 in [heap run](4gb-heap-profile.md)) | 102 → ~700 plateau |
-| ClickHouse jemalloc allocated | grew ~611 MiB | 230–277 MiB, flat |
-| Server tracked memory | reached ~1.33 GiB limit | 252–285 MiB |
+| Measurement                   | Synchronous baseline ([memory trace](4gb-memory-trace.md))         | Async + small-server |
+| ----------------------------- | ------------------------------------------------------------------ | -------------------- |
+| Accepted / unique stored      | 88272 / 88272                                                      | 89992 / 89992        |
+| Metadata / HTTP refusals      | 1285 / 82                                                          | 9 / 0                |
+| Generator drops               | 361                                                                | 0                    |
+| Analytical memory rejections  | 2                                                                  | 0                    |
+| Records per confirmed write   | ~1.1                                                               | 34.3 (89992 / 2620)  |
+| Server async insert queries   | 0                                                                  | 2620                 |
+| Mean storage write duration   | —                                                                  | 1.02 s               |
+| Inactive analytics parts      | tens of thousands (40584–54907 in [heap run](4gb-heap-profile.md)) | 102 → ~700 plateau   |
+| ClickHouse jemalloc allocated | grew ~611 MiB                                                      | 230–277 MiB, flat    |
+| Server tracked memory         | reached ~1.33 GiB limit                                            | 252–285 MiB          |
 
 Other measurements: HTTP p95 7.54 / p99 55.23 / max 437 ms; 429 analytical
 attempts, diagnostic query max 379 ms; drain 0.02 s; no publication
@@ -76,12 +76,12 @@ ClickHouse on the same small-server/1-second-flush configuration. Child workers
 use the 5000-ms production storage timeout in async mode (250 ms when synchronous).
 The probe asserts the server recorded async inserts (and none for `load pipeline`).
 
-| Check | `load pipeline` (sync) | `load pipeline-async` |
-| --- | --- | --- |
-| Paused storage: failed write, retry, uncommitted offset, SIGKILL, restart → 1 row, offset committed | pass | pass |
-| Insert stored but response withheld, SIGKILL, replacement re-inserts → 1 logical row | pass | pass |
-| Bounded bulk 205 events in 100/100/5 inserts; byte-bounded chunks; DLQ | pass (0.12 s) | pass (3.16 s) |
-| Server insert counters | 11 sync, 0 async | 11 async |
+| Check                                                                                               | `load pipeline` (sync) | `load pipeline-async` |
+| --------------------------------------------------------------------------------------------------- | ---------------------- | --------------------- |
+| Paused storage: failed write, retry, uncommitted offset, SIGKILL, restart → 1 row, offset committed | pass                   | pass                  |
+| Insert stored but response withheld, SIGKILL, replacement re-inserts → 1 logical row                | pass                   | pass                  |
+| Bounded bulk 205 events in 100/100/5 inserts; byte-bounded chunks; DLQ                              | pass (0.12 s)          | pass (3.16 s)         |
+| Server insert counters                                                                              | 11 sync, 0 async       | 11 async              |
 
 Reports: `test-results/load/2026-11-11T00-11-04.078Z-pipeline/result.json` and
 `test-results/load/2026-11-11T00-12-57.085Z-pipeline-async/result.json`; cleanup

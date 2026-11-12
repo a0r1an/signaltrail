@@ -14,19 +14,19 @@ Report:
 
 **Failed capacity; diagnostic evidence retained completely through export.**
 
-| Measurement | Result |
-| --- | --- |
-| HTTP accepted / unique stored | 88272 / 88272 |
-| Metadata / HTTP admission refusals | 1285 / 82 |
-| Invalid/incomplete response outcomes | 1367 |
-| Generator dropped iterations | 361 |
-| HTTP failure rate | 1.525% |
-| HTTP p95 / p99 | 211.01 / 1210.17 ms |
-| Analytical attempts / memory-limit exceptions | 387 / 2 |
-| Successful analytical maximum client time | 5192.79 ms |
-| Final source lag / drain time | 0 / 0.05 seconds |
-| Publication retries, cancellations, late completions | 0 |
-| Detected container OOM kills / restarts | 0 / 0 |
+| Measurement                                          | Result              |
+| ---------------------------------------------------- | ------------------- |
+| HTTP accepted / unique stored                        | 88272 / 88272       |
+| Metadata / HTTP admission refusals                   | 1285 / 82           |
+| Invalid/incomplete response outcomes                 | 1367                |
+| Generator dropped iterations                         | 361                 |
+| HTTP failure rate                                    | 1.525%              |
+| HTTP p95 / p99                                       | 211.01 / 1210.17 ms |
+| Analytical attempts / memory-limit exceptions        | 387 / 2             |
+| Successful analytical maximum client time            | 5192.79 ms          |
+| Final source lag / drain time                        | 0 / 0.05 seconds    |
+| Publication retries, cancellations, late completions | 0                   |
+| Detected container OOM kills / restarts              | 0 / 0               |
 
 All 387 analytical IDs have a matching terminal query-log record, including the two
 exceptions. Analytical requests continued after rejection. There are 61 memory
@@ -84,17 +84,17 @@ not identify the allocation that exhausted headroom or prove the best control.
 All values below are MiB from the first/last snapshots and observed maxima; these
 are different accounting views, not additive components of guest memory.
 
-| Counter | First | Last | Sampled maximum |
-| --- | --- | --- | --- |
-| ClickHouse MemoryTracking | 319.24 | 922.55 | 1085.48 |
-| jemalloc allocated | 288.80 | 899.98 | 1030.14 |
-| jemalloc active | 349.88 | 1090.56 | 1222.25 |
-| jemalloc resident | 355.19 | 1106.31 | 1240.19 |
-| jemalloc fragmentation | 61.08 | 190.58 | 200.86 |
-| Process MemoryResident | 737.05 | 1512.89 | 1577.02 |
-| Merge/mutation tracking | 0 | 0 | 247.83 |
-| Mark cache bytes | 0.01 | 0.05 | 0.07 |
-| Uncompressed/query cache bytes | 0 | 0 | 0 |
+| Counter                        | First  | Last    | Sampled maximum |
+| ------------------------------ | ------ | ------- | --------------- |
+| ClickHouse MemoryTracking      | 319.24 | 922.55  | 1085.48         |
+| jemalloc allocated             | 288.80 | 899.98  | 1030.14         |
+| jemalloc active                | 349.88 | 1090.56 | 1222.25         |
+| jemalloc resident              | 355.19 | 1106.31 | 1240.19         |
+| jemalloc fragmentation         | 61.08  | 190.58  | 200.86          |
+| Process MemoryResident         | 737.05 | 1512.89 | 1577.02         |
+| Merge/mutation tracking        | 0      | 0       | 247.83          |
+| Mark cache bytes               | 0.01   | 0.05    | 0.07            |
+| Uncompressed/query cache bytes | 0      | 0       | 0               |
 
 Live allocator allocations increase about **611 MiB**; reported fragmentation grows
 about **130 MiB**. The rise is not just unused virtual mappings or the named read

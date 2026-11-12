@@ -10,15 +10,15 @@ Diagnostics and workload code are the same for the baseline repeat and revised r
 Only the service memory distribution changes, as one allocation experiment with
 three caps adjusted. Existing profiles/application/development defaults are retained.
 
-| Allocation, MiB | Baseline | Revised |
-| --- | --- | --- |
-| Redpanda | 1280 | 1280 |
-| ClickHouse | 1280 | 1536 |
-| PostgreSQL | 256 | 128 |
-| Valkey | 128 | 128 |
-| Ingestion + processor | 512 | 384 |
-| Host/operations reserve | 640 | 640 |
-| Total | 4096 | 4096 |
+| Allocation, MiB         | Baseline | Revised |
+| ----------------------- | -------- | ------- |
+| Redpanda                | 1280     | 1280    |
+| ClickHouse              | 1280     | 1536    |
+| PostgreSQL              | 256      | 128     |
+| Valkey                  | 128      | 128     |
+| Ingestion + processor   | 512      | 384     |
+| Host/operations reserve | 640      | 640     |
+| Total                   | 4096     | 4096    |
 
 Swap remains disabled. Node heaps, PostgreSQL shared buffers/max connections,
 Redpanda internal memory and application gates are unchanged. Reduced donor caps
@@ -86,15 +86,15 @@ Docker-displayed individual peaks: ClickHouse 1502.21 MiB of 1536, app 155.1 MiB
 of 384, PostgreSQL 39.93 MiB of 128. Summed displayed target peak 1927.61 MiB;
 this excludes guest OS/some cache and can miss brief peaks.
 
-| Measurement | Original allocation repeat | Revised 1 | Revised 2 |
-| --- | --- | --- | --- |
-| Result | Fail | Pass | Pass |
-| Metadata HTTP 503s | 13 | 0 | 0 |
-| Accepted / unique stored | 29988 / 29988 | 30001 / 30001 | 30001 / 30001 |
-| HTTP p99, ms | 35.67 | 23.19 | 17.62 |
-| Peak outstanding metadata queries | 24 | 14 | 14 |
-| ClickHouse memory-pressure some total, seconds | 1.982 | 1.161 | 1.029 |
-| ClickHouse max-limit event count | 15475 | 15239 | 15497 |
+| Measurement                                    | Original allocation repeat | Revised 1     | Revised 2     |
+| ---------------------------------------------- | -------------------------- | ------------- | ------------- |
+| Result                                         | Fail                       | Pass          | Pass          |
+| Metadata HTTP 503s                             | 13                         | 0             | 0             |
+| Accepted / unique stored                       | 29988 / 29988              | 30001 / 30001 | 30001 / 30001 |
+| HTTP p99, ms                                   | 35.67                      | 23.19         | 17.62         |
+| Peak outstanding metadata queries              | 24                         | 14            | 14            |
+| ClickHouse memory-pressure some total, seconds | 1.982                      | 1.161         | 1.029         |
+| ClickHouse max-limit event count               | 15475                      | 15239         | 15497         |
 
 ### Working conclusion
 

@@ -55,27 +55,27 @@ Baseline:
 Candidate:
 `test-results/load/2026-11-10T19-25-45.206Z-capacity-4gb-memory-trace-heap-batched/result.json`.
 
-| Measurement | Baseline0ms | Candidate200ms |
-| --- | --- | --- |
-| HTTP accepted / unique stored |89970 /89970 |58638 /62937 |
-| Metadata / HTTP admission refusals |31 /0 |3901 /11511 |
-| Per-event retry outcomes |0 |2582 |
-| Invalid/incomplete responses |31 |18070 |
-| Generator dropped iterations |0 |10711 |
-| HTTP failure rate |~0.034% |22.79% |
-| HTTP p95 / p99, ms |19.24 /118.13 |8729.96 /10266.66 |
-| Selected source records / confirmed writes |89970 /81956 |62944 /8607 |
-| Source records per confirmed write |1.098 |7.313 |
-| Worker CPU seconds, initial→final metric delta |126.59 |86.14 |
-| Worker CPU milliseconds per selected source record |1.407 |1.369 |
-| Worker RSS at final scrape, MiB |113.91 |120.20 |
-| Maximum observed ClickHouse allocated, MiB |1046.04 |540.04 |
-| Maximum observed ClickHouse allocator resident, MiB |1250.81 |655.50 |
-| Maximum observed ClickHouse process RSS, MiB |1577.73 |941.20 |
-| Maximum observed inactive analytics parts |56222 |6625 |
-| Sampled source lag mean / maximum |2.85 /90 |13.78 /120 |
-| Analytical attempts / failed attempts |411 /1 |324 /4 |
-| Detected container OOM kills / restarts |0 /0 |0 /0 |
+| Measurement                                         | Baseline0ms   | Candidate200ms    |
+| --------------------------------------------------- | ------------- | ----------------- |
+| HTTP accepted / unique stored                       | 89970 /89970  | 58638 /62937      |
+| Metadata / HTTP admission refusals                  | 31 /0         | 3901 /11511       |
+| Per-event retry outcomes                            | 0             | 2582              |
+| Invalid/incomplete responses                        | 31            | 18070             |
+| Generator dropped iterations                        | 0             | 10711             |
+| HTTP failure rate                                   | ~0.034%       | 22.79%            |
+| HTTP p95 / p99, ms                                  | 19.24 /118.13 | 8729.96 /10266.66 |
+| Selected source records / confirmed writes          | 89970 /81956  | 62944 /8607       |
+| Source records per confirmed write                  | 1.098         | 7.313             |
+| Worker CPU seconds, initial→final metric delta      | 126.59        | 86.14             |
+| Worker CPU milliseconds per selected source record  | 1.407         | 1.369             |
+| Worker RSS at final scrape, MiB                     | 113.91        | 120.20            |
+| Maximum observed ClickHouse allocated, MiB          | 1046.04       | 540.04            |
+| Maximum observed ClickHouse allocator resident, MiB | 1250.81       | 655.50            |
+| Maximum observed ClickHouse process RSS, MiB        | 1577.73       | 941.20            |
+| Maximum observed inactive analytics parts           | 56222         | 6625              |
+| Sampled source lag mean / maximum                   | 2.85 /90      | 13.78 /120        |
+| Analytical attempts / failed attempts               | 411 /1        | 324 /4            |
+| Detected container OOM kills / restarts             | 0 /0          | 0 /0              |
 
 Per-event retry outcomes are not worker storage retries. Malformed-response metrics
 also count absent/incomplete outcomes after HTTP errors/timeouts, not just bad JSON.
@@ -121,12 +121,12 @@ memory comparisons. The successful short probe separately confirms larger batche
 at the full offered rate, and early pre-stall candidate memory/part samples are lower.
 
 | Heap profile estimated live bytes, MiB | Baseline | Candidate |
-| --- | --- | --- |
-| Startup |147.16 |172.91 |
-| Five minutes |628.60 |244.38 |
-| Eleven minutes |892.68 |234.57 |
-| After load |815.21 |291.46 |
-| After idle |649.65 |302.35 |
+| -------------------------------------- | -------- | --------- |
+| Startup                                | 147.16   | 172.91    |
+| Five minutes                           | 628.60   | 244.38    |
+| Eleven minutes                         | 892.68   | 234.57    |
+| After load                             | 815.21   | 291.46    |
+| After idle                             | 649.65   | 302.35    |
 
 Heap values are sampling estimates, not an exact memory census. Candidate idle
 profile increases slightly; do not claim every idle footprint drops. Profiling

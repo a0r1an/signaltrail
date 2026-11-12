@@ -21,31 +21,31 @@ worker batch wait 0 (default). Targets share CPUs 0,1; generator uses 2,3
 
 Report: `test-results/load/2026-11-10T22-38-36.799Z-capacity-4gb-db8-q24-endurance-50/result.json`.
 
-| Measurement | Result |
-| --- | --- |
-| Accepted / unique stored | 90001 / 90001 |
-| Retries / rejected / malformed / generator drops | 0 / 0 / 0 / 0 |
-| HTTP failure rate | 0 |
-| HTTP p50 / p95 / p99 / max | 2.40 / 11.29 / 54.26 / 1169.88 ms |
-| Metadata / HTTP admission refusals | 0 / 0 |
-| Publication cancellations / late completions | 0 / 0 |
-| Final source lag (3 partitions) | 0 |
-| Analytical queries during traffic | 846, 0 errors; p50 106 / p95 341 / max 1142 ms |
-| Container OOM kills / restarts | 0 / 0 |
-| Interval records saved | 1806, complete through export |
+| Measurement                                      | Result                                         |
+| ------------------------------------------------ | ---------------------------------------------- |
+| Accepted / unique stored                         | 90001 / 90001                                  |
+| Retries / rejected / malformed / generator drops | 0 / 0 / 0 / 0                                  |
+| HTTP failure rate                                | 0                                              |
+| HTTP p50 / p95 / p99 / max                       | 2.40 / 11.29 / 54.26 / 1169.88 ms              |
+| Metadata / HTTP admission refusals               | 0 / 0                                          |
+| Publication cancellations / late completions     | 0 / 0                                          |
+| Final source lag (3 partitions)                  | 0                                              |
+| Analytical queries during traffic                | 846, 0 errors; p50 106 / p95 341 / max 1142 ms |
+| Container OOM kills / restarts                   | 0 / 0                                          |
+| Interval records saved                           | 1806, complete through export                  |
 
 ## ClickHouse memory under the 1536-MiB cap
 
 From 359 cgroup samples (`samples.json`, `memory.stat`/`memory.events`):
 
 | Time (UTC) | Anonymous | Page cache | Cumulative `max` events |
-| --- | ---: | ---: | ---: |
-| 22:38:57 | 253 MiB | 27 MiB | 0 |
-| 22:43:57 | 515 MiB | 639 MiB | 3853 |
-| 22:48:59 | 770 MiB | 534 MiB | 11217 |
-| 22:56:33 | 768 MiB | 174 MiB | 31809 |
-| 23:04:07 | 758 MiB | 106 MiB | 44947 |
-| 23:08:59 | 762 MiB | 24 MiB | 56453 |
+| ---------- | --------: | ---------: | ----------------------: |
+| 22:38:57   |   253 MiB |     27 MiB |                       0 |
+| 22:43:57   |   515 MiB |    639 MiB |                    3853 |
+| 22:48:59   |   770 MiB |    534 MiB |                   11217 |
+| 22:56:33   |   768 MiB |    174 MiB |                   31809 |
+| 23:04:07   |   758 MiB |    106 MiB |                   44947 |
+| 23:08:59   |   762 MiB |     24 MiB |                   56453 |
 
 Anonymous (heap) memory grew for about ten minutes, then held at roughly
 750–780 MiB for the remaining twenty. This contrasts with 100-EPS runs, where
@@ -58,15 +58,15 @@ no `high`/OOM events). Docker-displayed usage (~1.44 GiB) includes that cache.
 Report: `test-results/load/2026-11-10T23-10-40.464Z-capacity-4gb-db8-q24-endurance-50/result.json`.
 Same checkout, profile and host conditions, started immediately after run 1.
 
-| Measurement | Result |
-| --- | --- |
-| Accepted / unique stored | 89670 / 89670 |
-| Metadata-gate refusals (HTTP 503) / HTTP-gate refusals | 270 / 0 |
-| Generator drops / retries / rejected | 61 / 0 / 0 |
-| Publication cancellations / late completions | 0 / 0 |
-| HTTP p95 / p99 / max | 27.09 / 459.40 / 3252.17 ms |
-| Analytical queries | 826, 0 errors; max 9892 ms (gate 2000 ms) |
-| Final source lag / OOM kills / restarts | 0 / 0 / 0 |
+| Measurement                                            | Result                                    |
+| ------------------------------------------------------ | ----------------------------------------- |
+| Accepted / unique stored                               | 89670 / 89670                             |
+| Metadata-gate refusals (HTTP 503) / HTTP-gate refusals | 270 / 0                                   |
+| Generator drops / retries / rejected                   | 61 / 0 / 0                                |
+| Publication cancellations / late completions           | 0 / 0                                     |
+| HTTP p95 / p99 / max                                   | 27.09 / 459.40 / 3252.17 ms               |
+| Analytical queries                                     | 826, 0 errors; max 9892 ms (gate 2000 ms) |
+| Final source lag / OOM kills / restarts                | 0 / 0 / 0                                 |
 
 Failure reasons: refused responses, generator drops, HTTP failures, k6 threshold
 exit and a diagnostic query over two seconds. Accepted events were all stored.

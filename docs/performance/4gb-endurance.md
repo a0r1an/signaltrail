@@ -11,21 +11,21 @@ CPUs 0,1; generator uses 2,3. No application defaults changed.
 **Failed.** Report:
 `test-results/load/2026-11-10T00-06-19.248Z-capacity-4gb-db8-q24-endurance/result.json`.
 
-| Measurement | Result |
-| --- | --- |
-| HTTP accepted events | 168505 |
-| Unique stored fixture events | 169217 |
-| Broker completed publications | 169221 |
-| HTTP requests / generator drops | 173919 / 6081 |
-| HTTP failure rate | 3.11% |
-| HTTP p95 / p99 | 42.24 / 5191.51 ms |
-| Metadata / HTTP admission refusals | 824 / 2038 |
-| Metadata failed queries | 849 |
-| Event retry outcomes / rejected | 5 / 0 |
-| Invalid/incomplete response outcomes | 5409 |
-| Publication cancellations / late completions | 537 / 537 |
-| Final broker source lag | 0 |
-| Detected container OOM kills / restarts | 0 / 0 |
+| Measurement                                  | Result             |
+| -------------------------------------------- | ------------------ |
+| HTTP accepted events                         | 168505             |
+| Unique stored fixture events                 | 169217             |
+| Broker completed publications                | 169221             |
+| HTTP requests / generator drops              | 173919 / 6081      |
+| HTTP failure rate                            | 3.11%              |
+| HTTP p95 / p99                               | 42.24 / 5191.51 ms |
+| Metadata / HTTP admission refusals           | 824 / 2038         |
+| Metadata failed queries                      | 849                |
+| Event retry outcomes / rejected              | 5 / 0              |
+| Invalid/incomplete response outcomes         | 5409               |
+| Publication cancellations / late completions | 537 / 537          |
+| Final broker source lag                      | 0                  |
+| Detected container OOM kills / restarts      | 0 / 0              |
 
 Counts are different populations, not additive. `responses_malformed` also covers
 HTTP errors/timeouts without complete event outcomes; it does not mean 5409 corrupt

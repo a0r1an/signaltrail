@@ -33,13 +33,13 @@ backups to S3 needs user approval and is not done.
 Report: `test-results/load/*-backup-restore/backup-restore.json` (first pass
 2026-11-11).
 
-| Measurement | Value |
-| --- | --- |
-| ClickHouse full / incremental backup | 0.05 s, 10.2 MB / 0.02 s, 2.6 MB |
-| pg_dump / pg_restore | 0.22 s / 0.37 s |
-| ClickHouse restore | 0.04 s |
-| Replacement start → verified (includes container start) | 6.4 s |
-| Restored events / links | 250,004 / 5,002 (all projects match) |
+| Measurement                                             | Value                                |
+| ------------------------------------------------------- | ------------------------------------ |
+| ClickHouse full / incremental backup                    | 0.05 s, 10.2 MB / 0.02 s, 2.6 MB     |
+| pg_dump / pg_restore                                    | 0.22 s / 0.37 s                      |
+| ClickHouse restore                                      | 0.04 s                               |
+| Replacement start → verified (includes container start) | 6.4 s                                |
+| Restored events / links                                 | 250,004 / 5,002 (all projects match) |
 
 Findings captured in the fixture:
 

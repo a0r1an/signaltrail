@@ -47,13 +47,13 @@ An earlier exploratory report at `2026-11-10T01-00-49.373Z` also passed, but reu
 query IDs before/after and mixed 30 log rows in the final lookup. It is not used
 for the phase comparisons below. IDs/files were corrected and a fresh run verified.
 
-| Query control | Before traffic memory, MiB | After traffic memory, MiB |
-| --- | --- | --- |
-| Original FINAL + count + uniqExact | 14.87–14.88 | 14.42 |
-| Same query, max_threads=1 | 14.87 | 14.42 |
-| Same query, external group-by threshold 16 MiB | 14.87 | 14.42 |
-| FINAL + count only | 11.08–11.97 | 10.83 |
-| No-FINAL diagnostic control | 9.85–10.33 | 10.39 |
+| Query control                                  | Before traffic memory, MiB | After traffic memory, MiB |
+| ---------------------------------------------- | -------------------------- | ------------------------- |
+| Original FINAL + count + uniqExact             | 14.87–14.88                | 14.42                     |
+| Same query, max_threads=1                      | 14.87                      | 14.42                     |
+| Same query, external group-by threshold 16 MiB | 14.87                      | 14.42                     |
+| FINAL + count only                             | 11.08–11.97                | 10.83                     |
+| No-FINAL diagnostic control                    | 9.85–10.33                 | 10.39                     |
 
 All spill-part counters are zero; the spill setting did not exercise spilling.
 Post-traffic client timing ranges are baseline 40.27–97.11 ms, one thread
@@ -99,12 +99,12 @@ zero, HTTP p99 32.70 ms, 59 analytical attempts. All 30 controls succeed with
 validated distinct query-log rows, 128 contiguous intervals, no OOM/restart and
 successful cleanup. Both phase snapshots have no text_log parts.
 
-| Server tracking | Baseline | Text log disabled |
-| --- | --- | --- |
-| Before traffic, MiB | 285.53 | 292.93 |
-| After traffic, MiB | 446.37 | 457.65 |
-| Growth, MiB | 160.84 | 164.72 |
-| Post-traffic baseline aggregation peak, MiB | 14.42 | 14.42 |
+| Server tracking                             | Baseline | Text log disabled |
+| ------------------------------------------- | -------- | ----------------- |
+| Before traffic, MiB                         | 285.53   | 292.93            |
+| After traffic, MiB                          | 446.37   | 457.65            |
+| Growth, MiB                                 | 160.84   | 164.72            |
+| Post-traffic baseline aggregation peak, MiB | 14.42    | 14.42             |
 
 Disabling text_log does not reduce tracked-memory growth in this pair. It is not
 supported as the dominant explanation or proposed as a fix. Ordered, shared-host

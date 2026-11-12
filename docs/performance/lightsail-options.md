@@ -5,12 +5,12 @@ services/overages. No purchase, region, deployment or provider selection is appr
 Lightsail bundles CPU/RAM/storage; the requested four-vCPU/four-GB instance is not
 listed in the current bundle tables. This is public pricing, not an account quote.
 
-| Bundle | vCPUs | Advertised RAM | SSD | Public IPv4 monthly cap | IPv6-only monthly cap |
-| --- | --- | --- | --- | --- | --- |
-| General purpose Medium | 2 | 4 GB | 80 GB | $24 | $20 |
-| Compute optimized Large | 2 | 4 GB | 160 GB | $42 | $38 |
-| Compute optimized Xlarge | 4 | 8 GB | 320 GB | $84 | $80 |
-| General purpose Xlarge | 4 | 16 GB | 320 GB | $84 | $80 |
+| Bundle                   | vCPUs | Advertised RAM | SSD    | Public IPv4 monthly cap | IPv6-only monthly cap |
+| ------------------------ | ----- | -------------- | ------ | ----------------------- | --------------------- |
+| General purpose Medium   | 2     | 4 GB           | 80 GB  | $24                     | $20                   |
+| Compute optimized Large  | 2     | 4 GB           | 160 GB | $42                     | $38                   |
+| Compute optimized Xlarge | 4     | 8 GB           | 320 GB | $84                     | $80                   |
+| General purpose Xlarge   | 4     | 16 GB          | 320 GB | $84                     | $80                   |
 
 Sources: [AWS bundle tables](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-bundles.html)
 and [AWS pricing](https://aws.amazon.com/lightsail/pricing/), accessed November 9.

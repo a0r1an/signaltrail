@@ -28,13 +28,13 @@ Harness checks: 83 load units pass. The smoke run first exposed a harness bug
 
 Report: `test-results/load/2026-11-11T01-06-07.794Z-capacity-4gb-memory-trace-async-dashboard/result.json`.
 
-| Dashboard query | Result over 126 page loads |
-| --- | --- |
-| Visitor count | **126 / 126 failed**: 125 × code 241 (64 MiB query memory limit), 1 × timeout |
-| Event count | 125 ok, 1 timeout (code 159, 4.5 s); p50 1981 / p95 2241 ms |
-| Event list | 126 ok; p50 2007 / p95 2374 ms |
-| Page load (parallel) | p50 2113 / p95 2408 / max 5036 ms |
-| Rows read per query | ~6.6–9.4 million for every window, including 1 day |
+| Dashboard query      | Result over 126 page loads                                                    |
+| -------------------- | ----------------------------------------------------------------------------- |
+| Visitor count        | **126 / 126 failed**: 125 × code 241 (64 MiB query memory limit), 1 × timeout |
+| Event count          | 125 ok, 1 timeout (code 159, 4.5 s); p50 1981 / p95 2241 ms                   |
+| Event list           | 126 ok; p50 2007 / p95 2374 ms                                                |
+| Page load (parallel) | p50 2113 / p95 2408 / max 5036 ms                                             |
+| Rows read per query  | ~6.6–9.4 million for every window, including 1 day                            |
 
 Ingestion alongside: 89,523 explicitly accepted, 89,532 unique stored, final
 source lag 0. 83 metadata refusals in a ~5 s burst at 01:17:29–34 (CPU pressure
@@ -80,17 +80,17 @@ select-only reader and replay dedupe. `pipeline`, `project-access`,
 
 Report: `test-results/load/2026-11-11T17-31-26.930Z-capacity-4gb-memory-trace-async-dashboard/result.json`.
 
-| Measurement | Before (Nov 10) | After |
-| --- | --- | --- |
-| Dashboard query errors | 126 visitor + 1 count | **0** of 164 pages |
-| Page p50 / p95 / max | 2113 / 2408 / 5036 ms | **317 / 1192 / 2008 ms** |
-| 1-day page p50 / p95 | ~2.1 s | 122 / 180 ms |
-| 7-day page p50 / p95 | ~2.1 s | 312 / 406 ms |
-| 30-day page p50 / p95 | ~2.1 s | 1047 / 1384 ms |
-| Visitor query p95 | failed (≥ 64 MiB) | 1189 ms; peak query memory ≤ 39.8 MiB |
-| Accepted / unique stored | 89523 / 89532 | 90001 / 90001 |
-| Refusals / drops / retries | 83 / 322 / 9 | 0 / 0 / 0 |
-| ClickHouse jemalloc / tracked | ≤ 381 / ≤ 379 MiB | 228–391 / 253–333 MiB |
+| Measurement                   | Before (Nov 10)       | After                                 |
+| ----------------------------- | --------------------- | ------------------------------------- |
+| Dashboard query errors        | 126 visitor + 1 count | **0** of 164 pages                    |
+| Page p50 / p95 / max          | 2113 / 2408 / 5036 ms | **317 / 1192 / 2008 ms**              |
+| 1-day page p50 / p95          | ~2.1 s                | 122 / 180 ms                          |
+| 7-day page p50 / p95          | ~2.1 s                | 312 / 406 ms                          |
+| 30-day page p50 / p95         | ~2.1 s                | 1047 / 1384 ms                        |
+| Visitor query p95             | failed (≥ 64 MiB)     | 1189 ms; peak query memory ≤ 39.8 MiB |
+| Accepted / unique stored      | 89523 / 89532         | 90001 / 90001                         |
+| Refusals / drops / retries    | 83 / 322 / 9          | 0 / 0 / 0                             |
+| ClickHouse jemalloc / tracked | ≤ 381 / ≤ 379 MiB     | 228–391 / 253–333 MiB                 |
 
 Window-cost figures are from the run's last 136 page loads. Result gate passed
 with no reasons; drain 0.05 s; no OOM/restart.

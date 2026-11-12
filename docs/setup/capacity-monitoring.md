@@ -13,12 +13,12 @@ These describe bounded test executions, not projects, sessions or event IDs. Eac
 new run creates a new set of series; consider retention/active-series usage when
 running many tests. No customer payloads, keys, SQL text or credentials are exported.
 
-| Job | Target from Alloy | Data |
-| --- | --- | --- |
-| `signaltrail-capacity` | `host.docker.internal:34105/metrics` | HTTP/publication metrics; Node CPU/GC; DB occupancy, refusals and acquisition/execution histograms; interval scheduling and pressure |
-| `signaltrail-capacity-host` | `host.docker.internal:34107/metrics` | Run/configuration, Docker service/generator CPU and displayed memory, hard caps, ClickHouse cgroup pressure/events, source lag and completed-stage reconciliation |
-| `signaltrail-capacity-processor` | `host.docker.internal:34105/processor-metrics` | Proxy to fixture worker's loopback metrics; storage attempts, retries, duration, Node CPU/GC |
-| `signaltrail-capacity-redpanda` | `host.docker.internal:34105/broker-metrics` | Proxy to isolated broker's public metrics |
+| Job                              | Target from Alloy                              | Data                                                                                                                                                              |
+| -------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signaltrail-capacity`           | `host.docker.internal:34105/metrics`           | HTTP/publication metrics; Node CPU/GC; DB occupancy, refusals and acquisition/execution histograms; interval scheduling and pressure                              |
+| `signaltrail-capacity-host`      | `host.docker.internal:34107/metrics`           | Run/configuration, Docker service/generator CPU and displayed memory, hard caps, ClickHouse cgroup pressure/events, source lag and completed-stage reconciliation |
+| `signaltrail-capacity-processor` | `host.docker.internal:34105/processor-metrics` | Proxy to fixture worker's loopback metrics; storage attempts, retries, duration, Node CPU/GC                                                                      |
+| `signaltrail-capacity-redpanda`  | `host.docker.internal:34105/broker-metrics`    | Proxy to isolated broker's public metrics                                                                                                                         |
 
 The host exporter binds to loopback. Container listener ports are published on
 host loopback by the isolated Compose fixture; proxy URLs are fixed. Fixture

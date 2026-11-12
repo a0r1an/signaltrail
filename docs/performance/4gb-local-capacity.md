@@ -27,11 +27,12 @@ The live adapter is asserted to have eight connections / 24 outstanding slots.
 All 42 harness units pass; the workload test first failed before implementation.
 
 | Trial | Metadata gate refusals | Other metadata failures | HTTP gate refusals | Total HTTP 503s | Generator drops | HTTP p95 / p99, ms | Accepted / unique stored | Result |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 158 | 0 | 117 | 275 | 152 | 19.10 / 1032.42 | 29574 / 29574 | Fail |
-| 2 | 637 | 24 | 82 | 743 | 604 | 377.68 / 1738.00 | 28602 / 28635 | Fail |
+| ----- | ---------------------- | ----------------------- | ------------------ | --------------- | --------------- | ------------------ | ------------------------ | ------ |
+| 1     | 158                    | 0                       | 117                | 275             | 152             | 19.10 / 1032.42    | 29574 / 29574            | Fail   |
+| 2     | 637                    | 24                      | 82                 | 743             | 604             | 377.68 / 1738.00   | 28602 / 28635            | Fail   |
 
 Reports:
+
 - `test-results/load/2026-11-09T20-17-25.957Z-capacity-4gb-db8-q24/result.json`
 - `test-results/load/2026-11-09T20-23-28.552Z-capacity-4gb-db8-q24/result.json`
 
@@ -67,13 +68,14 @@ Same two shared logical CPUs, four-GiB allocation, one million seeded rows,
 singleton requests, fixed session pool and concurrent analytical SQL throughout.
 
 | Trial | Connections | Accepted / unique stored | Metadata HTTP 503s | HTTP p95 / p99, ms | Generator drops | Result |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 4 | 30001 / 30001 | 0 | 9.06 / 26.52 | 0 | Pass |
-| 2 | 8 | 29870 / 29870 | 64 | 15.38 / 513.39 | 67 | Fail |
-| 3 | 4 | 29991 / 29991 | 10 | 9.83 / 52.50 | 0 | Fail |
-| 4 | 8 | 29997 / 29997 | 3 | 9.75 / 47.07 | 0 | Fail |
+| ----- | ----------- | ------------------------ | ------------------ | ------------------ | --------------- | ------ |
+| 1     | 4           | 30001 / 30001            | 0                  | 9.06 / 26.52       | 0               | Pass   |
+| 2     | 8           | 29870 / 29870            | 64                 | 15.38 / 513.39     | 67              | Fail   |
+| 3     | 4           | 29991 / 29991            | 10                 | 9.83 / 52.50       | 0               | Fail   |
+| 4     | 8           | 29997 / 29997            | 3                  | 9.75 / 47.07       | 0               | Fail   |
 
 Reports in execution order:
+
 - `test-results/load/2026-11-09T19-49-36.584Z-capacity-4gb-db4-long/result.json`
 - `test-results/load/2026-11-09T19-55-32.326Z-capacity-4gb-db8-long/result.json`
 - `test-results/load/2026-11-09T20-01-37.904Z-capacity-4gb-db4-long/result.json`
@@ -126,17 +128,17 @@ fresh stack, two shared logical CPUs, memory caps, seed data and direct SQL load
 
 Report: `test-results/load/2026-11-09T19-36-42.403Z-capacity-4gb-db8/result.json`.
 
-| Measurement | Four connections (19:30 run) | Eight connections (19:36 run) |
-| --- | --- | --- |
-| Accepted / unique stored | 12001 / 12001 | 12001 / 12001 |
-| HTTP/metadata refusals | 0 / 0 | 0 / 0 |
-| HTTP p95 / p99, ms | 8.96 / 47.20 | 7.87 / 32.00 |
-| Connection acquisition mean / max, ms | 0.0415 / 95.20 | 0.0369 / 51.79 |
-| Query round-trip mean / max, ms | 0.624 / 53.25 | 0.554 / 55.74 |
-| Peak outstanding / executing queries | 6 / 4 | 8 / 8 |
-| Average sampled service CPU, cores | 0.973 | 0.891 |
-| Peak summed Docker service memory, MiB | 1228.41 | 1244.54 |
-| Ingestion event-loop histogram max, ms | 54.20 | 71.96 |
+| Measurement                            | Four connections (19:30 run) | Eight connections (19:36 run) |
+| -------------------------------------- | ---------------------------- | ----------------------------- |
+| Accepted / unique stored               | 12001 / 12001                | 12001 / 12001                 |
+| HTTP/metadata refusals                 | 0 / 0                        | 0 / 0                         |
+| HTTP p95 / p99, ms                     | 8.96 / 47.20                 | 7.87 / 32.00                  |
+| Connection acquisition mean / max, ms  | 0.0415 / 95.20               | 0.0369 / 51.79                |
+| Query round-trip mean / max, ms        | 0.624 / 53.25                | 0.554 / 55.74                 |
+| Peak outstanding / executing queries   | 6 / 4                        | 8 / 8                         |
+| Average sampled service CPU, cores     | 0.973                        | 0.891                         |
+| Peak summed Docker service memory, MiB | 1228.41                      | 1244.54                       |
+| Ingestion event-loop histogram max, ms | 54.20                        | 71.96                         |
 
 No retries, rejections, generator drops, detected OOM or restart in the eight-pool
 run; final broker lag zero. Cleanup passed and the lock was released. All 39
@@ -160,12 +162,13 @@ Reports now record all three application limits; container inspection verifies
 that the HTTP cap matches the selected profile. Both retain four connections,
 16 outstanding metadata queries, identical CPU/memory limits and workload.
 
-| HTTP cap | Accepted / unique stored | HTTP 503s | HTTP p95 / p99, ms | Result |
-| --- | --- | --- | --- | --- |
-| 32 | 12001 / 12001 | 0 | 10.81 / 47.42 | Pass |
-| 128 | 12000 / 12000 | 1 (metadata gate) | 9.22 / 38.75 | Fail |
+| HTTP cap | Accepted / unique stored | HTTP 503s         | HTTP p95 / p99, ms | Result |
+| -------- | ------------------------ | ----------------- | ------------------ | ------ |
+| 32       | 12001 / 12001            | 0                 | 10.81 / 47.42      | Pass   |
+| 128      | 12000 / 12000            | 1 (metadata gate) | 9.22 / 38.75       | Fail   |
 
 Reports, in execution order:
+
 - `test-results/load/2026-11-09T18-59-51.499Z-capacity-4gb-http32/result.json`
 - `test-results/load/2026-11-09T19-02-56.585Z-capacity-4gb-http128/result.json`
 
@@ -364,13 +367,13 @@ not the separate processor process or PostgreSQL scheduler. No limits changed.
 
 Interpret together rather than treating one metric as proof:
 
-| Observation | What to investigate |
-| --- | --- |
-| Connection acquisition time rises while execution stays low | Pool queueing, connection setup, arrival bursts |
-| Execution time rises | Database work, network or scheduling delays |
-| Event-loop delay rises | Ingestion scheduling/CPU contention or blocking work |
-| Metadata refusal event | Outstanding/executing/acquiring/waiting counts at that instant |
-| HTTP occupancy/publisher reservations rise | Body/auth/publication work and downstream pressure |
+| Observation                                                 | What to investigate                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
+| Connection acquisition time rises while execution stays low | Pool queueing, connection setup, arrival bursts                |
+| Execution time rises                                        | Database work, network or scheduling delays                    |
+| Event-loop delay rises                                      | Ingestion scheduling/CPU contention or blocking work           |
+| Metadata refusal event                                      | Outstanding/executing/acquiring/waiting counts at that instant |
+| HTTP occupancy/publisher reservations rise                  | Body/auth/publication work and downstream pressure             |
 
 Timings are cumulative count/total/max summaries, not percentiles; interval means
 can be calculated from deltas. Peaks survive polling gaps but have no full time
